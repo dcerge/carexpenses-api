@@ -2,9 +2,9 @@
 import { BaseGateway, HEADERS } from '@sdflc/backend-helpers';
 import { OpResult, OP_RESULT_CODES, queryGraphQL } from '@sdflc/api-helpers';
 
-import config from '../config';
-import { SendEmailArgs, SendPersonalization, MessageVariableInput } from '../boundary';
-import { logger } from '../logger';
+import config from '../../config';
+import { SendEmailArgs, SendPersonalization, MessageVariableInput } from '../../boundary';
+import { logger } from '../../logger';
 
 const { gatewayUrl, interserviceApiKey, spaceId: configSpaceId } = config;
 

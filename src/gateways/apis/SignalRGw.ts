@@ -1,5 +1,5 @@
 import { WebPubSubServiceClient } from '@azure/web-pubsub';
-import config from '../config';
+import config from '../../config';
 
 const HUB_NAME = 'displayHub';
 

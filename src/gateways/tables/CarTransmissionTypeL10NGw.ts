@@ -3,13 +3,14 @@ import { BaseGateway, BaseGatewayPropsInterface } from '@sdflc/backend-helpers';
 import { SORT_ORDER, STATUSES } from '@sdflc/utils';
 
 import { FIELDS, TABLES } from '../../database';
+import { castArray } from 'lodash';
 
 class CarTransmissionTypeL10NGw extends BaseGateway {
   constructor(props: BaseGatewayPropsInterface) {
     super({
       ...props,
       table: TABLES.CAR_TRANSMISSION_TYPE_L10N,
-      hasStatus: true,
+      hasStatus: false,
       hasVersion: false,
       hasLang: true,
       hasUserId: false,
@@ -28,6 +29,20 @@ class CarTransmissionTypeL10NGw extends BaseGateway {
         },
       ],
     });
+  }
+
+  async onListFilter(query: any, filterParams: any) {
+    const { carTransmissionTypeId, lang } = filterParams || {};
+
+    await super.onListFilter(query, filterParams);
+
+    if (carTransmissionTypeId) {
+      query.whereIn(FIELDS.CAR_TRANSMISSION_TYPE_ID, castArray(carTransmissionTypeId));
+    }
+
+    if (lang) {
+      query.whereIn(FIELDS.LANG, castArray(lang));
+    }
   }
 }
 

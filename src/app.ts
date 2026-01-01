@@ -26,7 +26,7 @@ import * as controllers from './app/restapi';
 import { redisClient } from './redisClient';
 
 import packageJson from '../package.json';
-import { initNotificationQueue, cleanupOrphanedTempFiles, NotificationQueue } from './utils';
+import { cleanupOrphanedTempFiles } from './utils';
 // import { logger } from './logger';
 // import knexConfig from './knexConfig';
 
@@ -43,9 +43,6 @@ const corsOptions = {
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
 
-  // Wait for queue to finish processing (max 30 seconds)
-  await NotificationQueue.shutdown(30000);
-
   // Close server, database connections, etc.
   process.exit(0);
 });
@@ -54,8 +51,6 @@ const configureApp = async (app) => {
   //logger.log('Knex Config:', knexConfig);
 
   cleanupOrphanedTempFiles();
-
-  initNotificationQueue({ maxConcurrent: 5 });
 
   app.disable('x-powered-by');
 

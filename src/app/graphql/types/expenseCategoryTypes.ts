@@ -4,6 +4,7 @@ const typeDefs = `#graphql
     id: ID
     code: String
     name: String
+    kinds: [ExpenseKind!]
   }
 
   type ExpenseCategoryResult implements OpResult {
@@ -15,6 +16,7 @@ const typeDefs = `#graphql
   input ExpenseCategoryFilter {
     id: [ID]
     code: [String]
+    lang: String
     searchKeyword: String
   }
 

@@ -2,7 +2,6 @@
 const typeDefs = `#graphql
   type CarBodyType @key(fields: "id") {
     id: ID
-    code: String
     name: String
   }
 
@@ -15,12 +14,13 @@ const typeDefs = `#graphql
   input CarBodyTypeFilter {
     id: [ID]
     code: [String]
+    lang: String
     searchKeyword: String
   }
 
   type Query {
     carBodyTypeList(filter: CarBodyTypeFilter, params: PaginationAndSorting): CarBodyTypeResult
-    carBodyTypeGet(carMonthlySummaryId: ID, expenseKindId: Int): CarBodyTypeResult
+    carBodyTypeGet(carBodyTypeId: ID): CarBodyTypeResult
     carBodyTypeGetMany(ids: [ID]): CarBodyTypeResult
   }
 `;
