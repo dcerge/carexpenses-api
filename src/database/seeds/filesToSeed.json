@@ -1,0 +1,11 @@
+{
+  "filesToSeed": [
+    ["car_body_types", "car_body_type_l_10_n"],
+    ["car_engine_types", "car_engine_type_l_10_n"],
+    ["car_transmission_types", "car_transmission_type_l_10_n"],
+    ["expense_categories", "expense_category_l_10_n"],
+    ["expense_kinds", "expense_kind_l_10_n"],
+    ["vehicle_makes"],
+    ["service_interval_defaults"]
+  ]
+}

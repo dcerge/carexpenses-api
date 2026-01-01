@@ -1,0 +1,13 @@
+{
+  "cleanTableFilters": {
+    "space": {
+      "where": [
+        {
+          "fieldName": "id",
+          "operand": "IN",
+          "value": ["develop", "uat"]
+        }
+      ]
+    }
+  }
+}
