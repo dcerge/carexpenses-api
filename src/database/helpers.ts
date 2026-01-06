@@ -290,8 +290,8 @@ export const FIELDS = {
   TOTAL_REFUELS_COST: 'total_refuels_cost',
   TOTAL_EXPENSES_COST: 'total_expenses_cost',
   TOTAL_REFUELS_VOLUME: 'total_refuels_volume',
-  FIRST_RECORD_DTTM: 'first_record_dttm',
-  LAST_RECORD_DTTM: 'last_record_dttm',
+  FIRST_RECORD_AT: 'first_record_at',
+  LAST_RECORD_AT: 'last_record_at',
 
   // ---------------------------------------------------------------------------
   // Car Total Expense Fields

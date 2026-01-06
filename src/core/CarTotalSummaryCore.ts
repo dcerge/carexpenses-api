@@ -6,6 +6,7 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/carTotalSummaryValidators';
+import { OpResult } from '@sdflc/api-helpers';
 
 dayjs.extend(utc);
 
@@ -75,6 +76,8 @@ class CarTotalSummaryCore extends AppCore {
     if (!Array.isArray(items) || items.length === 0) {
       return items;
     }
+
+    console.log('===== items', items);
 
     return items.map((item: any) => this.processItemOnOut(item, opt));
   }

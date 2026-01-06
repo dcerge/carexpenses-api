@@ -2,9 +2,9 @@
 import { castArray } from 'lodash';
 
 import { BaseGateway, BaseGatewayPropsInterface } from '@sdflc/backend-helpers';
-import { SORT_ORDER } from '@sdflc/utils';
+import { SORT_ORDER, STATUSES } from '@sdflc/utils';
 
-import { FIELDS, TABLES } from '../../database';
+import { FIELDS, STATUS, TABLES } from '../../database';
 
 class ExpenseGw extends BaseGateway {
   constructor(props: BaseGatewayPropsInterface) {
@@ -36,10 +36,14 @@ class ExpenseGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { kindId, accountId } = filterParams || {};
+    const { id, kindId, accountId } = filterParams || {};
     const self = this;
 
     await super.onListFilter(query, filterParams);
+
+    if (id) {
+      query.whereIn(`${TABLES.EXPENSES}.${FIELDS.ID}`, castArray(id));
+    }
 
     if (kindId) {
       query.whereIn(FIELDS.KIND_ID, castArray(kindId));

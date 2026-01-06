@@ -9,8 +9,6 @@ const typeDefs = `#graphql
     consumptionIn: String
     notifyInMileage: Float
     notifyInDays: Int
-    user: User
-    account: Account
   }
 
   type UserProfileResult implements OpResult {

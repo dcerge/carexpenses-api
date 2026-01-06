@@ -2,7 +2,7 @@
 import { castArray } from 'lodash';
 
 import { BaseGateway, BaseGatewayPropsInterface } from '@sdflc/backend-helpers';
-import { SORT_ORDER } from '@sdflc/utils';
+import { SORT_ORDER, STATUSES } from '@sdflc/utils';
 
 import config from '../../config';
 import { FIELDS, TABLES } from '../../database';
@@ -27,6 +27,7 @@ class ExpenseBaseGw extends BaseGateway {
       selectFields: [`${TABLES.EXPENSE_BASES}.*`],
       idField: `${TABLES.EXPENSE_BASES}.${FIELDS.ID}`,
       idFieldUpdateRemove: FIELDS.ID,
+      activeStatuses: [STATUSES.ACTIVE],
       defaultSorting: [
         {
           name: FIELDS.WHEN_DONE,

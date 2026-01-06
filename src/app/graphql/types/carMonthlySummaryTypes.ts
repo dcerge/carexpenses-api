@@ -16,8 +16,8 @@ const typeDefs = `#graphql
     expensesTaxes: Float
     expensesCost: Float
     refuelsVolume: Float
-    firstRecordDttm: String
-    lastRecordDttm: String
+    firstRecordAt: String
+    lastRecordAt: String
     updatedAt: String
     car: Car
   }

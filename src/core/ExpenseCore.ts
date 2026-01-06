@@ -14,6 +14,8 @@ dayjs.extend(utc);
 const EXPENSE_TYPE = {
   REFUEL: 1,
   EXPENSE: 2,
+  CHECKOINT: 3,
+  TRAVEL: 4,
 };
 
 interface ExpenseUpdateData {
@@ -94,22 +96,18 @@ class ExpenseCore extends AppCore {
 
     // Batch fetch extension data (2 queries max)
     const [refuels, expenses] = await Promise.all([
-      refuelIds.length > 0
-        ? this.getGateways().refuelGw.list({ filter: { id: refuelIds } })
-        : Promise.resolve({ data: [] }),
-      expenseIds.length > 0
-        ? this.getGateways().expenseGw.list({ filter: { id: expenseIds } })
-        : Promise.resolve({ data: [] }),
+      refuelIds.length > 0 ? this.getGateways().refuelGw.list({ filter: { id: refuelIds } }) : Promise.resolve([]),
+      expenseIds.length > 0 ? this.getGateways().expenseGw.list({ filter: { id: expenseIds } }) : Promise.resolve([]),
     ]);
 
     // Create lookup maps by ID
     const refuelMap = new Map<string, any>();
-    for (const refuel of refuels.data || []) {
+    for (const refuel of refuels) {
       refuelMap.set(refuel.id, refuel);
     }
 
     const expenseMap = new Map<string, any>();
-    for (const expense of expenses.data || []) {
+    for (const expense of expenses) {
       expenseMap.set(expense.id, expense);
     }
 
@@ -131,6 +129,7 @@ class ExpenseCore extends AppCore {
         }
       } else if (base.expenseType === EXPENSE_TYPE.EXPENSE) {
         const expense = expenseMap.get(base.id);
+
         if (expense) {
           merged.kindId = expense.kindId;
           merged.costWork = expense.costWork;

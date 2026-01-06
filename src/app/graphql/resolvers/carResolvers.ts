@@ -19,7 +19,7 @@ const resolvers = buildDefaultResolvers({
         const { bodyType, bodyTypeId } = parent || {};
 
         if (!bodyType && bodyTypeId) {
-          return context.gateways.bodyTypeGw.get(bodyTypeId);
+          return context.gateways.carBodyTypeGw.get(bodyTypeId);
         }
 
         return bodyType ?? null;
@@ -28,7 +28,7 @@ const resolvers = buildDefaultResolvers({
         const { transmissionType, transmissionTypeId } = parent || {};
 
         if (!transmissionType && transmissionTypeId) {
-          return context.gateways.transmissionTypeGw.get(transmissionTypeId);
+          return context.gateways.carTransmissionTypeGw.get(transmissionTypeId);
         }
 
         return transmissionType ?? null;
@@ -37,19 +37,19 @@ const resolvers = buildDefaultResolvers({
         const { engineType, engineTypeId } = parent || {};
 
         if (!engineType && engineTypeId) {
-          return context.gateways.engineTypeGw.get(engineTypeId);
+          return context.gateways.carEngineTypeGw.get(engineTypeId);
         }
 
         return engineType ?? null;
       },
-      async make(parent, args, context) {
-        const { make, makeId } = parent || {};
+      async vehicleMake(parent, args, context) {
+        const { vehicleMake, makeId } = parent || {};
 
-        if (!make && makeId) {
-          return context.gateways.makeGw.get(makeId);
+        if (!vehicleMake && makeId) {
+          return context.gateways.vehicleMakeGw.get(makeId);
         }
 
-        return make ?? null;
+        return vehicleMake ?? null;
       },
       async entityAttachment(parent, args, context) {
         const { entityAttachment, entityAttachmentId } = parent || {};

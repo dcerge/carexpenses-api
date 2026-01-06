@@ -36,10 +36,14 @@ class RefuelGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { accountId, isFullTank, fuelGrade } = filterParams || {};
+    const { id, accountId, isFullTank, fuelGrade } = filterParams || {};
     const self = this;
 
     await super.onListFilter(query, filterParams);
+
+    if (id) {
+      query.whereIn(`${TABLES.REFUELS}.${FIELDS.ID}`, castArray(id));
+    }
 
     if (isFullTank != null) {
       query.where(FIELDS.IS_FULL_TANK, isFullTank);

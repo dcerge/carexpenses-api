@@ -41,9 +41,9 @@ export const up = (knex: Knex) =>
       .defaultTo(0)
       .comment('Total fuel volume purchased in this month');
 
-    table.datetime(FIELDS.FIRST_RECORD_DTTM).nullable().comment('Date/time of first record in this month');
+    table.datetime(FIELDS.FIRST_RECORD_AT).nullable().comment('Date/time of first record in this month');
 
-    table.datetime(FIELDS.LAST_RECORD_DTTM).nullable().comment('Date/time of last record in this month');
+    table.datetime(FIELDS.LAST_RECORD_AT).nullable().comment('Date/time of last record in this month');
 
     table.datetime(FIELDS.UPDATED_AT).nullable().comment('When this summary was last updated');
 

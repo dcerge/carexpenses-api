@@ -77,11 +77,6 @@ class UserProfileCore extends BaseCore {
       return item;
     }
 
-    // Security check: verify the profile belongs to the current account
-    if (item.accountId !== this.getContext().accountId) {
-      return null; // Return null so the core returns NOT_FOUND
-    }
-
     return this.processItemOnOut(item, opt);
   }
 

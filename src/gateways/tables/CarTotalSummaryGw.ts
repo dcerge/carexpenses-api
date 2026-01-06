@@ -27,6 +27,8 @@ class CarTotalSummaryGw extends BaseGateway {
       selectFields: [`${TABLES.CAR_TOTAL_SUMMARIES}.*`],
       idField: `${TABLES.CAR_TOTAL_SUMMARIES}.${FIELDS.CAR_ID}`,
       idFieldUpdateRemove: FIELDS.CAR_ID,
+      returnFields: [`${TABLES.CAR_TOTAL_SUMMARIES}.*`],
+      noCache: true,
       defaultSorting: [
         {
           name: FIELDS.CAR_ID,

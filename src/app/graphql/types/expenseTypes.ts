@@ -10,6 +10,7 @@ const typeDefs = `#graphql
     # Common fields (from expense_bases)
     odometer: Float
     tripMeter: Float
+    consumption: Float
     whenDone: String
     location: String
     whereDone: String
@@ -57,6 +58,7 @@ const typeDefs = `#graphql
     account: Account
     car: Car
     expenseLabel: ExpenseLabel
+    expenseTags: [ExpenseTag!]
     travel: Travel
     expenseKind: ExpenseKind
     userCreated: User
@@ -78,7 +80,6 @@ const typeDefs = `#graphql
     
     # Common fields
     odometer: Float
-    tripMeter: Float
     whenDone: String
     location: String
     whereDone: String
@@ -109,6 +110,9 @@ const typeDefs = `#graphql
     isFullTank: Boolean
     remainingInTankBefore: Float
     fuelGrade: String
+
+    expenseTags: [ExpenseTagInput]
+    expenseLabel: ExpenseLabelInput
     
     status: Int
   }
@@ -126,6 +130,8 @@ const typeDefs = `#graphql
     fuelGrade: [String]
     whenDoneFrom: String
     whenDoneTo: String
+    expenseLabel: [ID]
+    expenseTag: [ID]
     status: [Int]
     searchKeyword: String
   }

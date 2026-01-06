@@ -6,11 +6,8 @@ const typeDefs = `#graphql
     userId: ID
     label: String
     vin: String
-    make: String
     model: String
     color: String
-    bodyType: String
-    transmission: String
     engineVolume: Int
     manufacturedIn: Int
     mileageIn: String
@@ -64,11 +61,8 @@ const typeDefs = `#graphql
     accountId: ID
     label: String
     vin: String
-    make: String
     model: String
     color: String
-    bodyType: String
-    transmission: String
     engineVolume: Int
     manufacturedIn: Int
     mileageIn: String
