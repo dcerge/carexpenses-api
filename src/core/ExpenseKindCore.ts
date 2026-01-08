@@ -51,6 +51,7 @@ class ExpenseKindCore extends AppCore {
       if (mapIdToExpenseKind[l10n.expenseKindId]) {
         processedItems.push({
           id: l10n.expenseKindId,
+          code: mapIdToExpenseKind[l10n.expenseKindId].code,
           name: l10n.name,
         });
       }

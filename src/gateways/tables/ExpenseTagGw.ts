@@ -36,9 +36,13 @@ class ExpenseTagGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { accountId, tagName, normalizedName, searchKeyword } = filterParams || {};
+    const { id, accountId, tagName, normalizedName, searchKeyword } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
+
+    if (id) {
+      query.whereIn(FIELDS.ID, castArray(id));
+    }
 
     if (accountId) {
       query.whereIn(FIELDS.ACCOUNT_ID, castArray(accountId));

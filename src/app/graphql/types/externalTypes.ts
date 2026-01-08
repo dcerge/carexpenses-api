@@ -7,6 +7,10 @@ const typeDefs = `#graphql
   extend type Account @key(fields: "id") {
     id: ID @external
   }
+
+  extend type UploadedFile @key(fields: "id") {
+    id: ID @external
+  }
 `;
 
 export default typeDefs;

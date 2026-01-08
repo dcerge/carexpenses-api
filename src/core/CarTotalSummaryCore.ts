@@ -77,8 +77,6 @@ class CarTotalSummaryCore extends AppCore {
       return items;
     }
 
-    console.log('===== items', items);
-
     return items.map((item: any) => this.processItemOnOut(item, opt));
   }
 

@@ -12,3 +12,4 @@ export * from './SendPersonalization';
 export * from './submissionStatuses';
 export * from './userRoles';
 export * from './operationRights';
+export * from './entityTypeIds';

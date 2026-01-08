@@ -2,11 +2,11 @@
 const typeDefs = `#graphql
   type EntityEntityAttachment @key(fields: "id") {
     id: ID
+    orderNo: Int
     entityTypeId: Int
     entityId: ID
     entityAttachmentId: ID
-    orderNo: Int
-    entityAttachment: EntityAttachment
+    uploadedFileId: ID
   }
 
   type EntityEntityAttachmentResult implements OpResult {
@@ -17,10 +17,11 @@ const typeDefs = `#graphql
 
   input EntityEntityAttachmentInput {
     id: ID
+    orderNo: Int
     entityTypeId: Int
     entityId: ID
     entityAttachmentId: ID
-    orderNo: Int
+    uploadedFileId: ID
   }
 
   input EntityEntityAttachmentFilter {

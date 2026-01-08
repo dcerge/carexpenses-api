@@ -1,7 +1,6 @@
-CREATE USER carexpenses_user WITH PASSWORD 'xy7PjMkQ4Ygi';
+CREATE USER carexpenses_user WITH PASSWORD '...';
 
 GRANT CONNECT ON DATABASE carexpensesdb TO carexpenses_user;
-ALTER USER carexpenses_user WITH SUPERUSER;
 
 GRANT ALL PRIVILEGES ON DATABASE carexpensesdb TO carexpenses_user;
 
@@ -62,9 +61,3 @@ GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA ms_sender TO carexpenses_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA ms_sender GRANT ALL PRIVILEGES ON TABLES TO carexpenses_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA ms_sender GRANT ALL PRIVILEGES ON SEQUENCES TO carexpenses_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA ms_sender GRANT ALL PRIVILEGES ON FUNCTIONS TO carexpenses_user;
-
---
-
-GRANT USAGE ON SCHEMA public TO carexpenses_user;
-ALTER USER carexpenses_user SET search_path TO carexpenses, ms_auth, ms_storage, ms_sender, public;
-

@@ -57,13 +57,15 @@ const typeDefs = `#graphql
     user: User
     account: Account
     car: Car
-    expenseLabel: ExpenseLabel
-    expenseTags: [ExpenseTag!]
     travel: Travel
     expenseKind: ExpenseKind
     userCreated: User
     userUpdated: User
     userRemoved: User
+    "References to uploaded files"
+    uploadedFilesIds: [ID]
+    uploadedFiles: [UploadedFile]
+    tags: [ExpenseTag]
   }
 
   type ExpenseResult implements OpResult {
@@ -110,11 +112,12 @@ const typeDefs = `#graphql
     isFullTank: Boolean
     remainingInTankBefore: Float
     fuelGrade: String
-
-    expenseTags: [ExpenseTagInput]
-    expenseLabel: ExpenseLabelInput
     
     status: Int
+
+    "References to uploaded files"
+    uploadedFilesIds: [ID]
+    tags: [ID]
   }
 
   input ExpenseFilter {
@@ -131,7 +134,7 @@ const typeDefs = `#graphql
     whenDoneFrom: String
     whenDoneTo: String
     expenseLabel: [ID]
-    expenseTag: [ID]
+    tags: [ID]
     status: [Int]
     searchKeyword: String
   }

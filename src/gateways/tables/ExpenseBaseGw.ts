@@ -42,8 +42,18 @@ class ExpenseBaseGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { accountId, userId, carId, expenseType, labelId, travelId, whenDoneFrom, whenDoneTo, searchKeyword } =
-      filterParams || {};
+    const {
+      accountId,
+      userId,
+      carId,
+      expenseType,
+      labelId,
+      travelId,
+      whenDoneFrom,
+      whenDoneTo,
+      searchKeyword,
+      withOdometer,
+    } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
 
@@ -77,6 +87,14 @@ class ExpenseBaseGw extends BaseGateway {
 
     if (whenDoneTo) {
       query.where(FIELDS.WHEN_DONE, '<=', whenDoneTo);
+    }
+
+    if (withOdometer != null) {
+      if (withOdometer) {
+        query.whereNotNull(FIELDS.ODOMETER);
+      } else {
+        query.whereNull(FIELDS.ODOMETER);
+      }
     }
 
     if (searchKeyword) {

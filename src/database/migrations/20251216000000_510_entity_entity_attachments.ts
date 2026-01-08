@@ -19,6 +19,8 @@ export const up = (knex: Knex) =>
 
     table.uuid(FIELDS.ENTITY_ATTACHMENT_ID).notNullable().comment('Reference to entity_attachments');
 
+    table.uuid(FIELDS.UPLOADED_FILE_ID).nullable().comment('Reference to ms_storage uploaded file');
+
     addOrderNoNum(table);
 
     // Indexes
