@@ -8,3 +8,4 @@ export * from './LocalEncryptionService';
 export * from './nameHelpers';
 export * from './parserHelpers';
 export * from './personalizationHelpers';
+export * from './CarStatsUpdater';

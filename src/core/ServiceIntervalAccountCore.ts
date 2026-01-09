@@ -7,8 +7,50 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/serviceIntervalAccountValidators';
+import { INTERVAL_TYPES } from 'database';
 
 dayjs.extend(utc);
+
+interface ExpenseKind {
+  id: number;
+  code: string;
+  canSchedule: boolean;
+  isItMaintenance: boolean;
+}
+
+interface ServiceIntervalDefault {
+  id: number;
+  kindId: number;
+  intervalType: number;
+  mileageInterval: number;
+  daysInterval: number;
+  status: number;
+}
+
+interface ServiceIntervalAccount {
+  id: string;
+  carId: string;
+  kindId: number;
+  intervalType: number;
+  mileageInterval: number;
+  daysInterval: number;
+  status: number;
+  version: number;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ServiceIntervalMerged {
+  carId: string;
+  kindId: number;
+  intervalType: number;
+  mileageInterval: number;
+  daysInterval: number;
+  isCustomized: boolean;
+  hasDefault: boolean;
+}
 
 class ServiceIntervalAccountCore extends AppCore {
   constructor(props: BaseCorePropsInterface) {
@@ -26,7 +68,7 @@ class ServiceIntervalAccountCore extends AppCore {
         createMany: '',
         update: 'updating a service interval account',
         updateMany: '',
-        set: '',
+        set: 'setting a service interval account',
         remove: 'removing a service interval account',
         removeMany: 'removing multiple service interval accounts',
       },
@@ -40,223 +82,306 @@ class ServiceIntervalAccountCore extends AppCore {
     };
   }
 
-  public processItemOnOut(item: any, opt?: BaseCoreActionsInterface): any {
-    if (!item) return item;
-
-    if (item.createdAt !== null && item.createdAt !== undefined) {
-      item.createdAt = dayjs(item.createdAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
-    }
-
-    if (item.updatedAt !== null && item.updatedAt !== undefined) {
-      item.updatedAt = dayjs(item.updatedAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
-    }
-
-    return item;
-  }
-
   /**
-   * Verify car belongs to current account
+   * Merge scheduleable kinds with defaults and car-specific customizations
    */
-  private async verifyCarOwnership(carId: string): Promise<boolean> {
-    const { accountId } = this.getContext();
-    const car = await this.getGateways().carGw.get(carId);
-    return car && car.accountId === accountId;
-  }
-
-  /**
-   * Verify service interval account belongs to current account via car
-   */
-  private async verifyRecordOwnership(recordId: string): Promise<{ isOwned: boolean; record: any }> {
-    const { accountId } = this.getContext();
-    const record = await this.getGateways().serviceIntervalAccountGw.get(recordId);
-
-    if (!record || !record.carId) {
-      return { isOwned: false, record: null };
+  private mergeScheduleableKindsWithDefaultsAndCustomizations(
+    scheduleableKinds: ExpenseKind[],
+    defaults: ServiceIntervalDefault[],
+    customizations: ServiceIntervalAccount[],
+    carId: string,
+  ): ServiceIntervalMerged[] {
+    // Create lookup map for defaults by kindId
+    const defaultMap = new Map<number, ServiceIntervalDefault>();
+    for (const def of defaults) {
+      defaultMap.set(def.kindId, def);
     }
 
-    const car = await this.getGateways().carGw.get(record.carId);
-    return {
-      isOwned: car && car.accountId === accountId,
-      record,
-    };
+    // Create lookup map for customizations by kindId
+    const customizationMap = new Map<number, ServiceIntervalAccount>();
+    for (const custom of customizations) {
+      customizationMap.set(custom.kindId, custom);
+    }
+
+    const merged: ServiceIntervalMerged[] = [];
+
+    for (const kind of scheduleableKinds) {
+      const customization = customizationMap.get(kind.id);
+      const defaultInterval = defaultMap.get(kind.id);
+
+      if (customization) {
+        // Use customization values (highest priority)
+        merged.push({
+          carId,
+          kindId: customization.kindId,
+          intervalType: customization.intervalType,
+          mileageInterval: customization.mileageInterval,
+          daysInterval: customization.daysInterval,
+          isCustomized: true,
+          hasDefault: defaultInterval != null,
+        });
+      } else if (defaultInterval) {
+        // Use default values (no customization)
+        merged.push({
+          carId,
+          kindId: defaultInterval.kindId,
+          intervalType: defaultInterval.intervalType,
+          mileageInterval: defaultInterval.mileageInterval,
+          daysInterval: defaultInterval.daysInterval,
+          isCustomized: false,
+          hasDefault: true,
+        });
+      } else {
+        // Scheduleable kind with no default and no customization
+        merged.push({
+          carId,
+          kindId: kind.id,
+          intervalType: 0,
+          mileageInterval: 0,
+          daysInterval: 0,
+          isCustomized: false,
+          hasDefault: false,
+        });
+      }
+    }
+
+    return merged;
   }
 
-  public async beforeList(args: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { filter } = args || {};
-    const { accountId } = this.getContext();
+  public async list(args: any) {
+    return this.runAction({
+      args,
+      doAuth: true,
+      validate: this.getValidators().list,
+      action: async (args: any, opt: BaseCoreActionsInterface) => {
+        const { filter } = args || {};
+        const { carId, kindId, intervalType } = filter || {};
+        const { accountId } = this.getContext();
 
-    // Security is handled via gateway join to cars
-    return {
-      ...args,
-      filter: {
-        ...filter,
-        accountId,
+        // Step 1: Fetch all scheduleable expense kinds
+        const scheduleableKinds: ExpenseKind[] = await this.getGateways().expenseKindGw.list({
+          filter: { canSchedule: true },
+        });
+
+        if (!scheduleableKinds || scheduleableKinds.length === 0) {
+          return this.success([]);
+        }
+
+        // Step 2: Fetch all defaults
+        const defaults: ServiceIntervalDefault[] = await this.getGateways().serviceIntervalDefaultGw.list({
+          filter: {},
+        });
+
+        // Step 3: Fetch car-specific customizations
+        const customizations: ServiceIntervalAccount[] = await this.getGateways().serviceIntervalAccountGw.list({
+          filter: {
+            carId,
+            accountId,
+          },
+        });
+
+        // Step 4: Merge all three sources
+        let merged = this.mergeScheduleableKindsWithDefaultsAndCustomizations(
+          scheduleableKinds,
+          defaults || [],
+          customizations || [],
+          carId,
+        );
+
+        // Apply additional filters if provided
+        if (kindId) {
+          const kindIds = Array.isArray(kindId) ? kindId : [kindId];
+          merged = merged.filter((item) => kindIds.includes(item.kindId));
+        }
+
+        if (intervalType) {
+          const intervalTypes = Array.isArray(intervalType) ? intervalType : [intervalType];
+          merged = merged.filter((item) => intervalTypes.includes(item.intervalType));
+        }
+
+        return this.success(merged);
       },
-    };
+      hasTransaction: false,
+      doingWhat: this.config.doingWhat?.list ?? 'listing service interval accounts',
+    });
   }
 
-  public async afterList(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    if (!Array.isArray(items) || items.length === 0) {
-      return items;
-    }
+  public async set(args: any) {
+    return this.runAction({
+      args,
+      doAuth: true,
+      validate: this.getValidators().set,
+      action: async (args: any, opt: BaseCoreActionsInterface) => {
+        const { params } = args || {};
+        const { carId, kindId, intervalType, mileageInterval, daysInterval } = params || {};
+        const { userId } = this.getContext();
 
-    return items.map((item: any) => this.processItemOnOut(item, opt));
+        const now = this.now();
+
+        const record = {
+          carId,
+          kindId,
+          intervalType,
+          mileageInterval: mileageInterval ?? 0,
+          daysInterval: daysInterval ?? 0,
+          createdBy: userId,
+          createdAt: now,
+          updatedBy: userId,
+          updatedAt: now,
+        };
+
+        const items = await this.getGateways().serviceIntervalAccountGw.set(record);
+
+        if (!items || items.length === 0) {
+          return this.failure(OP_RESULT_CODES.EXCEPTION, 'Failed to save service interval');
+        }
+
+        // Check if there's a default for this kind
+        const defaults: ServiceIntervalDefault[] = await this.getGateways().serviceIntervalDefaultGw.list({
+          filter: { kindId },
+        });
+
+        // Return merged format with isCustomized flag
+        const result: ServiceIntervalMerged = {
+          carId: items[0].carId,
+          kindId: items[0].kindId,
+          intervalType: items[0].intervalType,
+          mileageInterval: items[0].mileageInterval,
+          daysInterval: items[0].daysInterval,
+          isCustomized: true,
+          hasDefault: defaults != null && defaults.length > 0,
+        };
+
+        return this.success(result);
+      },
+      hasTransaction: true,
+      doingWhat: this.config.doingWhat?.set ?? 'setting a service interval account',
+    });
   }
 
-  public async afterGet(item: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    if (!item) {
-      return item;
-    }
+  public async remove(args: any) {
+    return this.runAction({
+      args,
+      doAuth: true,
+      validate: this.getValidators().remove,
+      action: async (args: any, opt: BaseCoreActionsInterface) => {
+        const { where } = args || {};
+        const { carId, kindId } = where || {};
+        const { accountId } = this.getContext();
 
-    // Security check via car ownership
-    const isOwned = await this.verifyCarOwnership(item.carId);
-    if (!isOwned) {
-      return null; // Return null so the core returns NOT_FOUND
-    }
+        const removeWhere = {
+          carId,
+          kindId,
+          accountId,
+        };
 
-    return this.processItemOnOut(item, opt);
+        const items = await this.getGateways().serviceIntervalAccountGw.remove(removeWhere);
+
+        if (!items || items.length === 0) {
+          return this.failure(OP_RESULT_CODES.NOT_FOUND, 'Service interval customization not found');
+        }
+
+        // Return the default interval after removal (or zeros if no default)
+        const defaults: ServiceIntervalDefault[] = await this.getGateways().serviceIntervalDefaultGw.list({
+          filter: { kindId },
+        });
+
+        if (defaults && defaults.length > 0) {
+          const result: ServiceIntervalMerged = {
+            carId,
+            kindId: kindId,
+            intervalType: defaults[0].intervalType,
+            mileageInterval: defaults[0].mileageInterval,
+            daysInterval: defaults[0].daysInterval,
+            isCustomized: false,
+            hasDefault: true,
+          };
+
+          return this.success(result);
+        }
+
+        // No default found - return zeros
+        const result: ServiceIntervalMerged = {
+          carId,
+          kindId,
+          intervalType: INTERVAL_TYPES.NONE,
+          mileageInterval: 0,
+          daysInterval: 0,
+          isCustomized: false,
+          hasDefault: false,
+        };
+        return this.success(result);
+      },
+      hasTransaction: true,
+      doingWhat: this.config.doingWhat?.remove ?? 'removing a service interval account',
+    });
   }
 
-  public async afterGetMany(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    if (!Array.isArray(items) || items.length === 0) {
-      return items;
-    }
+  public async removeMany(args: any) {
+    return this.runAction({
+      args,
+      doAuth: true,
+      validate: this.getValidators().removeMany,
+      action: async (args: any, opt: BaseCoreActionsInterface) => {
+        const { where } = args || {};
+        const { accountId } = this.getContext();
 
-    const { accountId } = this.getContext();
+        // Add accountId to each where item for security
+        const whereWithAccount = where.map((item: any) => ({
+          ...item,
+          accountId,
+        }));
 
-    // Batch fetch cars for all intervals
-    const carIds = [...new Set(items.filter((item) => item?.carId).map((item) => item.carId))];
+        const items = await this.getGateways().serviceIntervalAccountGw.remove(whereWithAccount);
 
-    if (carIds.length === 0) {
-      return [];
-    }
+        if (!items || items.length === 0) {
+          return this.failure(OP_RESULT_CODES.NOT_FOUND, 'No service interval customizations found');
+        }
 
-    const carsResult = await this.getGateways().carGw.list({ filter: { id: carIds } });
-    const cars = carsResult.data || [];
+        // Fetch defaults for removed items
+        const kindIds = items.map((item: any) => item.kindId);
+        const defaults: ServiceIntervalDefault[] = await this.getGateways().serviceIntervalDefaultGw.list({
+          filter: { kindId: kindIds },
+        });
 
-    // Create lookup map of valid car IDs (owned by account)
-    const validCarIds = new Set<string>();
-    for (const car of cars) {
-      if (car.accountId === accountId) {
-        validCarIds.add(car.id);
-      }
-    }
+        // Create lookup map for defaults
+        const defaultMap = new Map<number, ServiceIntervalDefault>();
+        for (const def of defaults) {
+          defaultMap.set(def.kindId, def);
+        }
 
-    // Filter items to only include those with valid cars
-    const filteredItems = items.filter((item) => item && validCarIds.has(item.carId));
+        // Return values for each removed item (default if exists, zeros otherwise)
+        const results: ServiceIntervalMerged[] = [];
+        for (const item of items) {
+          const defaultInterval = defaultMap.get(item.kindId);
+          if (defaultInterval) {
+            results.push({
+              carId: item.carId,
+              kindId: defaultInterval.kindId,
+              intervalType: defaultInterval.intervalType,
+              mileageInterval: defaultInterval.mileageInterval,
+              daysInterval: defaultInterval.daysInterval,
+              isCustomized: false,
+              hasDefault: true,
+            });
+          } else {
+            results.push({
+              carId: item.carId,
+              kindId: item.kindId,
+              intervalType: 0,
+              mileageInterval: 0,
+              daysInterval: 0,
+              isCustomized: false,
+              hasDefault: false,
+            });
+          }
+        }
 
-    return filteredItems.map((item: any) => this.processItemOnOut(item, opt));
-  }
-
-  public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { userId } = this.getContext();
-    const { carId } = params || {};
-
-    // Verify car ownership
-    if (carId) {
-      const isCarOwned = await this.verifyCarOwnership(carId);
-      if (!isCarOwned) {
-        return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Car not found');
-      }
-    }
-
-    const newInterval = {
-      ...params,
-      createdBy: userId,
-      createdAt: this.now(),
-    };
-
-    return newInterval;
-  }
-
-  public async afterCreate(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    return items.map((item: any) => this.processItemOnOut(item, opt));
-  }
-
-  public async beforeUpdate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { args } = opt || {};
-    const { where } = args || {};
-    const { id } = where || {};
-    const { accountId, userId } = this.getContext();
-
-    if (!id) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Service interval account ID is required');
-    }
-
-    // Verify record ownership via car
-    const { isOwned, record } = await this.verifyRecordOwnership(id);
-    if (!isOwned) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Service interval account not found');
-    }
-
-    // Don't allow changing carId
-    const { carId: _, ...restParams } = params;
-
-    restParams.updatedBy = userId;
-    restParams.updatedAt = this.now();
-
-    // Add accountId to where clause for SQL-level security via gateway join
-    where.accountId = accountId;
-
-    return restParams;
-  }
-
-  public async afterUpdate(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    return items.map((item: any) => this.processItemOnOut(item, opt));
-  }
-
-  public async beforeRemove(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { id } = where || {};
-    const { accountId } = this.getContext();
-
-    if (!id) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Service interval account ID is required');
-    }
-
-    // Verify record ownership via car
-    const { isOwned } = await this.verifyRecordOwnership(id);
-    if (!isOwned) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Service interval account not found');
-    }
-
-    // Add accountId to where clause for SQL-level security via gateway join
-    where.accountId = accountId;
-
-    return where;
-  }
-
-  public async afterRemove(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    return items.map((item: any) => this.processItemOnOut(item, opt));
-  }
-
-  public async beforeRemoveMany(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    if (!Array.isArray(where)) {
-      return where;
-    }
-
-    const { accountId } = this.getContext();
-    const allowedWhere: any[] = [];
-
-    for (const item of where) {
-      const { id } = item || {};
-
-      if (!id) {
-        continue;
-      }
-
-      // Verify record ownership via car
-      const { isOwned } = await this.verifyRecordOwnership(id);
-      if (isOwned) {
-        // Add accountId to where clause for SQL-level security via gateway join
-        allowedWhere.push({ ...item, accountId });
-      }
-    }
-
-    return allowedWhere;
-  }
-
-  public async afterRemoveMany(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    return items.map((item: any) => this.processItemOnOut(item, opt));
+        return this.success(results);
+      },
+      hasTransaction: true,
+      doingWhat: this.config.doingWhat?.removeMany ?? 'removing multiple service interval accounts',
+    });
   }
 }
 

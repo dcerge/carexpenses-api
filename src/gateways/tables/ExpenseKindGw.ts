@@ -1,4 +1,4 @@
-// ./src/gateways/tables/CarBodyTypeGw.ts
+// ./src/gateways/tables/ExpenseKindGw.ts
 import { BaseGateway, BaseGatewayPropsInterface } from '@sdflc/backend-helpers';
 import { SORT_ORDER, STATUSES } from '@sdflc/utils';
 
@@ -35,12 +35,20 @@ class ExpenseKindGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { expenseCategoryId, lang } = filterParams || {};
+    const { expenseCategoryId, lang, canSchedule, isItMaintenance } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
 
     if (expenseCategoryId) {
       query.whereIn(FIELDS.EXPENSE_CATEGORY_ID, castArray(expenseCategoryId));
+    }
+
+    if (canSchedule != null) {
+      query.where(FIELDS.CAN_SCHEDULE, canSchedule);
+    }
+
+    if (isItMaintenance != null) {
+      query.where(FIELDS.IS_IT_MAINTENANCE, isItMaintenance);
     }
 
     if (lang) {

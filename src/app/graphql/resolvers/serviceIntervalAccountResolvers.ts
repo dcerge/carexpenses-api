@@ -4,9 +4,10 @@ import { buildDefaultResolvers } from '@sdflc/backend-helpers';
 const resolvers = buildDefaultResolvers({
   prefix: 'serviceIntervalAccount',
   core: 'serviceIntervalAccountCore',
+  disableCreate: true,
   disableCreateMany: true,
   disableUpdateMany: true,
-  disableSet: true,
+  disableUpdate: true,
   types: {
     ServiceIntervalAccount: {
       userCreated(parent, args, context) {

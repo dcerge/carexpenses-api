@@ -1,4 +1,3 @@
-// ./src/core/ExpenseCore.ts
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 
@@ -7,32 +6,18 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/expenseValidators';
-import { ENTITY_TYPE_IDS } from 'boundary';
+import {
+  ENTITY_TYPE_IDS,
+  EXPENSE_TYPES,
+  US_GALLONS_TO_LITERS,
+  UK_GALLONS_TO_LITERS,
+  MILES_TO_KM,
+  UserProfile,
+} from '../boundary';
+import config from '../config';
+import { CarStatsUpdater, StatsOperationParams } from '../utils';
 
 dayjs.extend(utc);
-
-// Expense types
-const EXPENSE_TYPE = {
-  REFUEL: 1,
-  EXPENSE: 2,
-  CHECKPOINT: 3,
-  TRAVEL: 4,
-};
-
-// Unit conversion constants
-const MILES_TO_KM = 1.60934;
-const GALLONS_TO_LITERS = 3.78541;
-
-interface UserProfile {
-  id: string;
-  accountId: string;
-  homeCurrency: string;
-  distanceIn: string;
-  volumeIn: string;
-  consumptionIn: string;
-  notifyInMileage: number;
-  notifyInDays: number;
-}
 
 interface ExpenseUpdateData {
   expenseType: number;
@@ -40,11 +25,13 @@ interface ExpenseUpdateData {
   extensionParams: any;
   uploadedFilesIds: string[];
   tags: string[];
+  oldExpenseBase?: any; // Store old expense for stats delta calculation
+  oldExtension?: any; // Store old extension data (refuel or expense)
 }
 
 class ExpenseCore extends AppCore {
   private updateData: Map<string, ExpenseUpdateData> = new Map();
-  private userProfileCache: Map<string, UserProfile> = new Map();
+  private statsUpdater: CarStatsUpdater | null = null;
 
   constructor(props: BaseCorePropsInterface) {
     super({
@@ -76,6 +63,67 @@ class ExpenseCore extends AppCore {
   }
 
   // ===========================================================================
+  // Stats Updater Management
+  // ===========================================================================
+
+  /**
+   * Get or create the stats updater instance
+   */
+  private getStatsUpdater(): CarStatsUpdater {
+    if (!this.statsUpdater) {
+      const db = this.getDb();
+      this.statsUpdater = new CarStatsUpdater(db, config.dbSchema);
+    }
+    return this.statsUpdater;
+  }
+
+  /**
+   * Build StatsOperationParams from expense base and extension data
+   */
+  private buildStatsParams(expenseBase: any, extension: any, homeCurrency: string): StatsOperationParams {
+    const params: StatsOperationParams = {
+      recordId: expenseBase.id,
+      carId: expenseBase.carId,
+      homeCurrency,
+      expenseType: expenseBase.expenseType,
+      whenDone: expenseBase.whenDone,
+      odometer: expenseBase.odometer,
+      totalPriceInHc: expenseBase.totalPriceInHc,
+    };
+
+    if (expenseBase.expenseType === EXPENSE_TYPES.REFUEL) {
+      params.refuelVolume = extension?.refuelVolume;
+      params.refuelTaxesHc = expenseBase.tax; // Tax for refuels
+    } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
+      params.kindId = extension?.kindId;
+      params.expenseFeesHc = expenseBase.fees;
+      params.expenseTaxesHc = expenseBase.tax;
+    }
+
+    return params;
+  }
+
+  /**
+   * Determine home currency for stats
+   * Priority: expense record's homeCurrency > paidInCurrency > user profile
+   */
+  private async getHomeCurrencyForStats(expenseBase: any): Promise<string> {
+    // Use the expense record's home currency if available
+    if (expenseBase.homeCurrency) {
+      return expenseBase.homeCurrency;
+    }
+
+    // Fall back to paid in currency
+    if (expenseBase.paidInCurrency) {
+      return expenseBase.paidInCurrency;
+    }
+
+    // Last resort: use user's home currency
+    const userProfile = await this.getCurrentUserProfile();
+    return userProfile.homeCurrency;
+  }
+
+  // ===========================================================================
   // User Profile and Unit Conversion Utilities
   // ===========================================================================
 
@@ -89,7 +137,7 @@ class ExpenseCore extends AppCore {
       homeCurrency: 'USD',
       distanceIn: 'km',
       volumeIn: 'l',
-      consumptionIn: 'l/100km',
+      consumptionIn: 'l100km',
       notifyInMileage: 500,
       notifyInDays: 14,
     };
@@ -99,14 +147,9 @@ class ExpenseCore extends AppCore {
    * Get user profile with caching for the current request
    */
   private async getUserProfile(userId: string): Promise<UserProfile> {
-    if (this.userProfileCache.has(userId)) {
-      return this.userProfileCache.get(userId) || this.getDefaultUserProfile();
-    }
-
     const profile = await this.getGateways().userProfileGw.get(userId);
 
     if (profile) {
-      this.userProfileCache.set(userId, profile);
       return profile;
     }
 
@@ -150,24 +193,40 @@ class ExpenseCore extends AppCore {
 
   /**
    * Convert volume to metric (liters)
+   * @param value Volume in user's preferred unit
+   * @param unit User's volume unit: 'l', 'gal-us', or 'gal-uk'
    */
   private toMetricVolume(value: number | null | undefined, unit: string): number | null {
     if (value === null || value === undefined) return null;
-    if (unit === 'gal') {
-      return value * GALLONS_TO_LITERS;
+
+    switch (unit) {
+      case 'gal-us':
+        return value * US_GALLONS_TO_LITERS;
+      case 'gal-uk':
+        return value * UK_GALLONS_TO_LITERS;
+      case 'l':
+      default:
+        return value; // already in liters
     }
-    return value; // already in liters
   }
 
   /**
    * Convert volume from metric (liters) to user's preferred unit
+   * @param value Volume in liters
+   * @param unit User's volume unit: 'l', 'gal-us', or 'gal-uk'
    */
   private fromMetricVolume(value: number | null | undefined, unit: string): number | null {
     if (value === null || value === undefined) return null;
-    if (unit === 'gal') {
-      return value / GALLONS_TO_LITERS;
+
+    switch (unit) {
+      case 'gal-us':
+        return value / US_GALLONS_TO_LITERS;
+      case 'gal-uk':
+        return value / UK_GALLONS_TO_LITERS;
+      case 'l':
+      default:
+        return value; // already in liters
     }
-    return value; // already in liters
   }
 
   /**
@@ -186,16 +245,32 @@ class ExpenseCore extends AppCore {
     }
 
     switch (consumptionUnit) {
-      case 'l/100km':
+      case 'l100km': // Liters per 100 km (lower is better)
         return (volumeLiters / distanceKm) * 100;
-      case 'mpg': {
-        // Convert to miles and gallons for MPG calculation
+
+      case 'km-l': // Kilometers per liter (higher is better)
+        return distanceKm / volumeLiters;
+
+      case 'mpg-us': {
+        // Miles per US gallon (higher is better)
         const miles = distanceKm / MILES_TO_KM;
-        const gallons = volumeLiters / GALLONS_TO_LITERS;
+        const gallons = volumeLiters / US_GALLONS_TO_LITERS;
         return miles / gallons;
       }
-      case 'km/l':
-        return distanceKm / volumeLiters;
+
+      case 'mpg-uk': {
+        // Miles per UK gallon (higher is better)
+        const miles = distanceKm / MILES_TO_KM;
+        const gallons = volumeLiters / UK_GALLONS_TO_LITERS;
+        return miles / gallons;
+      }
+
+      case 'mi-l': {
+        // Miles per liter (higher is better)
+        const miles = distanceKm / MILES_TO_KM;
+        return miles / volumeLiters;
+      }
+
       default:
         return (volumeLiters / distanceKm) * 100; // default l/100km
     }
@@ -218,7 +293,7 @@ class ExpenseCore extends AppCore {
       filter: {
         carId,
         accountId,
-        expenseType: EXPENSE_TYPE.REFUEL,
+        expenseType: EXPENSE_TYPES.REFUEL,
         whenDoneTo: currentWhenDone,
       },
       params: {
@@ -293,7 +368,7 @@ class ExpenseCore extends AppCore {
     processed.tripMeter = this.fromMetricDistance(processed.tripMeter, userProfile.distanceIn);
 
     // For refuels, convert volume and calculate consumption
-    if (processed.expenseType === EXPENSE_TYPE.REFUEL) {
+    if (processed.expenseType === EXPENSE_TYPES.REFUEL) {
       // Convert refuel volume from liters to user's preferred unit
       processed.refuelVolume = this.fromMetricVolume(processed.refuelVolume, userProfile.volumeIn);
 
@@ -354,9 +429,9 @@ class ExpenseCore extends AppCore {
     const expenseIds: string[] = [];
 
     for (const base of expenseBases) {
-      if (base.expenseType === EXPENSE_TYPE.REFUEL) {
+      if (base.expenseType === EXPENSE_TYPES.REFUEL) {
         refuelIds.push(base.id);
-      } else if (base.expenseType === EXPENSE_TYPE.EXPENSE) {
+      } else if (base.expenseType === EXPENSE_TYPES.EXPENSE) {
         expenseIds.push(base.id);
       }
     }
@@ -384,7 +459,7 @@ class ExpenseCore extends AppCore {
     for (const base of expenseBases) {
       const merged = { ...base };
 
-      if (base.expenseType === EXPENSE_TYPE.REFUEL) {
+      if (base.expenseType === EXPENSE_TYPES.REFUEL) {
         const refuel = refuelMap.get(base.id);
         if (refuel) {
           merged.refuelVolume = refuel.refuelVolume;
@@ -394,7 +469,7 @@ class ExpenseCore extends AppCore {
           merged.remainingInTankBefore = refuel.remainingInTankBefore;
           merged.fuelGrade = refuel.fuelGrade;
         }
-      } else if (base.expenseType === EXPENSE_TYPE.EXPENSE) {
+      } else if (base.expenseType === EXPENSE_TYPES.EXPENSE) {
         const expense = expenseMap.get(base.id);
 
         if (expense) {
@@ -430,7 +505,7 @@ class ExpenseCore extends AppCore {
     const refuelIds = new Set<string>();
 
     for (const base of expenseBases) {
-      if (base.expenseType === EXPENSE_TYPE.REFUEL) {
+      if (base.expenseType === EXPENSE_TYPES.REFUEL) {
         carIds.add(base.carId);
         refuelIds.add(base.id);
       }
@@ -451,7 +526,7 @@ class ExpenseCore extends AppCore {
       filter: {
         carId: Array.from(carIds),
         accountId,
-        expenseType: EXPENSE_TYPE.REFUEL,
+        expenseType: EXPENSE_TYPES.REFUEL,
       },
       params: {
         sortBy: [
@@ -625,7 +700,7 @@ class ExpenseCore extends AppCore {
     const [merged] = await this.batchMergeExpenseData([item]);
 
     // Calculate trip meter if this is a refuel
-    if (merged.expenseType === EXPENSE_TYPE.REFUEL && merged.whenDone) {
+    if (merged.expenseType === EXPENSE_TYPES.REFUEL && merged.whenDone) {
       const previousRefuel = await this.findPreviousRefuel(merged.carId, merged.whenDone, merged.id, accountId);
 
       // tripMeter is only calculated if both current and previous have odometer values
@@ -682,7 +757,7 @@ class ExpenseCore extends AppCore {
 
     const baseFields = this.extractBaseFields(convertedParams);
 
-    // Store data for afterUpdate using requestId
+    // Store data for afterCreate using requestId
     const requestId = this.getRequestId();
     this.updateData.set(`create-${requestId}`, {
       expenseType: params.expenseType,
@@ -715,18 +790,32 @@ class ExpenseCore extends AppCore {
 
     // Create extension table record based on expenseType
     for (const expenseBase of items) {
-      if (expenseBase.expenseType === EXPENSE_TYPE.REFUEL) {
+      let extension: any = null;
+
+      if (expenseBase.expenseType === EXPENSE_TYPES.REFUEL) {
         const refuelFields = this.extractRefuelFields(convertedParams);
         await this.getGateways().refuelGw.create({
           id: expenseBase.id,
           ...refuelFields,
         });
-      } else if (expenseBase.expenseType === EXPENSE_TYPE.EXPENSE) {
+        extension = refuelFields;
+      } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
         const expenseFields = this.extractExpenseFields(convertedParams);
         await this.getGateways().expenseGw.create({
           id: expenseBase.id,
           ...expenseFields,
         });
+        extension = expenseFields;
+      }
+
+      // Update car stats
+      try {
+        const homeCurrency = await this.getHomeCurrencyForStats(expenseBase);
+        const statsParams = this.buildStatsParams(expenseBase, extension, homeCurrency);
+        await this.getStatsUpdater().onRecordCreated(statsParams);
+      } catch (error) {
+        // Log error but don't fail the create operation
+        console.error('Failed to update car stats on create:', error);
       }
     }
 
@@ -765,6 +854,9 @@ class ExpenseCore extends AppCore {
 
         await this.getGateways().expenseExpenseTagGw.create(expenseExpenseTags);
       }
+
+      // Clean up stored data
+      this.updateData.delete(`create-${requestId}`);
     }
 
     // Merge and return with conversions
@@ -794,6 +886,14 @@ class ExpenseCore extends AppCore {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense not found');
     }
 
+    // Fetch the old extension data for stats delta calculation
+    let oldExtension: any = null;
+    if (expenseBase.expenseType === EXPENSE_TYPES.REFUEL) {
+      oldExtension = await this.getGateways().refuelGw.get(id);
+    } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
+      oldExtension = await this.getGateways().expenseGw.get(id);
+    }
+
     // Don't allow changing accountId, userId, or expenseType
     const { accountId: _, userId: __, expenseType: ___, uploadedFilesIds, tags, ...restParams } = params;
 
@@ -816,6 +916,8 @@ class ExpenseCore extends AppCore {
       extensionParams: convertedParams,
       uploadedFilesIds,
       tags,
+      oldExpenseBase: expenseBase, // Store for stats delta
+      oldExtension, // Store for stats delta
     });
 
     return baseFields;
@@ -835,20 +937,41 @@ class ExpenseCore extends AppCore {
 
       if (!updateInfo) continue;
 
-      const { expenseType, expenseId, extensionParams } = updateInfo;
+      const { expenseType, expenseId, extensionParams, oldExpenseBase, oldExtension } = updateInfo;
 
-      if (expenseType === EXPENSE_TYPE.REFUEL) {
+      let newExtension: any = null;
+
+      if (expenseType === EXPENSE_TYPES.REFUEL) {
         const refuelFields = this.extractRefuelFields(extensionParams);
         const hasRefuelFields = Object.values(refuelFields).some((v) => v !== undefined);
         if (hasRefuelFields) {
           await this.getGateways().refuelGw.update({ id: expenseId }, refuelFields);
         }
-      } else if (expenseType === EXPENSE_TYPE.EXPENSE) {
+        // Fetch updated extension for stats
+        newExtension = await this.getGateways().refuelGw.get(expenseId);
+      } else if (expenseType === EXPENSE_TYPES.EXPENSE) {
         const expenseFields = this.extractExpenseFields(extensionParams);
         const hasExpenseFields = Object.values(expenseFields).some((v) => v !== undefined);
         if (hasExpenseFields) {
           await this.getGateways().expenseGw.update({ id: expenseId }, expenseFields);
         }
+        // Fetch updated extension for stats
+        newExtension = await this.getGateways().expenseGw.get(expenseId);
+      }
+
+      // Update car stats with delta
+      try {
+        if (oldExpenseBase) {
+          const oldHomeCurrency = await this.getHomeCurrencyForStats(oldExpenseBase);
+          const newHomeCurrency = await this.getHomeCurrencyForStats(item);
+
+          const oldStatsParams = this.buildStatsParams(oldExpenseBase, oldExtension, oldHomeCurrency);
+          const newStatsParams = this.buildStatsParams(item, newExtension, newHomeCurrency);
+
+          await this.getStatsUpdater().onRecordUpdated(oldStatsParams, newStatsParams);
+        }
+      } catch (error) {
+        console.error('Failed to update car stats on update:', error);
       }
 
       if (Array.isArray(updateInfo.uploadedFilesIds)) {
@@ -921,6 +1044,26 @@ class ExpenseCore extends AppCore {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense not found');
     }
 
+    // Fetch the extension data for stats update before removal
+    let extension: any = null;
+    if (expenseBase.expenseType === EXPENSE_TYPES.REFUEL) {
+      extension = await this.getGateways().refuelGw.get(id);
+    } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
+      extension = await this.getGateways().expenseGw.get(id);
+    }
+
+    // Store expense data for afterRemove stats update
+    const requestId = this.getRequestId();
+    this.updateData.set(`remove-${requestId}-${id}`, {
+      expenseType: expenseBase.expenseType,
+      expenseId: id,
+      extensionParams: {},
+      uploadedFilesIds: [],
+      tags: [],
+      oldExpenseBase: expenseBase,
+      oldExtension: extension,
+    });
+
     // Add accountId to where clause for SQL-level security
     where.accountId = accountId;
 
@@ -929,6 +1072,27 @@ class ExpenseCore extends AppCore {
 
   public async afterRemove(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const userProfile = await this.getCurrentUserProfile();
+    const requestId = this.getRequestId();
+
+    // Update stats for removed items
+    for (const item of items) {
+      if (!item.id) continue;
+
+      const removeInfo = this.updateData.get(`remove-${requestId}-${item.id}`);
+
+      if (removeInfo && removeInfo.oldExpenseBase) {
+        try {
+          const homeCurrency = await this.getHomeCurrencyForStats(removeInfo.oldExpenseBase);
+          const statsParams = this.buildStatsParams(removeInfo.oldExpenseBase, removeInfo.oldExtension, homeCurrency);
+          await this.getStatsUpdater().onRecordRemoved(statsParams);
+        } catch (error) {
+          console.error('Failed to update car stats on remove:', error);
+        }
+      }
+
+      // Clean up stored data
+      this.updateData.delete(`remove-${requestId}-${item.id}`);
+    }
 
     return items.map((item: any) => this.processItemWithProfile(item, userProfile));
   }
@@ -945,8 +1109,9 @@ class ExpenseCore extends AppCore {
     }
 
     const allowedWhere: any[] = [];
+    const requestId = this.getRequestId();
 
-    // Check ownership for each expense
+    // Check ownership for each expense and store data for stats
     for (const item of where) {
       const { id } = item || {};
 
@@ -957,6 +1122,25 @@ class ExpenseCore extends AppCore {
       const expenseBase = await this.getGateways().expenseBaseGw.get(id);
 
       if (expenseBase && expenseBase.accountId === accountId) {
+        // Fetch extension data for stats
+        let extension: any = null;
+        if (expenseBase.expenseType === EXPENSE_TYPES.REFUEL) {
+          extension = await this.getGateways().refuelGw.get(id);
+        } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
+          extension = await this.getGateways().expenseGw.get(id);
+        }
+
+        // Store for afterRemoveMany
+        this.updateData.set(`removeMany-${requestId}-${id}`, {
+          expenseType: expenseBase.expenseType,
+          expenseId: id,
+          extensionParams: {},
+          uploadedFilesIds: [],
+          tags: [],
+          oldExpenseBase: expenseBase,
+          oldExtension: extension,
+        });
+
         // Add accountId to where clause for SQL-level security
         allowedWhere.push({ ...item, accountId });
       }
@@ -967,6 +1151,27 @@ class ExpenseCore extends AppCore {
 
   public async afterRemoveMany(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const userProfile = await this.getCurrentUserProfile();
+    const requestId = this.getRequestId();
+
+    // Update stats for removed items
+    for (const item of items) {
+      if (!item.id) continue;
+
+      const removeInfo = this.updateData.get(`removeMany-${requestId}-${item.id}`);
+
+      if (removeInfo && removeInfo.oldExpenseBase) {
+        try {
+          const homeCurrency = await this.getHomeCurrencyForStats(removeInfo.oldExpenseBase);
+          const statsParams = this.buildStatsParams(removeInfo.oldExpenseBase, removeInfo.oldExtension, homeCurrency);
+          await this.getStatsUpdater().onRecordRemoved(statsParams);
+        } catch (error) {
+          console.error('Failed to update car stats on removeMany:', error);
+        }
+      }
+
+      // Clean up stored data
+      this.updateData.delete(`removeMany-${requestId}-${item.id}`);
+    }
 
     return items.map((item: any) => this.processItemWithProfile(item, userProfile));
   }

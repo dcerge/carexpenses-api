@@ -463,6 +463,7 @@ export const SMS_DIRECTION = {
 // =============================================================================
 
 export const INTERVAL_TYPES = {
+  NONE: 0,
   MILEAGE_ONLY: 1,
   DAYS_ONLY: 2,
   MILEAGE_OR_DAYS: 3,

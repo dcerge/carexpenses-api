@@ -99,13 +99,19 @@ class UserProfileCore extends BaseCore {
     const { id } = where || {};
 
     if (!id) {
+      this.logger.log(`Cannot update user profile as the 'id' field was not provided`);
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'User profile ID is required');
     }
 
     // Check if user owns the profile
     const profile = await this.getGateways().userProfileGw.get(id);
 
-    if (!profile || profile.accountId !== this.getContext().accountId) {
+    this.logger.debug(`Updating user profile preferencces: `, profile);
+
+    if (!profile || profile.id !== this.getContext().userId) {
+      this.logger.log(
+        `Cannot update user profile as its reference to the user ID ('${profile.id}') does not match current user's ID (${this.getContext().userId})`,
+      );
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'User profile not found');
     }
 
