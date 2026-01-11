@@ -20,13 +20,17 @@ export const up = (knex: Knex) =>
 
     table.string(FIELDS.DISTANCE_IN, 8).notNullable().defaultTo('km').comment('Distance unit preference (km, mi)');
 
-    table.string(FIELDS.VOLUME_IN, 8).notNullable().defaultTo('l').comment('Volume unit preference (l, gal)');
+    table
+      .string(FIELDS.VOLUME_IN, 8)
+      .notNullable()
+      .defaultTo('l')
+      .comment('Volume unit preference (l, gal-us, gal-uk)');
 
     table
       .string(FIELDS.CONSUMPTION_IN, 8)
       .notNullable()
-      .defaultTo('l/100km')
-      .comment('Fuel consumption unit preference (l/100km, mpg, km/l)');
+      .defaultTo('l100km')
+      .comment('Fuel consumption unit preference (l100km, km-l, mpg-us, mpg-uk, mi-l)');
 
     table
       .decimal(FIELDS.NOTIFY_IN_MILEAGE, 19, 4)

@@ -1,3 +1,4 @@
+export * from './CarStatsUpdater';
 export * from './cleanupOrphanedTempFiles';
 export * from './eventHelpers';
 export * from './eventHelpers';
@@ -8,4 +9,6 @@ export * from './LocalEncryptionService';
 export * from './nameHelpers';
 export * from './parserHelpers';
 export * from './personalizationHelpers';
+export * from './unitConversions';
 export * from './CarStatsUpdater';
+export * from './ServiceIntervalNextUpdater';

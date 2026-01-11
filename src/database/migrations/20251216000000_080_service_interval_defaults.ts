@@ -23,7 +23,7 @@ export const up = (knex: Knex) =>
     table
       .integer(FIELDS.INTERVAL_TYPE)
       .notNullable()
-      .comment('Interval type: 1=Mileage only, 2=Days only, 3=Mileage or Days, 4=Mileage and Days');
+      .comment('Interval type: 0=None, 1=Mileage only, 2=Days only, 3=Mileage or Days, 4=Mileage and Days');
 
     table
       .decimal(FIELDS.MILEAGE_INTERVAL, 19, 4)

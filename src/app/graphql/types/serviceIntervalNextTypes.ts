@@ -11,6 +11,9 @@ const typeDefs = `#graphql
     maxOdometer: Float
     nextWhenDo: String
     nextOdometer: Float
+    remainingDays: Int
+    remainingMileage: Float
+    urgencyStatus: String
     status: Int
     car: Car
     expenseKind: ExpenseKind
@@ -22,18 +25,30 @@ const typeDefs = `#graphql
     data: [ServiceIntervalNext!]
   }
 
+  input ServiceIntervalNextInput {
+    nextWhenDo: String
+    nextOdometer: Float
+  }
+
   input ServiceIntervalNextFilter {
-    id: [ID]
     carId: [ID]
     kindId: [Int]
     intervalType: [Int]
-    status: [Int]
+    urgencyStatus: [String]
+  }
+
+  input ServiceIntervalNextWhereInput {
+    id: ID!
   }
 
   type Query {
     serviceIntervalNextList(filter: ServiceIntervalNextFilter, params: PaginationAndSorting): ServiceIntervalNextResult
     serviceIntervalNextGet(id: ID): ServiceIntervalNextResult
     serviceIntervalNextGetMany(ids: [ID]): ServiceIntervalNextResult
+  }
+
+  type Mutation {
+    serviceIntervalNextUpdate(where: ServiceIntervalNextWhereInput, params: ServiceIntervalNextInput): ServiceIntervalNextResult
   }
 `;
 

@@ -316,6 +316,8 @@ export const FIELDS = {
   // ---------------------------------------------------------------------------
   // Service Interval Fields
   // ---------------------------------------------------------------------------
+  MILEAGE_INTERVAL_KM: 'mileage_interval_km',
+  DISTANCE_ENTERED_IN: 'distance_entered_in',
   MAX_WHEN_DONE: 'max_when_done',
   MAX_ODOMETER: 'max_odometer',
   NEXT_WHEN_DO: 'next_when_do',

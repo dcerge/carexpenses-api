@@ -41,10 +41,14 @@ class ServiceIntervalNextGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { carId, kindId, intervalType, accountId } = filterParams || {};
+    const { id, carId, kindId, intervalType, accountId } = filterParams || {};
     const self = this;
 
     await super.onListFilter(query, filterParams);
+
+    if (id) {
+      query.whereIn(`${TABLES.SERVICE_INTERVAL_NEXTS}.${FIELDS.ID}`, castArray(id));
+    }
 
     if (carId) {
       query.whereIn(`${TABLES.SERVICE_INTERVAL_NEXTS}.${FIELDS.CAR_ID}`, castArray(carId));

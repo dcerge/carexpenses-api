@@ -1,7 +1,0 @@
-export const SUBMISSION_STATUSES = {
-  SPAM: 10,
-  RECEIVED: 50,
-  REVIEWED: 100,
-  APPROVED: 110,
-  DECLINED: 200,
-};

@@ -26,17 +26,20 @@ export const up = (knex: Knex) =>
       .decimal(FIELDS.MILEAGE_INTERVAL, 19, 4)
       .notNullable()
       .defaultTo(0)
-      .comment('Mileage interval used for calculation');
+      .comment('Mileage interval in kilometers used for calculation');
 
     table.integer(FIELDS.DAYS_INTERVAL).notNullable().defaultTo(0).comment('Days interval used for calculation');
 
-    table.datetime(FIELDS.MAX_WHEN_DONE).notNullable().comment('Date of last service of this kind');
+    table.datetime(FIELDS.MAX_WHEN_DONE).notNullable().comment('Latest known date for the service of this kind');
 
-    table.decimal(FIELDS.MAX_ODOMETER, 19, 4).nullable().comment('Odometer reading at last service of this kind');
+    table
+      .decimal(FIELDS.MAX_ODOMETER, 19, 4)
+      .nullable()
+      .comment('Odometer reading in kilometers at last service of this kind');
 
     table.datetime(FIELDS.NEXT_WHEN_DO).nullable().comment('Calculated next service date');
 
-    table.decimal(FIELDS.NEXT_ODOMETER, 19, 4).nullable().comment('Calculated next service mileage');
+    table.decimal(FIELDS.NEXT_ODOMETER, 19, 4).nullable().comment('Calculated next service mileage in kilometers');
 
     dbFieldAddDefaults(table, {
       addUserInfo: false,

@@ -12,7 +12,7 @@ export const up = (knex: Knex) =>
 
     table.decimal(FIELDS.REFUEL_VOLUME, 19, 4).notNullable().defaultTo(0).comment('Volume of fuel added');
 
-    table.string(FIELDS.VOLUME_ENTERED_IN, 8).notNullable().defaultTo('l').comment('Volume unit (l, gal)');
+    table.string(FIELDS.VOLUME_ENTERED_IN, 8).notNullable().defaultTo('l').comment('Volume unit (l, gal-us, gal-uk)');
 
     table.decimal(FIELDS.PRICE_PER_VOLUME, 19, 4).nullable().comment('Price per unit volume');
 

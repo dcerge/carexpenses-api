@@ -1,13 +1,13 @@
-// ./src/core/ServiceIntervalAccountCore.ts
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 
-import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
+import { OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInterface } from '@sdflc/backend-helpers';
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/serviceIntervalAccountValidators';
 import { INTERVAL_TYPES } from 'database';
+import { toMetricDistance, fromMetricDistanceRounded } from '../utils/unitConversions';
 
 dayjs.extend(utc);
 
@@ -22,7 +22,7 @@ interface ServiceIntervalDefault {
   id: number;
   kindId: number;
   intervalType: number;
-  mileageInterval: number;
+  mileageInterval: number; // Always in km
   daysInterval: number;
   status: number;
 }
@@ -32,7 +32,9 @@ interface ServiceIntervalAccount {
   carId: string;
   kindId: number;
   intervalType: number;
-  mileageInterval: number;
+  mileageInterval: number; // Original user-entered value
+  mileageIntervalKm: number; // Metric equivalent for calculations
+  distanceEnteredIn: string; // Unit used at entry time
   daysInterval: number;
   status: number;
   version: number;
@@ -46,10 +48,11 @@ interface ServiceIntervalMerged {
   carId: string;
   kindId: number;
   intervalType: number;
-  mileageInterval: number;
+  mileageInterval: number; // In user's preferred unit
   daysInterval: number;
   isCustomized: boolean;
   hasDefault: boolean;
+  distanceUnit: string; // Indicates what unit mileageInterval is in
 }
 
 class ServiceIntervalAccountCore extends AppCore {
@@ -83,6 +86,57 @@ class ServiceIntervalAccountCore extends AppCore {
   }
 
   /**
+   * Convert mileage interval to user's preferred unit
+   * For customizations: use original value if units match, otherwise convert from km
+   * For defaults: always convert from km (defaults are always in km)
+   */
+  private convertMileageIntervalForDisplay(
+    customization: ServiceIntervalAccount | null,
+    defaultInterval: ServiceIntervalDefault | null,
+    userDistanceUnit: string,
+  ): { mileageInterval: number; distanceUnit: string } {
+    if (customization) {
+      // Customization exists - check if we can use the original value
+      if (customization.distanceEnteredIn === userDistanceUnit) {
+        // User's preference matches the entry unit - return exact original value
+        return {
+          mileageInterval: customization.mileageInterval,
+          distanceUnit: userDistanceUnit,
+        };
+      } else {
+        // User's preference differs - convert from metric with rounding
+        const converted = fromMetricDistanceRounded(customization.mileageIntervalKm, userDistanceUnit);
+        return {
+          mileageInterval: converted ?? 0,
+          distanceUnit: userDistanceUnit,
+        };
+      }
+    } else if (defaultInterval) {
+      // No customization, use default (always in km)
+      if (userDistanceUnit === 'km') {
+        // User prefers km - return as-is
+        return {
+          mileageInterval: defaultInterval.mileageInterval,
+          distanceUnit: 'km',
+        };
+      } else {
+        // User prefers different unit - convert from km with rounding
+        const converted = fromMetricDistanceRounded(defaultInterval.mileageInterval, userDistanceUnit);
+        return {
+          mileageInterval: converted ?? 0,
+          distanceUnit: userDistanceUnit,
+        };
+      }
+    }
+
+    // No customization and no default
+    return {
+      mileageInterval: 0,
+      distanceUnit: userDistanceUnit,
+    };
+  }
+
+  /**
    * Merge scheduleable kinds with defaults and car-specific customizations
    */
   private mergeScheduleableKindsWithDefaultsAndCustomizations(
@@ -90,6 +144,7 @@ class ServiceIntervalAccountCore extends AppCore {
     defaults: ServiceIntervalDefault[],
     customizations: ServiceIntervalAccount[],
     carId: string,
+    userDistanceUnit: string,
   ): ServiceIntervalMerged[] {
     // Create lookup map for defaults by kindId
     const defaultMap = new Map<number, ServiceIntervalDefault>();
@@ -106,8 +161,15 @@ class ServiceIntervalAccountCore extends AppCore {
     const merged: ServiceIntervalMerged[] = [];
 
     for (const kind of scheduleableKinds) {
-      const customization = customizationMap.get(kind.id);
-      const defaultInterval = defaultMap.get(kind.id);
+      const customization = customizationMap.get(kind.id) ?? null;
+      const defaultInterval = defaultMap.get(kind.id) ?? null;
+
+      // Convert mileage interval to user's preferred unit
+      const { mileageInterval, distanceUnit } = this.convertMileageIntervalForDisplay(
+        customization,
+        defaultInterval,
+        userDistanceUnit,
+      );
 
       if (customization) {
         // Use customization values (highest priority)
@@ -115,10 +177,11 @@ class ServiceIntervalAccountCore extends AppCore {
           carId,
           kindId: customization.kindId,
           intervalType: customization.intervalType,
-          mileageInterval: customization.mileageInterval,
+          mileageInterval,
           daysInterval: customization.daysInterval,
           isCustomized: true,
           hasDefault: defaultInterval != null,
+          distanceUnit,
         });
       } else if (defaultInterval) {
         // Use default values (no customization)
@@ -126,10 +189,11 @@ class ServiceIntervalAccountCore extends AppCore {
           carId,
           kindId: defaultInterval.kindId,
           intervalType: defaultInterval.intervalType,
-          mileageInterval: defaultInterval.mileageInterval,
+          mileageInterval,
           daysInterval: defaultInterval.daysInterval,
           isCustomized: false,
           hasDefault: true,
+          distanceUnit,
         });
       } else {
         // Scheduleable kind with no default and no customization
@@ -141,6 +205,7 @@ class ServiceIntervalAccountCore extends AppCore {
           daysInterval: 0,
           isCustomized: false,
           hasDefault: false,
+          distanceUnit: userDistanceUnit,
         });
       }
     }
@@ -157,6 +222,10 @@ class ServiceIntervalAccountCore extends AppCore {
         const { filter } = args || {};
         const { carId, kindId, intervalType } = filter || {};
         const { accountId } = this.getContext();
+
+        // Get user's distance preference
+        const userProfile = await this.getCurrentUserProfile();
+        const userDistanceUnit = userProfile.distanceIn;
 
         // Step 1: Fetch all scheduleable expense kinds
         const scheduleableKinds: ExpenseKind[] = await this.getGateways().expenseKindGw.list({
@@ -180,12 +249,13 @@ class ServiceIntervalAccountCore extends AppCore {
           },
         });
 
-        // Step 4: Merge all three sources
+        // Step 4: Merge all three sources with unit conversion
         let merged = this.mergeScheduleableKindsWithDefaultsAndCustomizations(
           scheduleableKinds,
           defaults || [],
           customizations || [],
           carId,
+          userDistanceUnit,
         );
 
         // Apply additional filters if provided
@@ -216,13 +286,22 @@ class ServiceIntervalAccountCore extends AppCore {
         const { carId, kindId, intervalType, mileageInterval, daysInterval } = params || {};
         const { userId } = this.getContext();
 
+        // Get user's distance preference
+        const userProfile = await this.getCurrentUserProfile();
+        const userDistanceUnit = userProfile.distanceIn;
+
+        // Convert mileage interval to metric for storage
+        const mileageIntervalKm = toMetricDistance(mileageInterval ?? 0, userDistanceUnit) ?? 0;
+
         const now = this.now();
 
         const record = {
           carId,
           kindId,
           intervalType,
-          mileageInterval: mileageInterval ?? 0,
+          mileageInterval: mileageInterval ?? 0, // Store original user-entered value
+          mileageIntervalKm, // Store metric equivalent
+          distanceEnteredIn: userDistanceUnit, // Store unit used at entry time
           daysInterval: daysInterval ?? 0,
           createdBy: userId,
           createdAt: now,
@@ -242,14 +321,16 @@ class ServiceIntervalAccountCore extends AppCore {
         });
 
         // Return merged format with isCustomized flag
+        // Since we just saved with the user's current unit, return the original value
         const result: ServiceIntervalMerged = {
           carId: items[0].carId,
           kindId: items[0].kindId,
           intervalType: items[0].intervalType,
-          mileageInterval: items[0].mileageInterval,
+          mileageInterval: items[0].mileageInterval, // Original value in user's unit
           daysInterval: items[0].daysInterval,
           isCustomized: true,
           hasDefault: defaults != null && defaults.length > 0,
+          distanceUnit: userDistanceUnit,
         };
 
         return this.success(result);
@@ -269,6 +350,10 @@ class ServiceIntervalAccountCore extends AppCore {
         const { carId, kindId } = where || {};
         const { accountId } = this.getContext();
 
+        // Get user's distance preference
+        const userProfile = await this.getCurrentUserProfile();
+        const userDistanceUnit = userProfile.distanceIn;
+
         const removeWhere = {
           carId,
           kindId,
@@ -287,14 +372,22 @@ class ServiceIntervalAccountCore extends AppCore {
         });
 
         if (defaults && defaults.length > 0) {
+          // Convert default mileage from km to user's preferred unit
+          const { mileageInterval, distanceUnit } = this.convertMileageIntervalForDisplay(
+            null,
+            defaults[0],
+            userDistanceUnit,
+          );
+
           const result: ServiceIntervalMerged = {
             carId,
             kindId: kindId,
             intervalType: defaults[0].intervalType,
-            mileageInterval: defaults[0].mileageInterval,
+            mileageInterval,
             daysInterval: defaults[0].daysInterval,
             isCustomized: false,
             hasDefault: true,
+            distanceUnit,
           };
 
           return this.success(result);
@@ -309,6 +402,7 @@ class ServiceIntervalAccountCore extends AppCore {
           daysInterval: 0,
           isCustomized: false,
           hasDefault: false,
+          distanceUnit: userDistanceUnit,
         };
         return this.success(result);
       },
@@ -325,6 +419,10 @@ class ServiceIntervalAccountCore extends AppCore {
       action: async (args: any, opt: BaseCoreActionsInterface) => {
         const { where } = args || {};
         const { accountId } = this.getContext();
+
+        // Get user's distance preference
+        const userProfile = await this.getCurrentUserProfile();
+        const userDistanceUnit = userProfile.distanceIn;
 
         // Add accountId to each where item for security
         const whereWithAccount = where.map((item: any) => ({
@@ -353,16 +451,25 @@ class ServiceIntervalAccountCore extends AppCore {
         // Return values for each removed item (default if exists, zeros otherwise)
         const results: ServiceIntervalMerged[] = [];
         for (const item of items) {
-          const defaultInterval = defaultMap.get(item.kindId);
+          const defaultInterval = defaultMap.get(item.kindId) ?? null;
+
+          // Convert mileage to user's preferred unit
+          const { mileageInterval, distanceUnit } = this.convertMileageIntervalForDisplay(
+            null,
+            defaultInterval,
+            userDistanceUnit,
+          );
+
           if (defaultInterval) {
             results.push({
               carId: item.carId,
               kindId: defaultInterval.kindId,
               intervalType: defaultInterval.intervalType,
-              mileageInterval: defaultInterval.mileageInterval,
+              mileageInterval,
               daysInterval: defaultInterval.daysInterval,
               isCustomized: false,
               hasDefault: true,
+              distanceUnit,
             });
           } else {
             results.push({
@@ -373,6 +480,7 @@ class ServiceIntervalAccountCore extends AppCore {
               daysInterval: 0,
               isCustomized: false,
               hasDefault: false,
+              distanceUnit: userDistanceUnit,
             });
           }
         }

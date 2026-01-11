@@ -1,3 +1,4 @@
+// ./src/core/ExpenseCore.ts
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 
@@ -6,16 +7,21 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/expenseValidators';
-import {
-  ENTITY_TYPE_IDS,
-  EXPENSE_TYPES,
-  US_GALLONS_TO_LITERS,
-  UK_GALLONS_TO_LITERS,
-  MILES_TO_KM,
-  UserProfile,
-} from '../boundary';
+import { ENTITY_TYPE_IDS, EXPENSE_TYPES, UserProfile } from '../boundary';
 import config from '../config';
-import { CarStatsUpdater, StatsOperationParams } from '../utils';
+import {
+  CarStatsUpdater,
+  StatsOperationParams,
+  ServiceIntervalNextUpdater,
+  ServiceIntervalUpdateParams,
+} from '../utils';
+import {
+  toMetricDistance,
+  fromMetricDistance,
+  toMetricVolume,
+  fromMetricVolume,
+  calculateConsumption,
+} from '../utils/unitConversions';
 
 dayjs.extend(utc);
 
@@ -32,6 +38,7 @@ interface ExpenseUpdateData {
 class ExpenseCore extends AppCore {
   private updateData: Map<string, ExpenseUpdateData> = new Map();
   private statsUpdater: CarStatsUpdater | null = null;
+  private serviceIntervalUpdater: ServiceIntervalNextUpdater | null = null;
 
   constructor(props: BaseCorePropsInterface) {
     super({
@@ -78,6 +85,17 @@ class ExpenseCore extends AppCore {
   }
 
   /**
+   * Get or create the service interval updater instance
+   */
+  private getServiceIntervalUpdater(): ServiceIntervalNextUpdater {
+    if (!this.serviceIntervalUpdater) {
+      const db = this.getDb();
+      this.serviceIntervalUpdater = new ServiceIntervalNextUpdater(db, config.dbSchema);
+    }
+    return this.serviceIntervalUpdater;
+  }
+
+  /**
    * Build StatsOperationParams from expense base and extension data
    */
   private buildStatsParams(expenseBase: any, extension: any, homeCurrency: string): StatsOperationParams {
@@ -104,6 +122,30 @@ class ExpenseCore extends AppCore {
   }
 
   /**
+   * Build ServiceIntervalUpdateParams from expense base and extension data.
+   * Only applicable for expenses (not refuels).
+   */
+  private buildServiceIntervalParams(expenseBase: any, extension: any): ServiceIntervalUpdateParams | null {
+    // Only expenses have kindId - refuels don't track service intervals
+    if (expenseBase.expenseType !== EXPENSE_TYPES.EXPENSE) {
+      return null;
+    }
+
+    const kindId = extension?.kindId;
+    if (!kindId) {
+      return null;
+    }
+
+    return {
+      expenseId: expenseBase.id,
+      carId: expenseBase.carId,
+      kindId,
+      whenDone: expenseBase.whenDone,
+      odometer: expenseBase.odometer,
+    };
+  }
+
+  /**
    * Determine home currency for stats
    * Priority: expense record's homeCurrency > paidInCurrency > user profile
    */
@@ -124,156 +166,19 @@ class ExpenseCore extends AppCore {
   }
 
   // ===========================================================================
-  // User Profile and Unit Conversion Utilities
+  // Unit Conversion Utilities (using shared functions)
   // ===========================================================================
 
   /**
-   * Get default user profile when no profile exists
+   * Calculate trip meter for a refuel based on previous refuel's odometer
    */
-  private getDefaultUserProfile(): UserProfile {
-    return {
-      id: '',
-      accountId: '',
-      homeCurrency: 'USD',
-      distanceIn: 'km',
-      volumeIn: 'l',
-      consumptionIn: 'l100km',
-      notifyInMileage: 500,
-      notifyInDays: 14,
-    };
-  }
-
-  /**
-   * Get user profile with caching for the current request
-   */
-  private async getUserProfile(userId: string): Promise<UserProfile> {
-    const profile = await this.getGateways().userProfileGw.get(userId);
-
-    if (profile) {
-      return profile;
-    }
-
-    return this.getDefaultUserProfile();
-  }
-
-  /**
-   * Get user profile for current context user, returns default if userId is not available
-   */
-  private async getCurrentUserProfile(): Promise<UserProfile> {
-    const { userId } = this.getContext();
-
-    if (!userId) {
-      return this.getDefaultUserProfile();
-    }
-
-    return this.getUserProfile(userId);
-  }
-
-  /**
-   * Convert distance to metric (km)
-   */
-  private toMetricDistance(value: number | null | undefined, unit: string): number | null {
-    if (value === null || value === undefined) return null;
-    if (unit === 'mi') {
-      return value * MILES_TO_KM;
-    }
-    return value; // already in km
-  }
-
-  /**
-   * Convert distance from metric (km) to user's preferred unit
-   */
-  private fromMetricDistance(value: number | null | undefined, unit: string): number | null {
-    if (value === null || value === undefined) return null;
-    if (unit === 'mi') {
-      return value / MILES_TO_KM;
-    }
-    return value; // already in km
-  }
-
-  /**
-   * Convert volume to metric (liters)
-   * @param value Volume in user's preferred unit
-   * @param unit User's volume unit: 'l', 'gal-us', or 'gal-uk'
-   */
-  private toMetricVolume(value: number | null | undefined, unit: string): number | null {
-    if (value === null || value === undefined) return null;
-
-    switch (unit) {
-      case 'gal-us':
-        return value * US_GALLONS_TO_LITERS;
-      case 'gal-uk':
-        return value * UK_GALLONS_TO_LITERS;
-      case 'l':
-      default:
-        return value; // already in liters
-    }
-  }
-
-  /**
-   * Convert volume from metric (liters) to user's preferred unit
-   * @param value Volume in liters
-   * @param unit User's volume unit: 'l', 'gal-us', or 'gal-uk'
-   */
-  private fromMetricVolume(value: number | null | undefined, unit: string): number | null {
-    if (value === null || value === undefined) return null;
-
-    switch (unit) {
-      case 'gal-us':
-        return value / US_GALLONS_TO_LITERS;
-      case 'gal-uk':
-        return value / UK_GALLONS_TO_LITERS;
-      case 'l':
-      default:
-        return value; // already in liters
-    }
-  }
-
-  /**
-   * Calculate fuel consumption in user's preferred unit
-   * @param distanceKm Distance in kilometers (metric)
-   * @param volumeLiters Volume in liters (metric)
-   * @param consumptionUnit User's preferred consumption unit
-   */
-  private calculateConsumption(
-    distanceKm: number | null | undefined,
-    volumeLiters: number | null | undefined,
-    consumptionUnit: string,
-  ): number | null {
-    if (!distanceKm || distanceKm <= 0 || !volumeLiters || volumeLiters <= 0) {
+  private calculateTripMeter(currentOdometer: number | null, previousOdometer: number | null): number | null {
+    if (currentOdometer === null || previousOdometer === null) {
       return null;
     }
 
-    switch (consumptionUnit) {
-      case 'l100km': // Liters per 100 km (lower is better)
-        return (volumeLiters / distanceKm) * 100;
-
-      case 'km-l': // Kilometers per liter (higher is better)
-        return distanceKm / volumeLiters;
-
-      case 'mpg-us': {
-        // Miles per US gallon (higher is better)
-        const miles = distanceKm / MILES_TO_KM;
-        const gallons = volumeLiters / US_GALLONS_TO_LITERS;
-        return miles / gallons;
-      }
-
-      case 'mpg-uk': {
-        // Miles per UK gallon (higher is better)
-        const miles = distanceKm / MILES_TO_KM;
-        const gallons = volumeLiters / UK_GALLONS_TO_LITERS;
-        return miles / gallons;
-      }
-
-      case 'mi-l': {
-        // Miles per liter (higher is better)
-        const miles = distanceKm / MILES_TO_KM;
-        return miles / volumeLiters;
-      }
-
-      default:
-        return (volumeLiters / distanceKm) * 100; // default l/100km
-    }
+    const tripMeter = currentOdometer - previousOdometer;
+    return tripMeter > 0 ? tripMeter : null;
   }
 
   /**
@@ -316,18 +221,6 @@ class ExpenseCore extends AppCore {
     return null;
   }
 
-  /**
-   * Calculate trip meter for a refuel based on previous refuel's odometer
-   */
-  private calculateTripMeter(currentOdometer: number | null, previousOdometer: number | null): number | null {
-    if (currentOdometer === null || previousOdometer === null) {
-      return null;
-    }
-
-    const tripMeter = currentOdometer - previousOdometer;
-    return tripMeter > 0 ? tripMeter : null;
-  }
-
   // ===========================================================================
   // Process Item Methods
   // ===========================================================================
@@ -364,13 +257,13 @@ class ExpenseCore extends AppCore {
     const processed = this.processItemOnOut(item);
 
     // Convert distance fields from metric to user's preferred unit
-    processed.odometer = this.fromMetricDistance(processed.odometer, userProfile.distanceIn);
-    processed.tripMeter = this.fromMetricDistance(processed.tripMeter, userProfile.distanceIn);
+    processed.odometer = fromMetricDistance(processed.odometer, userProfile.distanceIn);
+    processed.tripMeter = fromMetricDistance(processed.tripMeter, userProfile.distanceIn);
 
     // For refuels, convert volume and calculate consumption
     if (processed.expenseType === EXPENSE_TYPES.REFUEL) {
       // Convert refuel volume from liters to user's preferred unit
-      processed.refuelVolume = this.fromMetricVolume(processed.refuelVolume, userProfile.volumeIn);
+      processed.refuelVolume = fromMetricVolume(processed.refuelVolume, userProfile.volumeIn);
 
       // Calculate consumption only for full tank refuels
       if (processed.isFullTank && processed.tripMeter !== null) {
@@ -378,11 +271,7 @@ class ExpenseCore extends AppCore {
         const tripMeterMetric = item.tripMeter; // Original metric value
         const refuelVolumeMetric = item.refuelVolume; // Original metric value (liters)
 
-        processed.consumption = this.calculateConsumption(
-          tripMeterMetric,
-          refuelVolumeMetric,
-          userProfile.consumptionIn,
-        );
+        processed.consumption = calculateConsumption(tripMeterMetric, refuelVolumeMetric, userProfile.consumptionIn);
       } else {
         processed.consumption = null;
       }
@@ -401,12 +290,12 @@ class ExpenseCore extends AppCore {
 
     // Convert odometer from user's unit to metric (km)
     if (converted.odometer !== undefined && converted.odometer !== null) {
-      converted.odometer = this.toMetricDistance(converted.odometer, userProfile.distanceIn);
+      converted.odometer = toMetricDistance(converted.odometer, userProfile.distanceIn);
     }
 
     // Convert refuel volume from user's unit to metric (liters)
     if (converted.refuelVolume !== undefined && converted.refuelVolume !== null) {
-      converted.refuelVolume = this.toMetricVolume(converted.refuelVolume, userProfile.volumeIn);
+      converted.refuelVolume = toMetricVolume(converted.refuelVolume, userProfile.volumeIn);
     }
 
     return converted;
@@ -817,6 +706,17 @@ class ExpenseCore extends AppCore {
         // Log error but don't fail the create operation
         console.error('Failed to update car stats on create:', error);
       }
+
+      // Update service interval next (only for expenses with kindId)
+      try {
+        const serviceIntervalParams = this.buildServiceIntervalParams(expenseBase, extension);
+        if (serviceIntervalParams) {
+          await this.getServiceIntervalUpdater().onExpenseCreated(serviceIntervalParams);
+        }
+      } catch (error) {
+        // Log error but don't fail the create operation
+        console.error('Failed to update service interval on create:', error);
+      }
     }
 
     const requestId = this.getRequestId();
@@ -974,6 +874,27 @@ class ExpenseCore extends AppCore {
         console.error('Failed to update car stats on update:', error);
       }
 
+      // Update service interval next (only for expenses with kindId)
+      try {
+        const oldServiceIntervalParams = this.buildServiceIntervalParams(oldExpenseBase, oldExtension);
+        const newServiceIntervalParams = this.buildServiceIntervalParams(item, newExtension);
+
+        if (oldServiceIntervalParams || newServiceIntervalParams) {
+          // If both old and new have params, it's an update
+          if (oldServiceIntervalParams && newServiceIntervalParams) {
+            await this.getServiceIntervalUpdater().onExpenseUpdated(oldServiceIntervalParams, newServiceIntervalParams);
+          } else if (newServiceIntervalParams) {
+            // New expense has kindId but old didn't (shouldn't happen since expenseType can't change)
+            await this.getServiceIntervalUpdater().onExpenseCreated(newServiceIntervalParams);
+          } else if (oldServiceIntervalParams) {
+            // Old had kindId but new doesn't (kindId changed to null - unlikely but handle it)
+            await this.getServiceIntervalUpdater().onExpenseRemoved(oldServiceIntervalParams);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update service interval on update:', error);
+      }
+
       if (Array.isArray(updateInfo.uploadedFilesIds)) {
         await this.getGateways().entityEntityAttachmentGw.remove({
           entityTypeId: ENTITY_TYPE_IDS.EXPENSE,
@@ -1081,12 +1002,26 @@ class ExpenseCore extends AppCore {
       const removeInfo = this.updateData.get(`remove-${requestId}-${item.id}`);
 
       if (removeInfo && removeInfo.oldExpenseBase) {
+        // Update car stats
         try {
           const homeCurrency = await this.getHomeCurrencyForStats(removeInfo.oldExpenseBase);
           const statsParams = this.buildStatsParams(removeInfo.oldExpenseBase, removeInfo.oldExtension, homeCurrency);
           await this.getStatsUpdater().onRecordRemoved(statsParams);
         } catch (error) {
           console.error('Failed to update car stats on remove:', error);
+        }
+
+        // Update service interval next
+        try {
+          const serviceIntervalParams = this.buildServiceIntervalParams(
+            removeInfo.oldExpenseBase,
+            removeInfo.oldExtension,
+          );
+          if (serviceIntervalParams) {
+            await this.getServiceIntervalUpdater().onExpenseRemoved(serviceIntervalParams);
+          }
+        } catch (error) {
+          console.error('Failed to update service interval on remove:', error);
         }
       }
 
@@ -1160,12 +1095,26 @@ class ExpenseCore extends AppCore {
       const removeInfo = this.updateData.get(`removeMany-${requestId}-${item.id}`);
 
       if (removeInfo && removeInfo.oldExpenseBase) {
+        // Update car stats
         try {
           const homeCurrency = await this.getHomeCurrencyForStats(removeInfo.oldExpenseBase);
           const statsParams = this.buildStatsParams(removeInfo.oldExpenseBase, removeInfo.oldExtension, homeCurrency);
           await this.getStatsUpdater().onRecordRemoved(statsParams);
         } catch (error) {
           console.error('Failed to update car stats on removeMany:', error);
+        }
+
+        // Update service interval next
+        try {
+          const serviceIntervalParams = this.buildServiceIntervalParams(
+            removeInfo.oldExpenseBase,
+            removeInfo.oldExtension,
+          );
+          if (serviceIntervalParams) {
+            await this.getServiceIntervalUpdater().onExpenseRemoved(serviceIntervalParams);
+          }
+        } catch (error) {
+          console.error('Failed to update service interval on removeMany:', error);
         }
       }
 
@@ -1174,6 +1123,23 @@ class ExpenseCore extends AppCore {
     }
 
     return items.map((item: any) => this.processItemWithProfile(item, userProfile));
+  }
+
+  public async recalculateAll(args: any) {
+    return this.runAction({
+      args,
+      doAuth: true,
+      action: async (args: any, opt: BaseCoreActionsInterface) => {
+        const db = this.getDb();
+        const carUpdater = new CarStatsUpdater(db, config.dbSchema);
+
+        await carUpdater.recalculateAllStats();
+
+        return this.success({});
+      },
+      hasTransaction: true,
+      doingWhat: 'recalculating all vehicles stats',
+    });
   }
 }
 

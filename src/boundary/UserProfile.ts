@@ -1,3 +1,4 @@
+// ./src/boundary/UserProfile.ts
 export interface UserProfile {
   id: string;
   accountId: string;

@@ -1,12 +1,11 @@
-import yargs from 'yargs';
+import yargs, { exit } from 'yargs';
 import { createContext } from '../../context';
 
 import { HEADERS, dbReset } from '@sdflc/backend-helpers';
 
 import config from '../../config';
 import knexHandle from 'knexConfig';
-
-import { loadTest } from '../../utils/simpleLoadTester';
+import { logger } from 'logger';
 
 const resetFromCLI = () => {
   dbReset(knexHandle, config).then(() => knexHandle.destroy());
@@ -29,10 +28,20 @@ const getContext = () =>
     headers: {},
   });
 
-const runloadTest = async () => {
+const recalculateStats = async () => {
   const context = await getContext();
 
-  await loadTest({ mode: 'burst', requestsPerSecond: 20, totalRequests: 10000 });
+  try {
+    logger.log('Recalculating all vehicles stats...');
+    await context.cores.expenseCore.recalculateAll({});
+
+    logger.log('Recalculating upcoming services...');
+    await context.cores.serviceIntervalNextCore.recalculateAll({});
+
+    logger.log('Recalculation complete.');
+  } finally {
+    process.exit(0);
+  }
 };
 
 yargs(process.argv.splice(2))
@@ -45,12 +54,12 @@ yargs(process.argv.splice(2))
     resetFromCLI,
   )
   .command(
-    'load-test',
-    'Do simple load testing by making multiple form submissions a second',
+    'recalculate',
+    'Does recalculation of all the stats and upcoming service interals',
     (yargs) => {
       return yargs;
     },
-    runloadTest,
+    recalculateStats,
   )
   .strict()
   .help('h')

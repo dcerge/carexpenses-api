@@ -19,7 +19,10 @@ export const up = (knex: Knex) =>
 
     table.uuid(FIELDS.USER_ID).notNullable().comment('User ID - references ms_auth user');
 
-    table.integer(FIELDS.EXPENSE_TYPE).notNullable().comment('Expense type: 1=Refuel, 2=Expense');
+    table
+      .integer(FIELDS.EXPENSE_TYPE)
+      .notNullable()
+      .comment('Expense type: 1=Refuel, 2=Expense, 3=Checkpoint, 4=Travel Point');
 
     // Mileage tracking
     table.decimal(FIELDS.ODOMETER, 19, 4).nullable().comment('Odometer reading at time of expense');

@@ -26,7 +26,9 @@ export const up = (knex: Knex) =>
       .decimal(FIELDS.MILEAGE_INTERVAL, 19, 4)
       .notNullable()
       .defaultTo(0)
-      .comment('Mileage interval for service reminder');
+      .comment(
+        'Mileage interval exactly as user entered per their userProfile.distanceIn (km,mi) for service reminder',
+      );
 
     table.integer(FIELDS.DAYS_INTERVAL).notNullable().defaultTo(0).comment('Days interval for service reminder');
 

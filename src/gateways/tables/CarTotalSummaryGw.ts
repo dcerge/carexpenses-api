@@ -149,6 +149,50 @@ class CarTotalSummaryGw extends BaseGateway {
 
     return result?.rows?.[0]?.qty ? Number(result.rows[0].qty) : 0;
   }
+
+  /**
+   * Get the maximum known mileage for each car across all currency rows.
+   * Since car_total_summaries can have multiple rows per car (one per currency),
+   * this returns the highest latest_known_mileage for each car.
+   *
+   * @param carIds Array of car IDs to fetch mileage for
+   * @param accountId Account ID for security filtering
+   * @returns Map of carId -> maxMileage (in kilometers)
+   */
+  async getMaxMileageByCarIds(carIds: string[], accountId: string): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+
+    if (!carIds || carIds.length === 0) {
+      return result;
+    }
+
+    // Create placeholders for the IN clause
+    const placeholders = carIds.map(() => '?').join(', ');
+
+    const query = `
+      SELECT 
+        cts.${FIELDS.CAR_ID} as car_id,
+        MAX(cts.${FIELDS.LATEST_KNOWN_MILEAGE}) as max_mileage
+      FROM ${config.dbSchema}.${TABLES.CAR_TOTAL_SUMMARIES} cts
+      INNER JOIN ${config.dbSchema}.${TABLES.CARS} c 
+        ON c.${FIELDS.ID} = cts.${FIELDS.CAR_ID}
+        AND c.${FIELDS.ACCOUNT_ID} = ?
+      WHERE cts.${FIELDS.CAR_ID} IN (${placeholders})
+      GROUP BY cts.${FIELDS.CAR_ID}
+    `;
+
+    const bindings = [accountId, ...carIds];
+
+    const queryResult = await this.getDb().runRawQuery(query, bindings);
+
+    if (queryResult?.rows) {
+      for (const row of queryResult.rows) {
+        result.set(row.car_id, Number(row.max_mileage) || 0);
+      }
+    }
+
+    return result;
+  }
 }
 
 export { CarTotalSummaryGw };
