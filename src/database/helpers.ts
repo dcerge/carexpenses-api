@@ -16,16 +16,16 @@ export const TABLES = {
   // Lookup Tables (Static Reference Data)
   // ---------------------------------------------------------------------------
   CAR_BODY_TYPES: 'car_body_types',
-  CAR_BODY_TYPE_L10N: 'car_body_type_l10n',
+  CAR_BODY_TYPE_L10N: 'car_body_type_l_10_n',
   CAR_ENGINE_TYPES: 'car_engine_types',
-  CAR_ENGINE_TYPE_L10N: 'car_engine_type_l10n',
+  CAR_ENGINE_TYPE_L10N: 'car_engine_type_l_10_n',
   CAR_TRANSMISSION_TYPES: 'car_transmission_types',
-  CAR_TRANSMISSION_TYPE_L10N: 'car_transmission_type_l10n',
+  CAR_TRANSMISSION_TYPE_L10N: 'car_transmission_type_l_10_n',
   VEHICLE_MAKES: 'vehicle_makes',
   EXPENSE_CATEGORIES: 'expense_categories',
-  EXPENSE_CATEGORY_L10N: 'expense_category_l10n',
+  EXPENSE_CATEGORY_L10N: 'expense_category_l_10_n',
   EXPENSE_KINDS: 'expense_kinds',
-  EXPENSE_KIND_L10N: 'expense_kind_l10n',
+  EXPENSE_KIND_L10N: 'expense_kind_l_10_n',
   SERVICE_INTERVAL_DEFAULTS: 'service_interval_defaults',
 
   // ---------------------------------------------------------------------------

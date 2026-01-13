@@ -32,6 +32,12 @@ const resolvers = buildDefaultResolvers({
       },
     },
   },
+  mutation: {
+    // mutations
+  },
+  query: {
+    // queries
+  },
 });
 
 export default resolvers;

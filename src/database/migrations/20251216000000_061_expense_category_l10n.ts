@@ -8,7 +8,11 @@ const { dbSchema } = config;
 
 export const up = (knex: Knex) =>
   knex.schema.withSchema(dbSchema).createTable(TABLES.EXPENSE_CATEGORY_L10N, (table) => {
-    table.string(FIELDS.ID, 128).primary().notNullable();
+    table
+      .string(FIELDS.ID, 128)
+      .primary()
+      .notNullable()
+      .comment('ID is a comibnation of expense_category.id and land, example: 1-en');
 
     table.integer(FIELDS.EXPENSE_CATEGORY_ID).notNullable().comment(`Reference to ${TABLES.EXPENSE_CATEGORIES}`);
     table.string(FIELDS.LANG, 8).notNullable().comment('ISO 639-1 language code (e.g., en, uk, es)');

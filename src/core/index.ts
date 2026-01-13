@@ -26,3 +26,4 @@ export * from './UserCarCore';
 export * from './UserNotificationCore';
 export * from './UserProfileCore';
 export * from './VehicleMakeCore';
+export * from './ReportCore';
