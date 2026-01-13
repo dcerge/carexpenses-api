@@ -1,3 +1,4 @@
+// ./src/boundary/reportTypes.ts
 export interface CurrencyAmountRaw {
   currency: string;
   amount: number;
@@ -62,4 +63,54 @@ export interface GetDataParams {
   dateFrom: string;
   dateTo: string;
   lang?: string; // ISO 639-1 language code, defaults to 'en'
+}
+
+// =============================================================================
+// Yearly Report Types
+// =============================================================================
+
+/**
+ * Parameters for yearly report gateway
+ */
+export interface GetYearlyDataParams {
+  accountId: string;
+  carIds: string[];
+  year: number;
+}
+
+/**
+ * Raw monthly breakdown data from gateway (in metric units, HC currency + foreign)
+ */
+export interface MonthlyBreakdownRaw {
+  month: number;
+
+  // HC totals
+  refuelsCostHc: number;
+  expensesCostHc: number;
+  refuelsCountHc: number;
+  expensesCountHc: number;
+
+  // Fuel & mileage (tracked regardless of currency)
+  refuelsVolumeLiters: number;
+  startMileageKm: number | null;
+  endMileageKm: number | null;
+
+  // Foreign currency breakdowns
+  foreignRefuels: CurrencyAmountRaw[];
+  foreignExpenses: CurrencyAmountRaw[];
+  foreignCurrencyTotals: CurrencyAmountRaw[];
+  totalForeignRecordsCount: number;
+
+  // Total counts (HC + foreign)
+  refuelsCount: number;
+  expensesCount: number;
+}
+
+/**
+ * Complete raw data returned by yearly report gateway
+ */
+export interface YearlyReportRawData {
+  year: number;
+  months: MonthlyBreakdownRaw[];
+  vehiclesCount: number;
 }

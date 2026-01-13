@@ -3,6 +3,9 @@ const resolvers = {
     reportExpenseSummary: async (_: any, args: any, context: any) => {
       return context.cores.reportCore.expenseSummary(args);
     },
+    reportYearly: async (_: any, args: any, context: any) => {
+      return context.cores.reportCore.yearly(args);
+    },
     // Future reports:
     // reportMonthlyTrend: async (_: any, args: any, context: any) => {
     //   return context.cores.reportCore.monthlyTrend(args);

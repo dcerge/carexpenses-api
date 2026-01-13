@@ -1,6 +1,6 @@
 const typeDefs = `#graphql
   # =============================================================================
-  # Filter Input
+  # Filter Inputs
   # =============================================================================
 
   input ExpenseSummaryReportFilter {
@@ -8,6 +8,12 @@ const typeDefs = `#graphql
     tagId: [ID]
     dateFrom: String
     dateTo: String
+  }
+
+  input YearlyReportFilter {
+    carId: [ID]
+    tagId: [ID]
+    year: Int
   }
 
   # =============================================================================
@@ -83,7 +89,7 @@ const typeDefs = `#graphql
   }
 
   # =============================================================================
-  # Main Report Type
+  # Expense Summary Report Type
   # =============================================================================
 
   type ExpenseSummaryReport {
@@ -168,11 +174,93 @@ const typeDefs = `#graphql
   }
 
   # =============================================================================
-  # Query
+  # Yearly Report Types
+  # =============================================================================
+
+  type MonthlyBreakdown {
+    month: Int
+
+    # =========================================================================
+    # Totals (Home Currency)
+    # =========================================================================
+    refuelsCostHc: Float
+    expensesCostHc: Float
+    totalCostHc: Float
+    refuelsCountHc: Int
+    expensesCountHc: Int
+
+    # =========================================================================
+    # Totals (Foreign Currencies - unconverted)
+    # =========================================================================
+    foreignRefuels: [CurrencyAmount]
+    foreignExpenses: [CurrencyAmount]
+    foreignCurrencyTotals: [CurrencyAmount]
+    totalForeignRecordsCount: Int
+
+    # =========================================================================
+    # Fuel & Mileage Metrics (tracked regardless of currency)
+    # =========================================================================
+    fuelPurchased: Float
+    mileage: Float
+    refuelsCount: Int
+    expensesCount: Int
+  }
+
+  type YearlyReport {
+    year: Int
+
+    # =========================================================================
+    # Annual Totals (Home Currency)
+    # =========================================================================
+    totalRefuelsCostHc: Float
+    totalExpensesCostHc: Float
+    totalCostHc: Float
+    totalRefuelsCountHc: Int
+    totalExpensesCountHc: Int
+
+    # =========================================================================
+    # Annual Totals (Foreign Currencies - unconverted)
+    # =========================================================================
+    foreignRefuels: [CurrencyAmount]
+    foreignExpenses: [CurrencyAmount]
+    foreignCurrencyTotals: [CurrencyAmount]
+    totalForeignRecordsCount: Int
+
+    # =========================================================================
+    # Annual Fuel & Mileage Metrics (tracked regardless of currency)
+    # =========================================================================
+    totalFuelPurchased: Float
+    totalMileage: Float
+    totalRefuelsCount: Int
+    totalExpensesCount: Int
+
+    # =========================================================================
+    # Monthly Breakdown (12 months)
+    # =========================================================================
+    months: [MonthlyBreakdown]
+
+    # =========================================================================
+    # User Preferences (for frontend display)
+    # =========================================================================
+    distanceUnit: String
+    volumeUnit: String
+    homeCurrency: String
+    vehiclesCount: Int
+  }
+
+  type YearlyReportResult implements OpResult {
+    code: Int!
+    errors: [Error!]
+    data: [YearlyReport]
+  }
+
+  # =============================================================================
+  # Queries
   # =============================================================================
 
   type Query {
     reportExpenseSummary(filter: ExpenseSummaryReportFilter): ExpenseSummaryReportResult
+    reportYearly(filter: YearlyReportFilter): YearlyReportResult
   }
 `;
 

@@ -46,6 +46,46 @@ const rulesExpenseSummary = new Checkit({
   ],
 });
 
+// =============================================================================
+// Yearly Report Validators
+// =============================================================================
+
+const rulesYearly = new Checkit({
+  year: [
+    {
+      rule: 'required',
+      message: 'Year is required',
+    },
+    {
+      rule: 'integer',
+      message: 'Year should be an integer',
+    },
+  ],
+  carId: [
+    {
+      rule: 'array',
+      message: 'Car IDs should be an array',
+    },
+  ],
+});
+
+/**
+ * Validate year range
+ */
+const validateYearRange = (year: number): OpResult | true => {
+  const currentYear = dayjs().year();
+  const minYear = 2000;
+  const maxYear = currentYear + 1; // Allow next year for planning
+
+  if (year < minYear || year > maxYear) {
+    const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
+    opResult.addError('year', `Year must be between ${minYear} and ${maxYear}`);
+    return opResult;
+  }
+
+  return true;
+};
+
 /**
  * Validate date format and range
  */
@@ -222,12 +262,69 @@ const validateExpenseSummary = async (args: any, opt: BaseCoreActionsInterface) 
   return [true, dependencies];
 };
 
+/**
+ * Validate yearly report filter
+ */
+const validateYearly = async (args: any, opt: BaseCoreActionsInterface) => {
+  const { filter } = args || {};
+
+  if (!filter || Object.keys(filter).length === 0) {
+    const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
+    opResult.addError('filter', 'Filter is required');
+    return [opResult, {}];
+  }
+
+  const { year, carId } = filter;
+
+  // Run Checkit validation
+  const [result] = rulesYearly.validateSync(filter);
+
+  if (result) {
+    const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
+    Object.keys(result?.errors || {}).forEach((key) => {
+      const obj = result.errors[key];
+      if (Array.isArray(obj.errors)) {
+        obj.errors.forEach((item: any) => {
+          opResult.addError(key, item.message);
+        });
+      } else {
+        opResult.addError(key, obj.message);
+      }
+    });
+    return [opResult, {}];
+  }
+
+  // Validate year range
+  const yearRangeResult = validateYearRange(year);
+  if (yearRangeResult !== true) {
+    return [yearRangeResult, {}];
+  }
+
+  // Get account ID from context
+  const { accountId } = opt.core.getContext();
+
+  // Verify car ownership
+  const carOwnershipResult = await verifyCarOwnership(carId || [], accountId, opt);
+  if (carOwnershipResult !== true) {
+    return [carOwnershipResult, {}];
+  }
+
+  // Return validated and normalized data
+  const dependencies = {
+    year,
+    carIds: carId || [],
+  };
+
+  return [true, dependencies];
+};
+
 // =============================================================================
 // Export all validators
 // =============================================================================
 
 const validators = {
   expenseSummary: validateExpenseSummary,
+  yearly: validateYearly,
   // Future reports:
   // monthlyTrend: validateMonthlyTrend,
   // fuelEfficiency: validateFuelEfficiency,
