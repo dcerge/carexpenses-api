@@ -7,10 +7,17 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/carValidators';
+import { ENTITY_TYPE_IDS } from 'boundary';
 
 dayjs.extend(utc);
 
+interface CarUpdateData {
+  uploadedFilesIds: string[];
+}
+
 class CarCore extends AppCore {
+  private updateData: Map<string, CarUpdateData> = new Map();
+
   constructor(props: BaseCorePropsInterface) {
     super({
       ...props,
@@ -104,6 +111,13 @@ class CarCore extends AppCore {
 
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { accountId, userId } = this.getContext();
+    const { uploadedFilesIds, ...restParams } = params;
+
+    // Store data for afterCreate using requestId
+    const requestId = this.getRequestId();
+    this.updateData.set(`create-${requestId}`, {
+      uploadedFilesIds,
+    });
 
     const newCar = {
       ...params,
@@ -131,6 +145,27 @@ class CarCore extends AppCore {
       });
     }
 
+    const requestId = this.getRequestId();
+    const createInfo = this.updateData.get(`create-${requestId}`);
+
+    if (createInfo) {
+      if (Array.isArray(createInfo.uploadedFilesIds)) {
+        const attachments = createInfo.uploadedFilesIds.map((uploadedFileId, idx) => {
+          return {
+            entityTypeId: ENTITY_TYPE_IDS.CAR,
+            entityId: items[0].id,
+            uploadedFileId,
+            orderNo: 1000000 + (idx + 1) * 1000,
+          };
+        });
+
+        await this.getGateways().entityEntityAttachmentGw.create(attachments);
+      }
+
+      // Clean up stored data
+      this.updateData.delete(`create-${requestId}`);
+    }
+
     return items.map((item: any) => this.processItemOnOut(item, opt));
   }
 
@@ -152,7 +187,13 @@ class CarCore extends AppCore {
     }
 
     // Don't allow changing accountId or userId
-    const { accountId: _, userId: __, ...restParams } = params;
+    const { accountId: _, userId: __, uploadedFilesIds, ...restParams } = params;
+
+    // Store data for afterUpdate using requestId
+    const requestId = this.getRequestId();
+    this.updateData.set(`update-${requestId}-${id}`, {
+      uploadedFilesIds,
+    });
 
     restParams.updatedBy = userId;
     restParams.updatedAt = this.now();
@@ -164,6 +205,38 @@ class CarCore extends AppCore {
   }
 
   public async afterUpdate(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
+    const requestId = this.getRequestId();
+
+    for (const item of items) {
+      if (!item.id) {
+        continue;
+      }
+
+      const updateInfo = this.updateData.get(`update-${requestId}-${item.id}`);
+
+      if (!updateInfo) {
+        continue;
+      }
+
+      if (Array.isArray(updateInfo.uploadedFilesIds)) {
+        await this.getGateways().entityEntityAttachmentGw.remove({
+          entityTypeId: ENTITY_TYPE_IDS.CAR,
+          entityId: item.id,
+        });
+
+        const attachments = updateInfo.uploadedFilesIds.map((uploadedFileId, idx) => {
+          return {
+            entityTypeId: ENTITY_TYPE_IDS.CAR,
+            entityId: item.id,
+            uploadedFileId,
+            orderNo: 1000000 + (idx + 1) * 1000,
+          };
+        });
+
+        await this.getGateways().entityEntityAttachmentGw.create(attachments);
+      }
+    }
+
     return items.map((item: any) => this.processItemOnOut(item, opt));
   }
 

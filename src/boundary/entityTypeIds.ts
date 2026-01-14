@@ -1,6 +1,6 @@
 // ./src/boundary/entityTypeIds.ts
 export const ENTITY_TYPE_IDS = {
-  EXPENSE: 0, // expense, refuel, checkpoint
-  CAR: 1,
-  TRAVEL: 2, // ?
+  EXPENSE: 0, // expense, refuel, checkpoint, travel point
+  CAR: 2,
+  TRAVEL: 3, // ?
 };

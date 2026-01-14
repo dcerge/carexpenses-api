@@ -48,6 +48,8 @@ const typeDefs = `#graphql
     carEngineType: CarEngineType
     vehicleMake: VehicleMake
     entityAttachment: EntityAttachment
+    uploadedFilesIds: [ID]
+    uploadedFiles: [UploadedFile]
   }
 
   type CarResult implements OpResult {
@@ -85,6 +87,8 @@ const typeDefs = `#graphql
     makeId: Int
     entityAttachmentId: ID
     status: Int
+    "References to uploaded files"
+    uploadedFilesIds: [ID]
   }
 
   input CarFilter {

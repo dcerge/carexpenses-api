@@ -1,5 +1,6 @@
 // ./src/app/graphql/resolvers/carResolvers.ts
 import { buildDefaultResolvers } from '@sdflc/backend-helpers';
+import { ENTITY_TYPE_IDS } from 'boundary';
 
 const resolvers = buildDefaultResolvers({
   prefix: 'car',
@@ -59,6 +60,43 @@ const resolvers = buildDefaultResolvers({
         }
 
         return entityAttachment ?? null;
+      },
+      async uploadedFilesIds(parent, args, context) {
+        const { uploadedFilesIds, id } = parent || {};
+
+        if (!uploadedFilesIds && id) {
+          const attachments = await context.gateways.entityEntityAttachmentGw.list({
+            filter: {
+              entityTypeId: ENTITY_TYPE_IDS.CAR,
+              entityId: id,
+            },
+          });
+
+          return attachments.map((attachment) => attachment.uploadedFileId);
+        }
+
+        return uploadedFilesIds ?? [];
+      },
+      async uploadedFiles(parent, args, context) {
+        const { uploadedFilesIds, id } = parent || {};
+
+        if (!uploadedFilesIds && id) {
+          const attachments = await context.gateways.entityEntityAttachmentGw.list({
+            filter: {
+              entityTypeId: ENTITY_TYPE_IDS.CAR,
+              entityId: id,
+            },
+          });
+
+          return attachments.map((attachment) => {
+            return {
+              __typename: 'UploadedFile',
+              id: attachment.uploadedFileId,
+            };
+          });
+        }
+
+        return uploadedFilesIds ?? [];
       },
     },
   },
