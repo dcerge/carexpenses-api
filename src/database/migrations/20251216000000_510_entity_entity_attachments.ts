@@ -23,6 +23,16 @@ export const up = (knex: Knex) =>
 
     addOrderNoNum(table);
 
+    table
+      .bigInteger('entity_orig_id')
+      .comment("Reference to entity's original id: cars.orig_id, expense_bases.orig_id, etc");
+    table.bigInteger('entity_attachment_orig_id').comment('Reference to entity_attachment.orig_id');
+    table
+      .integer('process_status')
+      .comment(
+        'when is null then the record was not yet processed to move files. if it is 1 then success, if 2 then error',
+      );
+
     // Indexes
     table.index([FIELDS.ORIG_ID]);
     table.index([FIELDS.ENTITY_ID]);

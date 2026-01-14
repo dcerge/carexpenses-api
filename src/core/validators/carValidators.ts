@@ -292,6 +292,12 @@ const rulesCreate = new Checkit({
       message: 'Entity attachment ID should be a valid UUID',
     },
   ],
+  uploadedFileId: [
+    {
+      rule: 'uuid',
+      message: "Reference to the vehicle's image should be a valid UUID",
+    },
+  ],
   ...ruleStatus(),
 });
 
@@ -514,6 +520,12 @@ const rulesUpdate = new Checkit({
     {
       rule: 'uuid',
       message: 'Entity attachment ID should be a valid UUID',
+    },
+  ],
+  uploadedFileId: [
+    {
+      rule: 'uuid',
+      message: "Reference to the vehicle's image should be a valid UUID",
     },
   ],
   ...ruleStatus(),

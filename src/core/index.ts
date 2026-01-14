@@ -27,3 +27,4 @@ export * from './UserNotificationCore';
 export * from './UserProfileCore';
 export * from './VehicleMakeCore';
 export * from './ReportCore';
+export * from './DataTransferCore';

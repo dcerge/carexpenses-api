@@ -98,6 +98,16 @@ const resolvers = buildDefaultResolvers({
 
         return uploadedFilesIds ?? [];
       },
+      async uploadedFile(parent, args, context) {
+        const { uploadedFileId } = parent || {};
+
+        return uploadedFileId
+          ? {
+              __typename: 'UploadedFile',
+              id: uploadedFileId,
+            }
+          : null;
+      },
     },
   },
 });

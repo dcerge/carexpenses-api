@@ -6,6 +6,7 @@ import { SORT_ORDER } from '@sdflc/utils';
 
 import config from '../../config';
 import { FIELDS, TABLES } from '../../database';
+import { logger } from '../../logger';
 
 class EntityAttachmentGw extends BaseGateway {
   constructor(props: BaseGatewayPropsInterface) {
@@ -37,11 +38,30 @@ class EntityAttachmentGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { accountId, userId, carId, attachmentType, accessLevel, forEntityTypeId, searchKeyword } =
-      filterParams || {};
+    const {
+      accountId,
+      userId,
+      carId,
+      attachmentType,
+      accessLevel,
+      forEntityTypeId,
+      origId,
+      uploadedFileId,
+      searchKeyword,
+    } = filterParams || {};
     const self = this;
 
+    logger.log('filter params: ', filterParams);
+
     await super.onListFilter(query, filterParams);
+
+    if (origId) {
+      query.whereIn(FIELDS.ORIG_ID, castArray(origId));
+    }
+
+    if (uploadedFileId) {
+      query.whereIn(FIELDS.UPLOADED_FILE_ID, castArray(uploadedFileId));
+    }
 
     if (userId) {
       query.whereIn(FIELDS.USER_ID, castArray(userId));

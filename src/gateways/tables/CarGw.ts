@@ -52,9 +52,19 @@ class CarGw extends BaseGateway {
       engineTypeId,
       makeId,
       searchKeyword,
+      hasNoUploadedFileId,
+      hasEntityAttachmentId,
     } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
+
+    if (hasNoUploadedFileId) {
+      query.whereNull(FIELDS.UPLOADED_FILE_ID);
+    }
+
+    if (hasEntityAttachmentId) {
+      query.whereNotNull(FIELDS.ENTITY_ATTACHMENT_ID);
+    }
 
     if (accountId) {
       query.whereIn(FIELDS.ACCOUNT_ID, castArray(accountId));

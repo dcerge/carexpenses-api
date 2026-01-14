@@ -36,10 +36,44 @@ class EntityEntityAttachmentGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { entityTypeId, entityId, entityAttachmentId, accountId } = filterParams || {};
+    const {
+      entityTypeId,
+      entityId,
+      entityAttachmentId,
+      accountId,
+      uploadedFileId,
+      entityOrigId,
+      entityAttachmentOrigId,
+      processStatus,
+      hasEntityAttachmentOrigId,
+    } = filterParams || {};
     const self = this;
 
     await super.onListFilter(query, filterParams);
+
+    if (processStatus !== undefined) {
+      if (processStatus === null) {
+        query.whereNull('process_status');
+      } else {
+        query.whereIn('process_status', castArray(processStatus));
+      }
+    }
+
+    if (hasEntityAttachmentOrigId) {
+      query.whereNotNull('entity_attachment_orig_id');
+    }
+
+    if (uploadedFileId) {
+      query.whereIn(FIELDS.UPLOADED_FILE_ID, castArray(uploadedFileId));
+    }
+
+    if (entityOrigId) {
+      query.whereIn('entity_orig_id', castArray(entityOrigId));
+    }
+
+    if (entityAttachmentOrigId) {
+      query.whereIn('entity_attachment_orig_id', castArray(entityAttachmentOrigId));
+    }
 
     if (entityTypeId) {
       query.whereIn(FIELDS.ENTITY_TYPE_ID, castArray(entityTypeId));

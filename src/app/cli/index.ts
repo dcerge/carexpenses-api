@@ -4,8 +4,9 @@ import { createContext } from '../../context';
 import { HEADERS, dbReset } from '@sdflc/backend-helpers';
 
 import config from '../../config';
-import knexHandle from 'knexConfig';
-import { logger } from 'logger';
+import knexHandle from '../../knexConfig';
+import { logger } from '../../logger';
+import { redisClient } from '../../redisClient';
 
 const resetFromCLI = () => {
   dbReset(knexHandle, config).then(() => knexHandle.destroy());
@@ -44,6 +45,40 @@ const recalculateStats = async () => {
   }
 };
 
+const transferFiles = async () => {
+  const context = await getContext();
+
+  try {
+    if (redisClient) {
+      await redisClient.connect();
+    }
+
+    logger.log('Transferring files starts now...');
+    await context.cores.dataTransferCore.transferFiles({});
+
+    logger.log('Transferring files complete.');
+  } finally {
+    process.exit(0);
+  }
+};
+
+const transferCarImages = async () => {
+  const context = await getContext();
+
+  try {
+    if (redisClient) {
+      await redisClient.connect();
+    }
+
+    logger.log('Transferring car images starts now...');
+    await context.cores.dataTransferCore.transferCarImages({});
+
+    logger.log('Transferring car images complete.');
+  } finally {
+    process.exit(0);
+  }
+};
+
 yargs(process.argv.splice(2))
   .command(
     'reset',
@@ -60,6 +95,22 @@ yargs(process.argv.splice(2))
       return yargs;
     },
     recalculateStats,
+  )
+  .command(
+    'transfer-files',
+    'Transfers entity attachment files from old storage to new storate',
+    (yargs) => {
+      return yargs;
+    },
+    transferFiles,
+  )
+  .command(
+    'transfer-car-images',
+    'Transfers cars images from old storage to new storate',
+    (yargs) => {
+      return yargs;
+    },
+    transferCarImages,
   )
   .strict()
   .help('h')

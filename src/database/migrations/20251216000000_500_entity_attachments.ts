@@ -21,7 +21,10 @@ export const up = (knex: Knex) =>
 
     table.integer(FIELDS.ATTACHMENT_TYPE).notNullable().comment('Type of attachment (image, document, etc.)');
 
-    table.string(FIELDS.ATTACHMENT_PATH, 256).notNullable().comment('File path or URL to attachment');
+    table
+      .string(FIELDS.ATTACHMENT_PATH, 256)
+      .notNullable()
+      .comment('File path or URL to attachment - reference to a file to relocate');
 
     table.bigInteger(FIELDS.ATTACHMENT_SIZE).notNullable().defaultTo(0).comment('File size in bytes');
 
@@ -43,6 +46,9 @@ export const up = (knex: Knex) =>
       addVersion: false,
       skipRemovedAtStr: true,
     });
+
+    table.bigInteger('car_orig_id').comment('Reference to original car ID as integer => cars.orig_id');
+    table.uuid('account_id').comment('Reference user account');
 
     // Indexes
     table.index([FIELDS.ORIG_ID]);

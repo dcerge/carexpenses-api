@@ -44,6 +44,7 @@ interface UploadFileParams {
   originalFilename: string;
   mimeType: string;
   notes?: string;
+  headers?: any;
 }
 
 class UploadedFileGw {
@@ -233,7 +234,7 @@ class UploadedFileGw {
         headers: {
           [HEADERS.SPACE_ID]: config.spaceId,
           [HEADERS.API_KEY]: config.interserviceApiKey,
-          ...formData.getHeaders(),
+          ...(params.headers ?? {}),
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
@@ -256,7 +257,7 @@ class UploadedFileGw {
       logger.error(`Exception while uploading file '${params.originalFilename}':`, error.message);
       if (error.response) {
         logger.error(`Response status: ${error.response.status}`);
-        logger.error(`Response data:`, error.response.data);
+        logger.error(`Response data:`, JSON.stringify(error.response.data, null, 2));
       }
       return null;
     }

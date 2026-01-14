@@ -91,7 +91,10 @@ export const up = (knex: Knex) =>
     table.integer(FIELDS.OWNER_NUMBER).notNullable().defaultTo(1).comment('Owner sequence number (1 for first owner)');
 
     // Attachment reference
-    table.uuid(FIELDS.ENTITY_ATTACHMENT_ID).nullable().comment('Reference to primary car image/attachment');
+    table.uuid(FIELDS.ENTITY_ATTACHMENT_ID).comment('Reference to primary car image/attachment');
+    table
+      .uuid(FIELDS.UPLOADED_FILE_ID)
+      .comment('The main image of the vehicle. Reference to a file in the storage microservice');
 
     dbFieldAddDefaults(table, {
       addUserInfo: true,
