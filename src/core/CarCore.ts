@@ -8,6 +8,8 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 import { AppCore } from './AppCore';
 import { validators } from './validators/carValidators';
 import { ENTITY_TYPE_IDS } from 'boundary';
+import { trialCheckMiddleware } from 'middleware';
+import { FEATURE_CODES } from 'utils';
 
 dayjs.extend(utc);
 
@@ -45,6 +47,10 @@ class CarCore extends AppCore {
       ...super.getValidators(),
       ...validators,
     };
+  }
+
+  public async carsQty(): Promise<number> {
+    return this.getGateways().carGw.count({ accountId: this.getContext().accountId });
   }
 
   public processItemOnOut(item: any, opt?: BaseCoreActionsInterface): any {
@@ -111,6 +117,18 @@ class CarCore extends AppCore {
 
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { accountId, userId } = this.getContext();
+
+    const trialCheck = await trialCheckMiddleware({
+      core: this,
+      operation: 'create',
+      featureCode: FEATURE_CODES.MAX_VEHICLES,
+      featureValue: await this.carsQty(),
+    });
+
+    if (trialCheck.code !== OP_RESULT_CODES.OK) {
+      return trialCheck;
+    }
+
     const { uploadedFilesIds, ...restParams } = params;
 
     // Store data for afterCreate using requestId
@@ -120,7 +138,7 @@ class CarCore extends AppCore {
     });
 
     const newCar = {
-      ...params,
+      ...restParams,
       accountId,
       userId,
       createdBy: userId,

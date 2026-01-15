@@ -6,6 +6,52 @@ update carexpenses.entity_attachments set status = 100 where status = 10
 update carexpenses.expense_labels set status = 100, normalized_name = trim(lower(label_name))
 update carexpenses.expense_tags set status = 100, normalized_name = trim(lower(tag_name))
 update carexpenses.travels set status = 100 where status = 10
+update ms_auth.account set current_plan = 'free'
+
+select account_id, 
+       u.id as user_id,
+       count(ea.*) 
+  from carexpenses.entity_attachments as ea
+  join ms_auth."user" as u on u."Account_id"::uuid = ea.account_id 
+       group by ea.account_id , u.id
+
+
+-- Populating features for a plan:
+insert into ms_auth.app_plan_features (plan_id, feature_id, feature_value)
+      select 'f7d81dee-78aa-4ddf-ad73-8517fcadd607', id, feature_default_value
+        from ms_auth.app_features as af 
+      where space_id = 'formsubmits'
+        and status in (50,100)
+      order by order_no asc
+
+-- insert missing feature to all the plans
+INSERT INTO ms_auth.app_plan_features (plan_id, feature_id, feature_value)
+SELECT 
+    ap.id AS plan_id,
+    af.id AS feature_id,
+    af.feature_default_value AS feature_value
+FROM ms_auth.app_plans ap
+CROSS JOIN ms_auth.app_features af
+WHERE ap.space_id = 'carexpenses'
+  AND af.space_id = 'carexpenses'
+  AND af.status IN (50, 100)
+  AND NOT EXISTS (
+    SELECT 1 
+    FROM ms_auth.app_plan_features apf 
+    WHERE apf.plan_id = ap.id 
+      AND apf.feature_id = af.id
+  )
+ORDER BY ap.id, af.order_no;
+
+-- Plan features editor
+select apf.id, ap.plan_name, af.feature_code, af.feature_name, apf.feature_value, apf.status
+  from ms_auth.app_plan_features as apf 
+  join ms_auth.app_plans as ap on (ap.id = apf.plan_id)
+  join ms_auth.app_features as af on (af.id = apf.feature_id)
+  where ap.plan_code = 'free'
+  order by af.order_no asc 
+
+---- DATA MIGRATION:
 
 -- Populate user account table
 DELETE FROM ms_auth.user_account 
