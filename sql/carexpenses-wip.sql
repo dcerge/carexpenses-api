@@ -20,7 +20,7 @@ select account_id,
 insert into ms_auth.app_plan_features (plan_id, feature_id, feature_value)
       select 'f7d81dee-78aa-4ddf-ad73-8517fcadd607', id, feature_default_value
         from ms_auth.app_features as af 
-      where space_id = 'formsubmits'
+      where space_id = 'carexpenses'
         and status in (50,100)
       order by order_no asc
 

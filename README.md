@@ -1,4 +1,4 @@
-# CarExpenses
+# Car Expenses
 
 ## 🏁 Quick Start
 
