@@ -148,7 +148,7 @@ Share vehicle access with family members or team:
 | **Free**     | 2        | 1     | 250 MB  | $0        |
 | **Family**   | 5        | 5     | 2 GB    | $5/month  |
 | **Pro**      | 10       | 10    | 3 GB    | $15/month |
-| **Business** | 30       | 30    | 5 GB    | $35/month |
+| **Business** | 40       | 40    | 5 GB    | $35/month |
 
 ---
 

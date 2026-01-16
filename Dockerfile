@@ -22,7 +22,7 @@ RUN npm ci
 COPY . .
 FROM build-deps AS build
 RUN npm run build
-RUN mkdir -p /app/dist/src && cp -r /app/src/public /app/dist/src/public
+#RUN mkdir -p /app/dist/src && cp -r /app/src/public /app/dist/src/public
 
 # Production image
 FROM base AS production
