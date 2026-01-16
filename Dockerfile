@@ -12,7 +12,7 @@ COPY package*.json ./
 
 # Install dependencies
 FROM base AS dependencies
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Development dependencies for building
 FROM base AS build-deps
