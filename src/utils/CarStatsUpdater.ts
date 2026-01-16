@@ -200,10 +200,11 @@ class CarStatsUpdater {
 
     // Delete monthly expenses
     if (monthlySummaryIds.length > 0) {
+      const placeholders = monthlySummaryIds.map(() => '?').join(', ');
       await this.db.runRawQuery(
         `DELETE FROM ${this.schema}.${TABLES.CAR_MONTHLY_EXPENSES} 
-         WHERE ${FIELDS.CAR_MONTHLY_SUMMARY_ID} = ANY($1)`,
-        [monthlySummaryIds],
+         WHERE ${FIELDS.CAR_MONTHLY_SUMMARY_ID} IN (${placeholders})`,
+        monthlySummaryIds,
       );
     }
 
@@ -573,29 +574,45 @@ class CarStatsUpdater {
       expenseTaxesHc,
     } = params;
 
-    const updates: string[] = [];
-    const bindings: any[] = [];
     const whenDoneDate = dayjs.utc(whenDone).format('YYYY-MM-DD HH:mm:ss');
+    const nowDate = dayjs.utc().format('YYYY-MM-DD HH:mm:ss');
 
     // Table alias for clarity in ON CONFLICT DO UPDATE
     const t = TABLES.CAR_TOTAL_SUMMARIES;
+
+    // Build initial values for INSERT (first record case)
+    const initialLatestKnownMileage = odometer ?? 0;
+    const initialLatestRefuelId = expenseType === EXPENSE_TYPES.REFUEL ? recordId : null;
+    const initialLatestExpenseId = expenseType === EXPENSE_TYPES.EXPENSE ? recordId : null;
+    const initialTotalRefuelsCount = expenseType === EXPENSE_TYPES.REFUEL ? 1 : 0;
+    const initialTotalExpensesCount = expenseType === EXPENSE_TYPES.EXPENSE ? 1 : 0;
+    const initialRefuelsTaxes = expenseType === EXPENSE_TYPES.REFUEL ? refuelTaxesHc : null;
+    const initialTotalRefuelsCost = expenseType === EXPENSE_TYPES.REFUEL ? totalPriceInHc : null;
+    const initialExpensesFees = expenseType === EXPENSE_TYPES.EXPENSE ? expenseFeesHc : null;
+    const initialExpensesTaxes = expenseType === EXPENSE_TYPES.EXPENSE ? expenseTaxesHc : null;
+    const initialTotalExpensesCost = expenseType === EXPENSE_TYPES.EXPENSE ? totalPriceInHc : null;
+    const initialTotalRefuelsVolume = expenseType === EXPENSE_TYPES.REFUEL ? refuelVolume : null;
+
+    // Build updates for ON CONFLICT (existing record case)
+    const updates: string[] = [];
+    const updateBindings: any[] = [];
 
     if (expenseType === EXPENSE_TYPES.REFUEL) {
       updates.push(`${FIELDS.TOTAL_REFUELS_COUNT} = COALESCE(${t}.${FIELDS.TOTAL_REFUELS_COUNT}, 0) + 1`);
 
       if (totalPriceInHc != null) {
         updates.push(`${FIELDS.TOTAL_REFUELS_COST} = COALESCE(${t}.${FIELDS.TOTAL_REFUELS_COST}, 0) + ?`);
-        bindings.push(totalPriceInHc);
+        updateBindings.push(totalPriceInHc);
       }
 
       if (refuelVolume != null) {
         updates.push(`${FIELDS.TOTAL_REFUELS_VOLUME} = COALESCE(${t}.${FIELDS.TOTAL_REFUELS_VOLUME}, 0) + ?`);
-        bindings.push(refuelVolume);
+        updateBindings.push(refuelVolume);
       }
 
       if (refuelTaxesHc != null) {
         updates.push(`${FIELDS.REFUELS_TAXES} = COALESCE(${t}.${FIELDS.REFUELS_TAXES}, 0) + ?`);
-        bindings.push(refuelTaxesHc);
+        updateBindings.push(refuelTaxesHc);
       }
 
       // Update latest refuel if this is newer
@@ -603,23 +620,23 @@ class CarStatsUpdater {
         WHEN ${t}.${FIELDS.LAST_RECORD_AT} IS NULL OR ? > ${t}.${FIELDS.LAST_RECORD_AT} THEN ?
         ELSE ${t}.${FIELDS.LATEST_REFUEL_ID}
       END`);
-      bindings.push(whenDoneDate, recordId);
+      updateBindings.push(whenDoneDate, recordId);
     } else if (expenseType === EXPENSE_TYPES.EXPENSE) {
       updates.push(`${FIELDS.TOTAL_EXPENSES_COUNT} = COALESCE(${t}.${FIELDS.TOTAL_EXPENSES_COUNT}, 0) + 1`);
 
       if (totalPriceInHc != null) {
         updates.push(`${FIELDS.TOTAL_EXPENSES_COST} = COALESCE(${t}.${FIELDS.TOTAL_EXPENSES_COST}, 0) + ?`);
-        bindings.push(totalPriceInHc);
+        updateBindings.push(totalPriceInHc);
       }
 
       if (expenseFeesHc != null) {
         updates.push(`${FIELDS.EXPENSES_FEES} = COALESCE(${t}.${FIELDS.EXPENSES_FEES}, 0) + ?`);
-        bindings.push(expenseFeesHc);
+        updateBindings.push(expenseFeesHc);
       }
 
       if (expenseTaxesHc != null) {
         updates.push(`${FIELDS.EXPENSES_TAXES} = COALESCE(${t}.${FIELDS.EXPENSES_TAXES}, 0) + ?`);
-        bindings.push(expenseTaxesHc);
+        updateBindings.push(expenseTaxesHc);
       }
 
       // Update latest expense if this is newer
@@ -627,32 +644,68 @@ class CarStatsUpdater {
         WHEN ${t}.${FIELDS.LAST_RECORD_AT} IS NULL OR ? > ${t}.${FIELDS.LAST_RECORD_AT} THEN ?
         ELSE ${t}.${FIELDS.LATEST_EXPENSE_ID}
       END`);
-      bindings.push(whenDoneDate, recordId);
+      updateBindings.push(whenDoneDate, recordId);
     }
 
     // Mileage - use GREATEST since we're adding
     if (odometer != null) {
       updates.push(`${FIELDS.LATEST_KNOWN_MILEAGE} = GREATEST(COALESCE(${t}.${FIELDS.LATEST_KNOWN_MILEAGE}, 0), ?)`);
-      bindings.push(odometer);
+      updateBindings.push(odometer);
     }
 
     // Date range - use LEAST/GREATEST since we're adding
     updates.push(`${FIELDS.FIRST_RECORD_AT} = LEAST(COALESCE(${t}.${FIELDS.FIRST_RECORD_AT}, ?), ?)`);
-    bindings.push(whenDoneDate, whenDoneDate);
+    updateBindings.push(whenDoneDate, whenDoneDate);
     updates.push(`${FIELDS.LAST_RECORD_AT} = GREATEST(COALESCE(${t}.${FIELDS.LAST_RECORD_AT}, ?), ?)`);
-    bindings.push(whenDoneDate, whenDoneDate);
+    updateBindings.push(whenDoneDate, whenDoneDate);
 
     updates.push(`${FIELDS.UPDATED_AT} = ?`);
-    bindings.push(dayjs.utc().format('YYYY-MM-DD HH:mm:ss'));
+    updateBindings.push(nowDate);
 
     const sql = `
-      INSERT INTO ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES} (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY})
-      VALUES (?, ?)
+      INSERT INTO ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES} (
+        ${FIELDS.CAR_ID},
+        ${FIELDS.HOME_CURRENCY},
+        ${FIELDS.LATEST_KNOWN_MILEAGE},
+        ${FIELDS.LATEST_REFUEL_ID},
+        ${FIELDS.LATEST_EXPENSE_ID},
+        ${FIELDS.TOTAL_REFUELS_COUNT},
+        ${FIELDS.TOTAL_EXPENSES_COUNT},
+        ${FIELDS.REFUELS_TAXES},
+        ${FIELDS.TOTAL_REFUELS_COST},
+        ${FIELDS.EXPENSES_FEES},
+        ${FIELDS.EXPENSES_TAXES},
+        ${FIELDS.TOTAL_EXPENSES_COST},
+        ${FIELDS.TOTAL_REFUELS_VOLUME},
+        ${FIELDS.FIRST_RECORD_AT},
+        ${FIELDS.LAST_RECORD_AT},
+        ${FIELDS.UPDATED_AT}
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY})
       DO UPDATE SET ${updates.join(', ')}
     `;
 
-    await this.db.runRawQuery(sql, [carId, homeCurrency, ...bindings]);
+    const insertBindings = [
+      carId,
+      homeCurrency,
+      initialLatestKnownMileage,
+      initialLatestRefuelId,
+      initialLatestExpenseId,
+      initialTotalRefuelsCount,
+      initialTotalExpensesCount,
+      initialRefuelsTaxes,
+      initialTotalRefuelsCost,
+      initialExpensesFees,
+      initialExpensesTaxes,
+      initialTotalExpensesCost,
+      initialTotalRefuelsVolume,
+      whenDoneDate,
+      whenDoneDate,
+      nowDate,
+    ];
+
+    await this.db.runRawQuery(sql, [...insertBindings, ...updateBindings]);
   }
 
   /**
@@ -677,76 +730,126 @@ class CarStatsUpdater {
       expenseTaxesHc,
     } = params;
 
-    const updates: string[] = [];
-    const bindings: any[] = [];
     const whenDoneDate = dayjs.utc(whenDone).format('YYYY-MM-DD HH:mm:ss');
+    const nowDate = dayjs.utc().format('YYYY-MM-DD HH:mm:ss');
 
     // Table alias for clarity in ON CONFLICT DO UPDATE
     const t = TABLES.CAR_MONTHLY_SUMMARIES;
+
+    // Build initial values for INSERT (first record case)
+    const initialRefuelsCount = expenseType === EXPENSE_TYPES.REFUEL ? 1 : 0;
+    const initialExpensesCount = expenseType === EXPENSE_TYPES.EXPENSE ? 1 : 0;
+    const initialRefuelsCost = expenseType === EXPENSE_TYPES.REFUEL ? totalPriceInHc : null;
+    const initialExpensesCost = expenseType === EXPENSE_TYPES.EXPENSE ? totalPriceInHc : null;
+    const initialRefuelsVolume = expenseType === EXPENSE_TYPES.REFUEL ? refuelVolume : null;
+    const initialRefuelsTaxes = expenseType === EXPENSE_TYPES.REFUEL ? refuelTaxesHc : null;
+    const initialExpensesFees = expenseType === EXPENSE_TYPES.EXPENSE ? expenseFeesHc : null;
+    const initialExpensesTaxes = expenseType === EXPENSE_TYPES.EXPENSE ? expenseTaxesHc : null;
+
+    // Build updates for ON CONFLICT (existing record case)
+    const updates: string[] = [];
+    const updateBindings: any[] = [];
 
     if (expenseType === EXPENSE_TYPES.REFUEL) {
       updates.push(`${FIELDS.REFUELS_COUNT} = COALESCE(${t}.${FIELDS.REFUELS_COUNT}, 0) + 1`);
 
       if (totalPriceInHc != null) {
         updates.push(`${FIELDS.REFUELS_COST} = COALESCE(${t}.${FIELDS.REFUELS_COST}, 0) + ?`);
-        bindings.push(totalPriceInHc);
+        updateBindings.push(totalPriceInHc);
       }
 
       if (refuelVolume != null) {
         updates.push(`${FIELDS.REFUELS_VOLUME} = COALESCE(${t}.${FIELDS.REFUELS_VOLUME}, 0) + ?`);
-        bindings.push(refuelVolume);
+        updateBindings.push(refuelVolume);
       }
 
       if (refuelTaxesHc != null) {
         updates.push(`${FIELDS.REFUELS_TAXES} = COALESCE(${t}.${FIELDS.REFUELS_TAXES}, 0) + ?`);
-        bindings.push(refuelTaxesHc);
+        updateBindings.push(refuelTaxesHc);
       }
     } else if (expenseType === EXPENSE_TYPES.EXPENSE) {
       updates.push(`${FIELDS.EXPENSES_COUNT} = COALESCE(${t}.${FIELDS.EXPENSES_COUNT}, 0) + 1`);
 
       if (totalPriceInHc != null) {
         updates.push(`${FIELDS.EXPENSES_COST} = COALESCE(${t}.${FIELDS.EXPENSES_COST}, 0) + ?`);
-        bindings.push(totalPriceInHc);
+        updateBindings.push(totalPriceInHc);
       }
 
       if (expenseFeesHc != null) {
         updates.push(`${FIELDS.EXPENSES_FEES} = COALESCE(${t}.${FIELDS.EXPENSES_FEES}, 0) + ?`);
-        bindings.push(expenseFeesHc);
+        updateBindings.push(expenseFeesHc);
       }
 
       if (expenseTaxesHc != null) {
         updates.push(`${FIELDS.EXPENSES_TAXES} = COALESCE(${t}.${FIELDS.EXPENSES_TAXES}, 0) + ?`);
-        bindings.push(expenseTaxesHc);
+        updateBindings.push(expenseTaxesHc);
       }
     }
 
     // Mileage range - use LEAST/GREATEST
     if (odometer != null) {
       updates.push(`${FIELDS.START_MILEAGE} = LEAST(COALESCE(NULLIF(${t}.${FIELDS.START_MILEAGE}, 0), ?), ?)`);
-      bindings.push(odometer, odometer);
+      updateBindings.push(odometer, odometer);
       updates.push(`${FIELDS.END_MILEAGE} = GREATEST(COALESCE(${t}.${FIELDS.END_MILEAGE}, 0), ?)`);
-      bindings.push(odometer);
+      updateBindings.push(odometer);
     }
 
     // Date range
     updates.push(`${FIELDS.FIRST_RECORD_AT} = LEAST(COALESCE(${t}.${FIELDS.FIRST_RECORD_AT}, ?), ?)`);
-    bindings.push(whenDoneDate, whenDoneDate);
+    updateBindings.push(whenDoneDate, whenDoneDate);
     updates.push(`${FIELDS.LAST_RECORD_AT} = GREATEST(COALESCE(${t}.${FIELDS.LAST_RECORD_AT}, ?), ?)`);
-    bindings.push(whenDoneDate, whenDoneDate);
+    updateBindings.push(whenDoneDate, whenDoneDate);
 
     updates.push(`${FIELDS.UPDATED_AT} = ?`);
-    bindings.push(dayjs.utc().format('YYYY-MM-DD HH:mm:ss'));
+    updateBindings.push(nowDate);
 
     const sql = `
-      INSERT INTO ${this.schema}.${TABLES.CAR_MONTHLY_SUMMARIES} 
-        (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY}, ${FIELDS.YEAR}, ${FIELDS.MONTH})
-      VALUES (?, ?, ?, ?)
+      INSERT INTO ${this.schema}.${TABLES.CAR_MONTHLY_SUMMARIES} (
+        ${FIELDS.CAR_ID},
+        ${FIELDS.HOME_CURRENCY},
+        ${FIELDS.YEAR},
+        ${FIELDS.MONTH},
+        ${FIELDS.REFUELS_COUNT},
+        ${FIELDS.EXPENSES_COUNT},
+        ${FIELDS.REFUELS_COST},
+        ${FIELDS.EXPENSES_COST},
+        ${FIELDS.REFUELS_VOLUME},
+        ${FIELDS.REFUELS_TAXES},
+        ${FIELDS.EXPENSES_FEES},
+        ${FIELDS.EXPENSES_TAXES},
+        ${FIELDS.START_MILEAGE},
+        ${FIELDS.END_MILEAGE},
+        ${FIELDS.FIRST_RECORD_AT},
+        ${FIELDS.LAST_RECORD_AT},
+        ${FIELDS.UPDATED_AT}
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY}, ${FIELDS.YEAR}, ${FIELDS.MONTH})
       DO UPDATE SET ${updates.join(', ')}
       RETURNING ${FIELDS.ID}
     `;
 
-    const result = await this.db.runRawQuery(sql, [carId, homeCurrency, year, month, ...bindings]);
+    const insertBindings = [
+      carId,
+      homeCurrency,
+      year,
+      month,
+      initialRefuelsCount,
+      initialExpensesCount,
+      initialRefuelsCost,
+      initialExpensesCost,
+      initialRefuelsVolume,
+      initialRefuelsTaxes,
+      initialExpensesFees,
+      initialExpensesTaxes,
+      odometer ?? 0,
+      odometer ?? 0,
+      whenDoneDate,
+      whenDoneDate,
+      nowDate,
+    ];
+
+    const result = await this.db.runRawQuery(sql, [...insertBindings, ...updateBindings]);
     return result?.rows?.[0]?.id || null;
   }
 
@@ -827,9 +930,41 @@ class CarStatsUpdater {
   }
 
   /**
-   * Recalculate MIN/MAX fields for total summary by querying expense_bases
+   * Recalculate MIN/MAX fields for total summary by querying expense_bases.
+   * Handles the edge case where all records have been removed.
    */
   private async recalculateTotalSummaryMinMax(carId: string, homeCurrency: string): Promise<void> {
+    // First, check if any records exist for this car/currency
+    const countResult = await this.db.runRawQuery(
+      `SELECT COUNT(*) AS cnt 
+       FROM ${this.schema}.${TABLES.EXPENSE_BASES} eb
+       WHERE eb.${FIELDS.CAR_ID} = ? 
+         AND COALESCE(eb.${FIELDS.HOME_CURRENCY}, eb.${FIELDS.PAID_IN_CURRENCY}) = ?
+         AND eb.${FIELDS.STATUS} = 100 
+         AND eb.${FIELDS.REMOVED_AT} IS NULL`,
+      [carId, homeCurrency],
+    );
+
+    const recordCount = parseInt(countResult?.rows?.[0]?.cnt || '0', 10);
+
+    if (recordCount === 0) {
+      // No records exist - reset MIN/MAX fields to NULL/0
+      const resetSql = `
+        UPDATE ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES}
+        SET 
+          ${FIELDS.LATEST_KNOWN_MILEAGE} = 0,
+          ${FIELDS.FIRST_RECORD_AT} = NULL,
+          ${FIELDS.LAST_RECORD_AT} = NULL,
+          ${FIELDS.LATEST_REFUEL_ID} = NULL,
+          ${FIELDS.LATEST_EXPENSE_ID} = NULL,
+          ${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP
+        WHERE ${FIELDS.CAR_ID} = ? AND ${FIELDS.HOME_CURRENCY} = ?
+      `;
+      await this.db.runRawQuery(resetSql, [carId, homeCurrency]);
+      return;
+    }
+
+    // Records exist - recalculate MIN/MAX via aggregate query
     const sql = `
       UPDATE ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES} cts
       SET 
@@ -973,7 +1108,8 @@ class CarStatsUpdater {
   }
 
   /**
-   * Recalculate MIN/MAX fields for monthly summary by querying expense_bases
+   * Recalculate MIN/MAX fields for monthly summary by querying expense_bases.
+   * Handles the edge case where all records have been removed for the month.
    */
   private async recalculateMonthlySummaryMinMax(
     carId: string,
@@ -981,6 +1117,41 @@ class CarStatsUpdater {
     year: number,
     month: number,
   ): Promise<void> {
+    // First, check if any records exist for this car/currency/year/month
+    const countResult = await this.db.runRawQuery(
+      `SELECT COUNT(*) AS cnt 
+       FROM ${this.schema}.${TABLES.EXPENSE_BASES} eb
+       WHERE eb.${FIELDS.CAR_ID} = ? 
+         AND COALESCE(eb.${FIELDS.HOME_CURRENCY}, eb.${FIELDS.PAID_IN_CURRENCY}) = ?
+         AND EXTRACT(YEAR FROM eb.${FIELDS.WHEN_DONE})::int = ?
+         AND EXTRACT(MONTH FROM eb.${FIELDS.WHEN_DONE})::int = ?
+         AND eb.${FIELDS.STATUS} = 100 
+         AND eb.${FIELDS.REMOVED_AT} IS NULL`,
+      [carId, homeCurrency, year, month],
+    );
+
+    const recordCount = parseInt(countResult?.rows?.[0]?.cnt || '0', 10);
+
+    if (recordCount === 0) {
+      // No records exist for this month - reset MIN/MAX fields to NULL/0
+      const resetSql = `
+        UPDATE ${this.schema}.${TABLES.CAR_MONTHLY_SUMMARIES}
+        SET 
+          ${FIELDS.START_MILEAGE} = 0,
+          ${FIELDS.END_MILEAGE} = 0,
+          ${FIELDS.FIRST_RECORD_AT} = NULL,
+          ${FIELDS.LAST_RECORD_AT} = NULL,
+          ${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP
+        WHERE ${FIELDS.CAR_ID} = ? 
+          AND ${FIELDS.HOME_CURRENCY} = ? 
+          AND ${FIELDS.YEAR} = ? 
+          AND ${FIELDS.MONTH} = ?
+      `;
+      await this.db.runRawQuery(resetSql, [carId, homeCurrency, year, month]);
+      return;
+    }
+
+    // Records exist - recalculate MIN/MAX via aggregate query
     const sql = `
       UPDATE ${this.schema}.${TABLES.CAR_MONTHLY_SUMMARIES} cms
       SET 
@@ -1215,7 +1386,8 @@ class CarStatsUpdater {
   // ===========================================================================
 
   /**
-   * Update total expense (by kind) with delta
+   * Update total expense (by kind) with delta.
+   * Uses UPSERT for create scenarios, UPDATE-only for modify/remove scenarios.
    */
   private async updateTotalExpenseDelta(
     carId: string,
@@ -1224,44 +1396,66 @@ class CarStatsUpdater {
     countDelta: number,
     amountDelta: number | null,
   ): Promise<void> {
-    const updates: string[] = [];
-    const bindings: any[] = [];
+    // Early return if no changes
+    if (countDelta === 0 && amountDelta == null) return;
 
     // Table alias for clarity in ON CONFLICT DO UPDATE
     const t = TABLES.CAR_TOTAL_EXPENSES;
 
-    if (countDelta !== 0) {
-      updates.push(`${FIELDS.RECORDS_COUNT} = GREATEST(COALESCE(${t}.${FIELDS.RECORDS_COUNT}, 0) + ?, 0)`);
-      bindings.push(countDelta);
+    if (countDelta > 0) {
+      // CREATE scenario: Use UPSERT with proper initial values
+      const updates: string[] = [];
+      const updateBindings: any[] = [];
+
+      updates.push(`${FIELDS.RECORDS_COUNT} = COALESCE(${t}.${FIELDS.RECORDS_COUNT}, 0) + ?`);
+      updateBindings.push(countDelta);
+
+      if (amountDelta != null) {
+        updates.push(`${FIELDS.AMOUNT} = COALESCE(${t}.${FIELDS.AMOUNT}, 0) + ?`);
+        updateBindings.push(amountDelta);
+      }
+
+      const sql = `
+        INSERT INTO ${this.schema}.${TABLES.CAR_TOTAL_EXPENSES} 
+          (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY}, ${FIELDS.EXPENSE_KIND_ID}, ${FIELDS.RECORDS_COUNT}, ${FIELDS.AMOUNT})
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY}, ${FIELDS.EXPENSE_KIND_ID})
+        DO UPDATE SET ${updates.join(', ')}
+      `;
+
+      await this.db.runRawQuery(sql, [carId, homeCurrency, kindId, countDelta, amountDelta, ...updateBindings]);
+    } else {
+      // REMOVE or VALUE UPDATE scenario: Use UPDATE only (row must already exist)
+      const updates: string[] = [];
+      const bindings: any[] = [];
+
+      if (countDelta !== 0) {
+        updates.push(`${FIELDS.RECORDS_COUNT} = GREATEST(COALESCE(${FIELDS.RECORDS_COUNT}, 0) + ?, 0)`);
+        bindings.push(countDelta);
+      }
+
+      if (amountDelta != null) {
+        updates.push(`${FIELDS.AMOUNT} = COALESCE(${FIELDS.AMOUNT}, 0) + ?`);
+        bindings.push(amountDelta);
+      }
+
+      if (updates.length === 0) return;
+
+      const sql = `
+        UPDATE ${this.schema}.${TABLES.CAR_TOTAL_EXPENSES}
+        SET ${updates.join(', ')}
+        WHERE ${FIELDS.CAR_ID} = ? 
+          AND ${FIELDS.HOME_CURRENCY} = ? 
+          AND ${FIELDS.EXPENSE_KIND_ID} = ?
+      `;
+
+      await this.db.runRawQuery(sql, [...bindings, carId, homeCurrency, kindId]);
     }
-
-    if (amountDelta != null) {
-      updates.push(`${FIELDS.AMOUNT} = COALESCE(${t}.${FIELDS.AMOUNT}, 0) + ?`);
-      bindings.push(amountDelta);
-    }
-
-    if (updates.length === 0) return;
-
-    const sql = `
-      INSERT INTO ${this.schema}.${TABLES.CAR_TOTAL_EXPENSES} 
-        (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY}, ${FIELDS.EXPENSE_KIND_ID}, ${FIELDS.RECORDS_COUNT}, ${FIELDS.AMOUNT})
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY}, ${FIELDS.EXPENSE_KIND_ID})
-      DO UPDATE SET ${updates.join(', ')}
-    `;
-
-    await this.db.runRawQuery(sql, [
-      carId,
-      homeCurrency,
-      kindId,
-      countDelta > 0 ? countDelta : 0,
-      amountDelta,
-      ...bindings,
-    ]);
   }
 
   /**
-   * Update monthly expense (by kind) with delta
+   * Update monthly expense (by kind) with delta.
+   * Uses UPSERT for create scenarios, UPDATE-only for modify/remove scenarios.
    */
   private async updateMonthlyExpenseDelta(
     monthlySummaryId: string,
@@ -1269,39 +1463,60 @@ class CarStatsUpdater {
     countDelta: number,
     amountDelta: number | null,
   ): Promise<void> {
-    const updates: string[] = [];
-    const bindings: any[] = [];
+    // Early return if no changes
+    if (countDelta === 0 && amountDelta == null) return;
 
     // Table alias for clarity in ON CONFLICT DO UPDATE
     const t = TABLES.CAR_MONTHLY_EXPENSES;
 
-    if (countDelta !== 0) {
-      updates.push(`${FIELDS.RECORDS_COUNT} = GREATEST(COALESCE(${t}.${FIELDS.RECORDS_COUNT}, 0) + ?, 0)`);
-      bindings.push(countDelta);
+    if (countDelta > 0) {
+      // CREATE scenario: Use UPSERT with proper initial values
+      const updates: string[] = [];
+      const updateBindings: any[] = [];
+
+      updates.push(`${FIELDS.RECORDS_COUNT} = COALESCE(${t}.${FIELDS.RECORDS_COUNT}, 0) + ?`);
+      updateBindings.push(countDelta);
+
+      if (amountDelta != null) {
+        updates.push(`${FIELDS.AMOUNT} = COALESCE(${t}.${FIELDS.AMOUNT}, 0) + ?`);
+        updateBindings.push(amountDelta);
+      }
+
+      const sql = `
+        INSERT INTO ${this.schema}.${TABLES.CAR_MONTHLY_EXPENSES} 
+          (${FIELDS.CAR_MONTHLY_SUMMARY_ID}, ${FIELDS.EXPENSE_KIND_ID}, ${FIELDS.RECORDS_COUNT}, ${FIELDS.AMOUNT})
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (${FIELDS.CAR_MONTHLY_SUMMARY_ID}, ${FIELDS.EXPENSE_KIND_ID})
+        DO UPDATE SET ${updates.join(', ')}
+      `;
+
+      await this.db.runRawQuery(sql, [monthlySummaryId, kindId, countDelta, amountDelta, ...updateBindings]);
+    } else {
+      // REMOVE or VALUE UPDATE scenario: Use UPDATE only (row must already exist)
+      const updates: string[] = [];
+      const bindings: any[] = [];
+
+      if (countDelta !== 0) {
+        updates.push(`${FIELDS.RECORDS_COUNT} = GREATEST(COALESCE(${FIELDS.RECORDS_COUNT}, 0) + ?, 0)`);
+        bindings.push(countDelta);
+      }
+
+      if (amountDelta != null) {
+        updates.push(`${FIELDS.AMOUNT} = COALESCE(${FIELDS.AMOUNT}, 0) + ?`);
+        bindings.push(amountDelta);
+      }
+
+      if (updates.length === 0) return;
+
+      const sql = `
+        UPDATE ${this.schema}.${TABLES.CAR_MONTHLY_EXPENSES}
+        SET ${updates.join(', ')}
+        WHERE ${FIELDS.CAR_MONTHLY_SUMMARY_ID} = ? 
+          AND ${FIELDS.EXPENSE_KIND_ID} = ?
+      `;
+
+      await this.db.runRawQuery(sql, [...bindings, monthlySummaryId, kindId]);
     }
-
-    if (amountDelta != null) {
-      updates.push(`${FIELDS.AMOUNT} = COALESCE(${t}.${FIELDS.AMOUNT}, 0) + ?`);
-      bindings.push(amountDelta);
-    }
-
-    if (updates.length === 0) return;
-
-    const sql = `
-      INSERT INTO ${this.schema}.${TABLES.CAR_MONTHLY_EXPENSES} 
-        (${FIELDS.CAR_MONTHLY_SUMMARY_ID}, ${FIELDS.EXPENSE_KIND_ID}, ${FIELDS.RECORDS_COUNT}, ${FIELDS.AMOUNT})
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT (${FIELDS.CAR_MONTHLY_SUMMARY_ID}, ${FIELDS.EXPENSE_KIND_ID})
-      DO UPDATE SET ${updates.join(', ')}
-    `;
-
-    await this.db.runRawQuery(sql, [
-      monthlySummaryId,
-      kindId,
-      countDelta > 0 ? countDelta : 0,
-      amountDelta,
-      ...bindings,
-    ]);
   }
 
   // ===========================================================================

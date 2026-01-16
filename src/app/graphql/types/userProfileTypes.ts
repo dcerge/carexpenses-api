@@ -14,7 +14,7 @@ const typeDefs = `#graphql
   type UserProfileResult implements OpResult {
     code: Int!
     errors: [Error!]
-    data: [UserProfile!]
+    data: [UserProfile]
   }
 
   input UserProfileInput {

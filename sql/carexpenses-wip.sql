@@ -8,6 +8,21 @@ update carexpenses.expense_tags set status = 100, normalized_name = trim(lower(t
 update carexpenses.travels set status = 100 where status = 10
 update ms_auth.account set current_plan = 'free'
 
+--delete from carexpenses.user_profiles where id = 'c55714b9-b25e-404f-93bc-b9e5d58c1e23'
+select *  from carexpenses.user_profiles where id = 'c55714b9-b25e-404f-93bc-b9e5d58c1e23'
+
+select * from carexpenses.car_total_summaries where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+select * from carexpenses.car_monthly_summaries where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+
+select * from carexpenses.expense_bases where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+select * from carexpenses.refuels where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+
+-- delete from carexpenses.car_total_summaries where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+-- delete from carexpenses.car_monthly_summaries where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+-- delete from carexpenses.refuels where id in (select id from carexpenses.expense_bases where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5')
+-- delete from carexpenses.expense_bases where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+
+
 select account_id, 
        u.id as user_id,
        count(ea.*) 
@@ -48,7 +63,7 @@ select apf.id, ap.plan_name, af.feature_code, af.feature_name, apf.feature_value
   from ms_auth.app_plan_features as apf 
   join ms_auth.app_plans as ap on (ap.id = apf.plan_id)
   join ms_auth.app_features as af on (af.id = apf.feature_id)
-  where ap.plan_code = 'free'
+  where ap.plan_code = 'business'
   order by af.order_no asc 
 
 ---- DATA MIGRATION:

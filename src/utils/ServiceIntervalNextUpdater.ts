@@ -49,9 +49,46 @@ class ServiceIntervalNextUpdater {
   private db: any;
   private schema: string;
 
+  private scheduleableKindCache: Map<number, boolean> | null = null;
+  private scheduleCacheExpiry: number = 0;
+  private static CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
   constructor(db: any, schema: string) {
     this.db = db;
     this.schema = schema;
+  }
+
+  // ===========================================================================
+  // Cache Management
+  // ===========================================================================
+
+  /**
+   * Invalidate the scheduleable kind cache.
+   * Call this when expense_kinds table is modified.
+   */
+  public invalidateScheduleableCache(): void {
+    this.scheduleableKindCache = null;
+    this.scheduleCacheExpiry = 0;
+  }
+
+  /**
+   * Ensure the scheduleable kind cache is populated and fresh.
+   */
+  private async ensureScheduleableCacheLoaded(): Promise<void> {
+    const now = Date.now();
+
+    if (this.scheduleableKindCache && now < this.scheduleCacheExpiry) {
+      return; // Cache is still valid
+    }
+
+    const result = await this.db.runRawQuery(
+      `SELECT ${FIELDS.ID}, ${FIELDS.CAN_SCHEDULE} 
+       FROM ${this.schema}.${TABLES.EXPENSE_KINDS} 
+       WHERE ${FIELDS.STATUS} = 100`,
+    );
+
+    this.scheduleableKindCache = new Map((result?.rows || []).map((row: any) => [row.id, row.can_schedule === true]));
+    this.scheduleCacheExpiry = now + ServiceIntervalNextUpdater.CACHE_TTL_MS;
   }
 
   // ===========================================================================
@@ -110,14 +147,12 @@ class ServiceIntervalNextUpdater {
     newParams: ServiceIntervalUpdateParams,
   ): Promise<void> {
     const kindChanged = oldParams.kindId !== newParams.kindId;
+    const carChanged = oldParams.carId !== newParams.carId;
 
-    if (kindChanged) {
-      // Treat as remove from old kind + create for new kind
-      await this.onExpenseRemoved(oldParams);
-      await this.onExpenseCreated(newParams);
+    if (kindChanged || carChanged) {
+      // Run in parallel since they affect different car+kind combinations
+      await Promise.all([this.onExpenseRemoved(oldParams), this.onExpenseCreated(newParams)]);
     } else {
-      // Same kindId - recalculate to handle any value changes
-      // This is safer than trying to detect if old value was the MAX
       await this.recalculateForCarAndKind(newParams.carId, newParams.kindId);
     }
   }
@@ -215,10 +250,6 @@ class ServiceIntervalNextUpdater {
     await this.upsertRecord(carId, kindId, settings, maxValues, nextWhenDo, nextOdometer);
   }
 
-  /**
-   * Upsert record when creating an expense.
-   * Uses GREATEST to handle concurrent creates efficiently.
-   */
   private async upsertOnCreate(
     carId: string,
     kindId: number,
@@ -252,13 +283,20 @@ class ServiceIntervalNextUpdater {
         ${FIELDS.MILEAGE_INTERVAL} = ?,
         ${FIELDS.DAYS_INTERVAL} = ?,
         ${FIELDS.MAX_WHEN_DONE} = GREATEST(${t}.${FIELDS.MAX_WHEN_DONE}, EXCLUDED.${FIELDS.MAX_WHEN_DONE}),
-        ${FIELDS.MAX_ODOMETER} = GREATEST(COALESCE(${t}.${FIELDS.MAX_ODOMETER}, 0), COALESCE(EXCLUDED.${FIELDS.MAX_ODOMETER}, 0)),
+        ${FIELDS.MAX_ODOMETER} = CASE
+          WHEN ${t}.${FIELDS.MAX_ODOMETER} IS NULL AND EXCLUDED.${FIELDS.MAX_ODOMETER} IS NULL THEN NULL
+          ELSE GREATEST(COALESCE(${t}.${FIELDS.MAX_ODOMETER}, 0), COALESCE(EXCLUDED.${FIELDS.MAX_ODOMETER}, 0))
+        END,
         ${FIELDS.NEXT_WHEN_DO} = CASE 
           WHEN ? > 0 THEN GREATEST(${t}.${FIELDS.MAX_WHEN_DONE}, EXCLUDED.${FIELDS.MAX_WHEN_DONE}) + INTERVAL '1 day' * ?
           ELSE ${t}.${FIELDS.NEXT_WHEN_DO}
         END,
         ${FIELDS.NEXT_ODOMETER} = CASE 
-          WHEN ? > 0 THEN GREATEST(COALESCE(${t}.${FIELDS.MAX_ODOMETER}, 0), COALESCE(EXCLUDED.${FIELDS.MAX_ODOMETER}, 0)) + ?
+          WHEN ? > 0 THEN 
+            CASE
+              WHEN ${t}.${FIELDS.MAX_ODOMETER} IS NULL AND EXCLUDED.${FIELDS.MAX_ODOMETER} IS NULL THEN NULL
+              ELSE GREATEST(COALESCE(${t}.${FIELDS.MAX_ODOMETER}, 0), COALESCE(EXCLUDED.${FIELDS.MAX_ODOMETER}, 0)) + ?
+            END
           ELSE ${t}.${FIELDS.NEXT_ODOMETER}
         END
     `;
@@ -359,12 +397,8 @@ class ServiceIntervalNextUpdater {
 
     const kindIdPlaceholders = scheduleableKindIds.map(() => '?').join(', ');
 
-    // This query:
-    // 1. Finds all car+kind combinations with expenses
-    // 2. Gets max whenDone and odometer for each
-    // 3. Joins with interval settings (customization or default)
-    // 4. Calculates next values
-    // 5. Only includes records where intervalType > 0
+    // Interval type constants for SQL:
+    // MILEAGE_ONLY = 1, DAYS_ONLY = 2, MILEAGE_OR_DAYS = 3, MILEAGE_AND_DAYS = 4
     const sql = `
       WITH expense_maxes AS (
         SELECT 
@@ -419,11 +453,13 @@ class ServiceIntervalNextUpdater {
         max_when_done,
         max_odometer,
         CASE 
-          WHEN days_interval > 0 THEN max_when_done + INTERVAL '1 day' * days_interval
+          WHEN days_interval > 0 AND interval_type IN (${INTERVAL_TYPES.DAYS_ONLY}, ${INTERVAL_TYPES.MILEAGE_OR_DAYS}, ${INTERVAL_TYPES.MILEAGE_AND_DAYS}) 
+          THEN max_when_done + INTERVAL '1 day' * days_interval
           ELSE NULL
         END AS next_when_do,
         CASE 
-          WHEN mileage_interval_km > 0 AND max_odometer IS NOT NULL THEN max_odometer + mileage_interval_km
+          WHEN mileage_interval_km > 0 AND max_odometer IS NOT NULL AND interval_type IN (${INTERVAL_TYPES.MILEAGE_ONLY}, ${INTERVAL_TYPES.MILEAGE_OR_DAYS}, ${INTERVAL_TYPES.MILEAGE_AND_DAYS}) 
+          THEN max_odometer + mileage_interval_km
           ELSE NULL
         END AS next_odometer,
         100 AS status
@@ -439,28 +475,27 @@ class ServiceIntervalNextUpdater {
   // ===========================================================================
 
   /**
-   * Check if a kindId is scheduleable
+   * Check if a kindId is scheduleable (uses cache)
    */
   private async isKindScheduleable(kindId: number): Promise<boolean> {
-    const result = await this.db.runRawQuery(
-      `SELECT ${FIELDS.CAN_SCHEDULE} FROM ${this.schema}.${TABLES.EXPENSE_KINDS} 
-       WHERE ${FIELDS.ID} = ? AND ${FIELDS.STATUS} = 100`,
-      [kindId],
-    );
-
-    return result?.rows?.[0]?.can_schedule === true;
+    await this.ensureScheduleableCacheLoaded();
+    return this.scheduleableKindCache?.get(kindId) ?? false;
   }
 
   /**
-   * Get all scheduleable kind IDs
+   * Get all scheduleable kind IDs (uses cache)
    */
   private async getScheduleableKindIds(): Promise<number[]> {
-    const result = await this.db.runRawQuery(
-      `SELECT ${FIELDS.ID} FROM ${this.schema}.${TABLES.EXPENSE_KINDS} 
-       WHERE ${FIELDS.CAN_SCHEDULE} = true AND ${FIELDS.STATUS} = 100`,
-    );
+    await this.ensureScheduleableCacheLoaded();
 
-    return (result?.rows || []).map((row: any) => row.id);
+    const result: number[] = [];
+    this.scheduleableKindCache?.forEach((isScheduleable, kindId) => {
+      if (isScheduleable) {
+        result.push(kindId);
+      }
+    });
+
+    return result;
   }
 
   /**
@@ -468,47 +503,29 @@ class ServiceIntervalNextUpdater {
    * Priority: customization > default > none
    */
   private async getIntervalSettings(carId: string, kindId: number): Promise<ResolvedIntervalSettings> {
-    // First, try to get customization
-    const customResult = await this.db.runRawQuery(
+    const result = await this.db.runRawQuery(
       `SELECT 
-        ${FIELDS.INTERVAL_TYPE},
-        ${FIELDS.MILEAGE_INTERVAL_KM},
-        ${FIELDS.DAYS_INTERVAL}
-       FROM ${this.schema}.${TABLES.SERVICE_INTERVAL_ACCOUNTS}
-       WHERE ${FIELDS.CAR_ID} = ? AND ${FIELDS.KIND_ID} = ? AND ${FIELDS.REMOVED_AT} IS NULL`,
+        COALESCE(sia.${FIELDS.INTERVAL_TYPE}, sid.${FIELDS.INTERVAL_TYPE}) AS interval_type,
+        COALESCE(sia.${FIELDS.MILEAGE_INTERVAL_KM}, sid.${FIELDS.MILEAGE_INTERVAL}) AS mileage_interval_km,
+        COALESCE(sia.${FIELDS.DAYS_INTERVAL}, sid.${FIELDS.DAYS_INTERVAL}) AS days_interval
+       FROM ${this.schema}.${TABLES.SERVICE_INTERVAL_DEFAULTS} sid
+       LEFT JOIN ${this.schema}.${TABLES.SERVICE_INTERVAL_ACCOUNTS} sia 
+         ON sia.${FIELDS.CAR_ID} = ? 
+         AND sia.${FIELDS.KIND_ID} = sid.${FIELDS.KIND_ID}
+         AND sia.${FIELDS.REMOVED_AT} IS NULL
+       WHERE sid.${FIELDS.KIND_ID} = ? AND sid.${FIELDS.STATUS} = 100`,
       [carId, kindId],
     );
 
-    if (customResult?.rows?.[0]) {
-      const row = customResult.rows[0];
+    if (result?.rows?.[0]) {
+      const row = result.rows[0];
       return {
-        intervalType: row.interval_type,
+        intervalType: row.interval_type ?? INTERVAL_TYPES.NONE,
         mileageIntervalKm: Number(row.mileage_interval_km) || 0,
         daysInterval: row.days_interval || 0,
       };
     }
 
-    // Fall back to default
-    const defaultResult = await this.db.runRawQuery(
-      `SELECT 
-        ${FIELDS.INTERVAL_TYPE},
-        ${FIELDS.MILEAGE_INTERVAL},
-        ${FIELDS.DAYS_INTERVAL}
-       FROM ${this.schema}.${TABLES.SERVICE_INTERVAL_DEFAULTS}
-       WHERE ${FIELDS.KIND_ID} = ? AND ${FIELDS.STATUS} = 100`,
-      [kindId],
-    );
-
-    if (defaultResult?.rows?.[0]) {
-      const row = defaultResult.rows[0];
-      return {
-        intervalType: row.interval_type,
-        mileageIntervalKm: Number(row.mileage_interval) || 0, // defaults are always in km
-        daysInterval: row.days_interval || 0,
-      };
-    }
-
-    // No settings found - return NONE
     return {
       intervalType: INTERVAL_TYPES.NONE,
       mileageIntervalKm: 0,

@@ -72,6 +72,10 @@ class UserProfileCore extends BaseCore {
     };
   }
 
+  public async beforeGet(item: any, opt?: BaseCoreActionsInterface): Promise<any> {
+    return this.defaultAfterAndBefore(item, opt);
+  }
+
   public async afterGet(item: any, opt?: BaseCoreActionsInterface): Promise<any> {
     if (!item) {
       return item;
@@ -97,6 +101,8 @@ class UserProfileCore extends BaseCore {
     const { args } = opt || {};
     const { where } = args || {};
     const { id } = where || {};
+    const { id: _, ...restParams } = params;
+    const { userId } = this.getContext();
 
     if (!id) {
       this.logger.log(`Cannot update user profile as the 'id' field was not provided`);
@@ -106,19 +112,28 @@ class UserProfileCore extends BaseCore {
     // Check if user owns the profile
     const profile = await this.getGateways().userProfileGw.get(id);
 
-    this.logger.debug(`Updating user profile preferencces: `, profile);
+    if (!profile) {
+      this.logger.log(`Creating preferences for a new user: `, profile);
+      const newProfile = await this.getGateways().userProfileGw.create({
+        id: userId,
+        ...restParams,
+      });
 
-    if (!profile || profile.id !== this.getContext().userId) {
+      this.getGateways().userProfileGw.clear(userId);
+
+      return OpResult.ok(newProfile);
+    }
+
+    this.logger.log(`Updating preferencces for existing user ${userId}: `, profile);
+
+    if (profile.id !== userId) {
       this.logger.log(
         `Cannot update user profile as its reference to the user ID ('${profile.id}') does not match current user's ID (${this.getContext().userId})`,
       );
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'User profile not found');
     }
 
-    // Don't allow changing accountId
-    const { accountId, ...restParams } = params;
-
-    where.accountId = accountId;
+    where.id = userId;
 
     return restParams;
   }

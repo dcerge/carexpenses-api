@@ -70,6 +70,14 @@ class UserProfileGw extends BaseGateway {
 
     return filtersAppliedQty;
   }
+
+  /**
+   * Clears cache for provided ID
+   * @param id ID of a record
+   */
+  public clear(id: string) {
+    this.loader.clear(id);
+  }
 }
 
 export { UserProfileGw };
