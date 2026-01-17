@@ -1,7 +1,6 @@
 export const USER_ROLES = {
-  OWNER: '59b30942-24c6-4b95-89e9-ffdac90e3b08',
-  ADMIN: '4d2a0251-81bd-4319-8b60-09b167a3d037', // can do everything except subscription and removal of an account
-  MEMBER: '9cd73213-29e1-4719-97ec-6a90d01c5e25',
-  SUPPORT_AGENT: '3c300e9f-8f31-4603-9013-8a48400f2d48',
-  VIEWER: '6becf910-76be-431b-bc13-f2d167bb3ea6',
+  OWNER: '54dfb3ec-7942-4b65-ba51-5ae62e79c860',
+  ADMIN: 'b7a5a5a1-82a5-433e-860d-fb7e7a374ad8', // can do everything except subscription and removal of an account
+  DRIVER: 'a1b810ca-6f53-4627-aa5c-d6a1714738d9',
+  VIEWER: '69533cd1-5468-4c92-bdfe-fc9025915862',
 };

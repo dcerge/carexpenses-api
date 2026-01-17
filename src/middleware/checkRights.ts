@@ -12,7 +12,7 @@ export const checkEmailLayoutRights = (object, context) => {
   const { roleId } = context || {};
 
   if (accountId === systemId) {
-    if ([USER_ROLES.VIEWER, USER_ROLES.SUPPORT_AGENT].includes(roleId) === false) {
+    if ([USER_ROLES.VIEWER].includes(roleId) === false) {
       return [OPERATION_RIGHTS.DUPLICATE];
     }
   } else if ([USER_ROLES.OWNER, USER_ROLES.ADMIN].includes(roleId)) {
@@ -28,12 +28,12 @@ export const checkFormsRights = (object, context) => {
   const rights: string[] = [];
 
   if (accountId === systemId) {
-    if ([USER_ROLES.VIEWER, USER_ROLES.SUPPORT_AGENT].includes(roleId) === false) {
+    if ([USER_ROLES.VIEWER].includes(roleId) === false) {
       rights.push(OPERATION_RIGHTS.DUPLICATE);
     }
   } else if ([USER_ROLES.OWNER, USER_ROLES.ADMIN].includes(roleId)) {
     rights.push(...[OPERATION_RIGHTS.UPDATE, OPERATION_RIGHTS.REMOVE, OPERATION_RIGHTS.DUPLICATE]);
-  } else if ([USER_ROLES.MEMBER].includes(roleId)) {
+  } else if ([USER_ROLES.DRIVER].includes(roleId)) {
     rights.push(OPERATION_RIGHTS.DUPLICATE);
     if (createdBy === userId) {
       rights.push(...[OPERATION_RIGHTS.UPDATE, OPERATION_RIGHTS.REMOVE, OPERATION_RIGHTS.DUPLICATE]);
@@ -48,7 +48,7 @@ export const checkSubmissionRights = (object, context) => {
   const { roleId, userId } = context || {};
   const rights: string[] = [];
 
-  if ([USER_ROLES.SUPPORT_AGENT, USER_ROLES.OWNER, USER_ROLES.ADMIN].includes(roleId)) {
+  if ([USER_ROLES.OWNER, USER_ROLES.ADMIN].includes(roleId)) {
     rights.push(...[OPERATION_RIGHTS.UPDATE, OPERATION_RIGHTS.REMOVE]);
   }
 

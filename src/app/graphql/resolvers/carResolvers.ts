@@ -10,6 +10,9 @@ const resolvers = buildDefaultResolvers({
   disableSet: true,
   types: {
     Car: {
+      user(parent, args, context) {
+        return parent.createdBy ? { __typename: 'User', id: parent.userId } : null;
+      },
       userCreated(parent, args, context) {
         return parent.createdBy ? { __typename: 'User', id: parent.createdBy } : null;
       },
@@ -103,9 +106,9 @@ const resolvers = buildDefaultResolvers({
 
         return uploadedFileId
           ? {
-              __typename: 'UploadedFile',
-              id: uploadedFileId,
-            }
+            __typename: 'UploadedFile',
+            id: uploadedFileId,
+          }
           : null;
       },
     },
