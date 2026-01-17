@@ -1,6 +1,6 @@
 // ./src/app/graphql/resolvers/expenseResolvers.ts
 import { buildDefaultResolvers } from '@sdflc/backend-helpers';
-import { ENTITY_TYPE_IDS } from 'boundary';
+import { ENTITY_TYPE_IDS } from '../../../boundary';
 
 const resolvers = buildDefaultResolvers({
   prefix: 'expense',

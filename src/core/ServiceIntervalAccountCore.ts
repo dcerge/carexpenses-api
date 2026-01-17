@@ -6,8 +6,8 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/serviceIntervalAccountValidators';
-import { INTERVAL_TYPES } from 'database';
-import { toMetricDistance, fromMetricDistanceRounded } from '../utils/unitConversions';
+import { INTERVAL_TYPES } from '../database';
+import { toMetricDistance, fromMetricDistanceRounded } from '../utils';
 
 dayjs.extend(utc);
 

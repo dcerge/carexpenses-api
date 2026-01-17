@@ -7,9 +7,9 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/carValidators';
-import { ENTITY_TYPE_IDS } from 'boundary';
-import { trialCheckMiddleware } from 'middleware';
-import { FEATURE_CODES } from 'utils';
+import { ENTITY_TYPE_IDS } from '../boundary';
+import { trialCheckMiddleware } from '../middleware';
+import { FEATURE_CODES } from '../utils';
 
 dayjs.extend(utc);
 
