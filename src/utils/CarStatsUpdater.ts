@@ -1223,7 +1223,14 @@ class CarStatsUpdater {
       expenseFeesDelta,
       expenseTaxesDelta,
     );
-    await this.recalculateTotalSummaryMinMax(carId, homeCurrency);
+
+    const odometerChanged = oldParams.odometer !== newParams.odometer;
+    const dateChanged = oldParams.whenDone !== newParams.whenDone;
+
+    // Only recalculate MIN/MAX if these fields changed
+    if (odometerChanged || dateChanged) {
+      await this.recalculateTotalSummaryMinMax(carId, homeCurrency);
+    }
 
     // Update total expense by kind
     if (expenseType === EXPENSE_TYPES.EXPENSE && kindId != null && amountDelta != null) {

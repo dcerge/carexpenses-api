@@ -23,6 +23,20 @@ select * from carexpenses.refuels where car_id = '3854732f-8383-4c4e-aff1-f7e6b0
 -- delete from carexpenses.expense_bases where car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
 
 
+-- INDEXES TO ADD
+CREATE INDEX idx_expense_bases_car_currency_status 
+ON carexpenses.expense_bases (car_id, home_currency, status, removed_at) 
+WHERE removed_at IS NULL;
+
+CREATE INDEX idx_expense_bases_car_when_done 
+ON carexpenses.expense_bases (car_id, home_currency, when_done DESC) 
+WHERE status = 100 AND removed_at IS NULL;
+
+
+CREATE INDEX idx_eb_car_hc_active ON carexpenses.expense_bases 
+  (car_id, COALESCE(home_currency, paid_in_currency), status) 
+  WHERE removed_at IS NULL;
+
 select account_id, 
        u.id as user_id,
        count(ea.*) 

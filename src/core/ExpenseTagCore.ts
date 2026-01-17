@@ -7,6 +7,7 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/expenseTagValidators';
+import { logger } from '../logger';
 
 dayjs.extend(utc);
 
@@ -61,6 +62,8 @@ class ExpenseTagCore extends AppCore {
   public async beforeList(args: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { filter } = args || {};
     const { accountId } = this.getContext();
+
+    logger.log('======= accountId', accountId);
 
     // Filter by accountId for security
     return {

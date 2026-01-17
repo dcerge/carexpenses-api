@@ -1,13 +1,20 @@
 import { BaseCore, BaseCorePropsInterface } from '@sdflc/backend-helpers';
 
 import { UserProfile } from '../boundary';
+import { logger } from '../logger';
+import { Logger, LoggerLevels } from '@sdflc/utils';
 
 /**
  * Base Core File for the project to be able to add common methods if needed
  */
 class AppCore extends BaseCore {
   constructor(props: BaseCorePropsInterface) {
-    super(props);
+    super({
+      ...props,
+      logger: new Logger({
+        level: LoggerLevels.DEBUG,
+      }),
+    });
   }
 
   public now() {

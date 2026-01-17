@@ -49,7 +49,7 @@
     "@graphql-tools/utils": "^10.9.1",
     "@microsoft/signalr": "^9.0.6",
     "@sdflc/api-helpers": "^1.1.13",
-    "@sdflc/backend-helpers": "^1.0.111",
+    "@sdflc/backend-helpers": "^1.0.112",
     "@sdflc/utils": "^1.0.24",
     "@sendgrid/mail": "^8.1.6",
     "@types/mime-types": "^3.0.1",

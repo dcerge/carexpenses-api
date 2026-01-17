@@ -113,11 +113,17 @@ class UserProfileCore extends BaseCore {
     const profile = await this.getGateways().userProfileGw.get(id);
 
     if (!profile) {
-      this.logger.log(`Creating preferences for a new user: `, profile);
+      this.logger.log(`Creating preferences for a new user: `, {
+        id: userId,
+        ...restParams,
+      });
+
       const newProfile = await this.getGateways().userProfileGw.create({
         id: userId,
         ...restParams,
       });
+
+      this.logger.log(`created preferences: `, newProfile);
 
       this.getGateways().userProfileGw.clear(userId);
 
