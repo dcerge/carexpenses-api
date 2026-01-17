@@ -1,6 +1,6 @@
 // ./src/app/graphql/resolvers/carResolvers.ts
 import { buildDefaultResolvers } from '@sdflc/backend-helpers';
-import { ENTITY_TYPE_IDS } from 'boundary';
+import { ENTITY_TYPE_IDS } from '../../../boundary';
 
 const resolvers = buildDefaultResolvers({
   prefix: 'car',
@@ -11,7 +11,7 @@ const resolvers = buildDefaultResolvers({
   types: {
     Car: {
       user(parent, args, context) {
-        return parent.createdBy ? { __typename: 'User', id: parent.userId } : null;
+        return parent.userId ? { __typename: 'User', id: parent.userId } : null;
       },
       userCreated(parent, args, context) {
         return parent.createdBy ? { __typename: 'User', id: parent.createdBy } : null;
