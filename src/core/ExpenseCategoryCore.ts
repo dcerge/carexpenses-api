@@ -51,6 +51,7 @@ class ExpenseCategoryCore extends AppCore {
       if (mapIdToExpenseCategory[l10n.expenseCategoryId]) {
         processedItems.push({
           id: l10n.expenseCategoryId,
+          code: mapIdToExpenseCategory[l10n.expenseCategoryId].code,
           name: l10n.name,
         });
       }

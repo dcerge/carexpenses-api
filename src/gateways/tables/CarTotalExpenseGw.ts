@@ -165,6 +165,10 @@ class CarTotalExpenseGw extends BaseGateway {
 
     return result?.rows?.[0]?.qty ? Number(result.rows[0].qty) : 0;
   }
+
+  public clear(carId): void {
+    this.loader.clear(carId);
+  }
 }
 
 export { CarTotalExpenseGw };

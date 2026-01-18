@@ -717,6 +717,8 @@ class ExpenseCore extends AppCore {
         // Log error but don't fail the create operation
         console.error('Failed to update service interval on create:', error);
       }
+
+      this.getGateways().carTotalExpenseGw.clear(expenseBase.carId);
     }
 
     const requestId = this.getRequestId();
@@ -911,6 +913,8 @@ class ExpenseCore extends AppCore {
         });
 
         await this.getGateways().entityEntityAttachmentGw.create(attachments);
+
+        this.getGateways().carTotalExpenseGw.clear(item.carId);
       }
 
       if (Array.isArray(updateInfo.tags)) {
@@ -1027,6 +1031,8 @@ class ExpenseCore extends AppCore {
 
       // Clean up stored data
       this.updateData.delete(`remove-${requestId}-${item.id}`);
+
+      this.getGateways().carTotalExpenseGw.clear(item.carId);
     }
 
     return items.map((item: any) => this.processItemWithProfile(item, userProfile));
