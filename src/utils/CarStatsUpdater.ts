@@ -591,7 +591,7 @@ class CarStatsUpdater {
     const initialExpensesFees = expenseType === EXPENSE_TYPES.EXPENSE ? expenseFeesHc : null;
     const initialExpensesTaxes = expenseType === EXPENSE_TYPES.EXPENSE ? expenseTaxesHc : null;
     const initialTotalExpensesCost = expenseType === EXPENSE_TYPES.EXPENSE ? totalPriceInHc : null;
-    const initialTotalRefuelsVolume = expenseType === EXPENSE_TYPES.REFUEL ? refuelVolume : null;
+    const initialTotalRefuelsVolume = expenseType === EXPENSE_TYPES.REFUEL ? refuelVolume : 0;
 
     // Build updates for ON CONFLICT (existing record case)
     const updates: string[] = [];
@@ -741,7 +741,7 @@ class CarStatsUpdater {
     const initialExpensesCount = expenseType === EXPENSE_TYPES.EXPENSE ? 1 : 0;
     const initialRefuelsCost = expenseType === EXPENSE_TYPES.REFUEL ? totalPriceInHc : null;
     const initialExpensesCost = expenseType === EXPENSE_TYPES.EXPENSE ? totalPriceInHc : null;
-    const initialRefuelsVolume = expenseType === EXPENSE_TYPES.REFUEL ? refuelVolume : null;
+    const initialRefuelsVolume = expenseType === EXPENSE_TYPES.REFUEL ? refuelVolume : 0;
     const initialRefuelsTaxes = expenseType === EXPENSE_TYPES.REFUEL ? refuelTaxesHc : null;
     const initialExpensesFees = expenseType === EXPENSE_TYPES.EXPENSE ? expenseFeesHc : null;
     const initialExpensesTaxes = expenseType === EXPENSE_TYPES.EXPENSE ? expenseTaxesHc : null;
