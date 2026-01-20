@@ -92,16 +92,6 @@ const rulesCreate = new Checkit({
       message: 'VIN should not exceed 32 characters',
     },
   ],
-  make: [
-    {
-      rule: 'string',
-      message: 'Make should be a string',
-    },
-    {
-      rule: 'maxLength:32',
-      message: 'Make should not exceed 32 characters',
-    },
-  ],
   model: [
     {
       rule: 'string',
@@ -182,6 +172,10 @@ const rulesCreate = new Checkit({
   ],
   tankVolume: [
     {
+      rule: 'required',
+      message: 'Tank volume is required',
+    },
+    {
       rule: 'integer',
       message: 'Tank volume should be an integer',
     },
@@ -199,6 +193,10 @@ const rulesCreate = new Checkit({
     },
   ],
   boughtFor: [
+    {
+      rule: 'required',
+      message: 'Purchase price is required',
+    },
     {
       rule: 'numeric',
       message: 'Bought for should be a number',
@@ -281,6 +279,10 @@ const rulesCreate = new Checkit({
     },
   ],
   makeId: [
+    {
+      rule: 'required',
+      message: 'Make is required',
+    },
     {
       rule: 'integer',
       message: 'Make ID should be an integer',

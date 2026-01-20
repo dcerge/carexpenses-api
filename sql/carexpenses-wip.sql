@@ -37,6 +37,38 @@ CREATE INDEX idx_eb_car_hc_active ON carexpenses.expense_bases
   (car_id, COALESCE(home_currency, paid_in_currency), status) 
   WHERE removed_at IS NULL;
 
+EXPLAIN ANALYZE
+SELECT COUNT(*) 
+FROM carexpenses.expense_bases eb
+WHERE eb.car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+  AND COALESCE(eb.home_currency, eb.paid_in_currency) = 'CAD'
+  AND eb.status = 100 
+  AND eb.removed_at IS NULL;
+
+EXPLAIN ANALYZE
+SELECT eb.id 
+FROM carexpenses.expense_bases eb
+JOIN carexpenses.refuels r ON r.id = eb.id
+WHERE eb.car_id = '3854732f-8383-4c4e-aff1-f7e6b04d2ec5'
+  AND COALESCE(eb.home_currency, eb.paid_in_currency) = 'CAD'
+  AND eb.status = 100 
+  AND eb.removed_at IS NULL
+ORDER BY eb.when_done DESC 
+LIMIT 1;
+
+
+select * 
+from "carexpenses"."glovebox_documents"
+where "glovebox_documents"."status" in (100) and "glovebox_documents"."removed_at" is null 
+and "account_id" in ('b6663f20-d05f-4461-9b09-e39141fb4488') 
+--and ("expires_at" is null or "expires_at" >= timezone('UTC', NOW())) 
+and "expires_at" is not null 
+and "expires_at" <= '2026-02-19' 
+and "expires_at" >= '2026-01-20'
+order by "expires_at" ASC, "created_at" DESC limit 10
+
+--------
+
 select account_id, 
        u.id as user_id,
        count(ea.*) 

@@ -28,3 +28,5 @@ export * from './UserProfileCore';
 export * from './VehicleMakeCore';
 export * from './ReportCore';
 export * from './DataTransferCore';
+export * from './GloveboxDocTypeCore';
+export * from './GloveboxDocumentCore';

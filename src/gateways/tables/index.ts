@@ -34,3 +34,8 @@ export * from './UserCarGw';
 export * from './UserNotificationGw';
 export * from './UserProfileGw';
 export * from './VehicleMakeGw';
+
+export * from './GloveboxDocTypeGw';
+export * from './GloveboxDocTypeL10NGw';
+export * from './GloveboxDocumentGw';
+export * from './GloveboxDocumentFileGw';

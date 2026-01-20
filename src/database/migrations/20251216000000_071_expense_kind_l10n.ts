@@ -12,7 +12,7 @@ export const up = (knex: Knex) =>
       .string(FIELDS.ID, 128)
       .primary()
       .notNullable()
-      .comment('ID is a comibnation of expense_kind.id and land, example: 1-en');
+      .comment('ID is a combination of expense_kind.id and land, example: 1-en');
 
     table.integer(FIELDS.EXPENSE_KIND_ID).notNullable().comment(`Reference to ${TABLES.EXPENSE_KINDS}`);
 

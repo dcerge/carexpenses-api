@@ -1,3 +1,4 @@
+// ./src/database/seeds/objects/car_body_types.js
 const { carBodyTypes } = require('./carBodyTypesData');
 const { STATUSES } = require('@sdflc/utils');
 

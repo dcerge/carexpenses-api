@@ -1,3 +1,4 @@
+// ./src/database/seeds/objects/carBodyTypesData.ts
 export const carBodyTypes = [
   {
     id: 0,

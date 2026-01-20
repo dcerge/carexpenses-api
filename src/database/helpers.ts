@@ -87,6 +87,14 @@ export const TABLES = {
   USER_NOTIFICATIONS: 'user_notifications',
   QUEUED_TASKS: 'queued_tasks',
   SMS_HISTORY_ITEMS: 'sms_history_items',
+
+  // ---------------------------------------------------------------------------
+  // Digital Glovebox
+  // ---------------------------------------------------------------------------
+  GLOVEBOX_DOC_TYPES: 'glovebox_doc_types',
+  GLOVEBOX_DOC_TYPE_L10N: 'glovebox_doc_type_l_10_n',
+  GLOVEBOX_DOCUMENTS: 'glovebox_documents',
+  GLOVEBOX_DOCUMENT_FILES: 'glovebox_document_files',
 };
 
 // =============================================================================
@@ -371,6 +379,35 @@ export const FIELDS = {
   TO_NUMBER: 'to_number',
   BODY: 'body',
   METADATA: 'metadata',
+
+
+  // Digital glove box 
+  DOC_TYPE_ID: 'doc_type_id',
+  GLOVEBOX_DOCUMENT_ID: 'glovebox_document_id',
+  CUSTOM_TYPE_NAME: 'custom_type_name',
+  CATEGORY: 'category',
+  HAS_DOCUMENT_NUMBER: 'has_document_number',
+  HAS_ISSUE_DATE: 'has_issue_date',
+  HAS_EFFECTIVE_DATE: 'has_effective_date',
+  HAS_EXPIRATION: 'has_expiration',
+  HAS_ISSUING_AUTHORITY: 'has_issuing_authority',
+  HAS_COST: 'has_cost',
+  HAS_COVERAGE_AMOUNT: 'has_coverage_amount',
+  DOCUMENT_NUMBER_LABEL_KEY: 'document_number_label_key',
+  DOCUMENT_NUMBER_LABEL: 'document_number_label',
+  DOCUMENT_NUMBER: 'document_number',
+  ISSUED_AT: 'issued_at',
+  EFFECTIVE_AT: 'effective_at',
+  EXPIRES_AT: 'expires_at',
+  ISSUING_AUTHORITY: 'issuing_authority',
+  COST: 'cost',
+  COST_CURRENCY: 'cost_currency',
+  COVERAGE_AMOUNT: 'coverage_amount',
+  COVERAGE_CURRENCY: 'coverage_currency',
+  REMIND_BEFORE_DAYS: 'remind_before_days',
+  NOTES: 'notes',
+  IS_PRIMARY: 'is_primary',
+  VEHICLE_ID: 'vehicle_id',
 };
 
 // =============================================================================
