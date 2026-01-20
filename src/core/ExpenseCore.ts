@@ -116,6 +116,10 @@ class ExpenseCore extends AppCore {
       params.kindId = extension?.kindId;
       params.expenseFeesHc = expenseBase.fees;
       params.expenseTaxesHc = expenseBase.tax;
+    } else if (expenseBase.expenseType === EXPENSE_TYPES.REVENUE) {
+      params.kindId = extension?.kindId;
+      // Note: For revenues, totalPriceInHc represents income earned
+      // The stats updater should handle this as positive income vs negative expense
     }
 
     return params;
@@ -316,19 +320,23 @@ class ExpenseCore extends AppCore {
     // Separate IDs by expense type
     const refuelIds: string[] = [];
     const expenseIds: string[] = [];
+    const revenueIds: string[] = [];
 
     for (const base of expenseBases) {
       if (base.expenseType === EXPENSE_TYPES.REFUEL) {
         refuelIds.push(base.id);
       } else if (base.expenseType === EXPENSE_TYPES.EXPENSE) {
         expenseIds.push(base.id);
+      } else if (base.expenseType === EXPENSE_TYPES.REVENUE) {
+        revenueIds.push(base.id);
       }
     }
 
     // Batch fetch extension data (2 queries max)
-    const [refuels, expenses] = await Promise.all([
+    const [refuels, expenses, revenues] = await Promise.all([
       refuelIds.length > 0 ? this.getGateways().refuelGw.list({ filter: { id: refuelIds } }) : Promise.resolve([]),
       expenseIds.length > 0 ? this.getGateways().expenseGw.list({ filter: { id: expenseIds } }) : Promise.resolve([]),
+      revenueIds.length > 0 ? this.getGateways().revenueGw.list({ filter: { id: revenueIds } }) : Promise.resolve([]),
     ]);
 
     // Create lookup maps by ID
@@ -340,6 +348,11 @@ class ExpenseCore extends AppCore {
     const expenseMap = new Map<string, any>();
     for (const expense of expenses) {
       expenseMap.set(expense.id, expense);
+    }
+
+    const revenueMap = new Map<string, any>();
+    for (const revenue of revenues) {
+      revenueMap.set(revenue.id, revenue);
     }
 
     // Merge data
@@ -368,6 +381,12 @@ class ExpenseCore extends AppCore {
           merged.costWorkHc = expense.costWorkHc;
           merged.costPartsHc = expense.costPartsHc;
           merged.shortNote = expense.shortNote;
+        }
+      } else if (base.expenseType === EXPENSE_TYPES.REVENUE) {
+        const revenue = revenueMap.get(base.id);
+        if (revenue) {
+          merged.kindId = revenue.kindId;
+          merged.shortNote = revenue.shortNote;
         }
       }
 
@@ -504,6 +523,16 @@ class ExpenseCore extends AppCore {
       costParts: params.costParts,
       costWorkHc: params.costWorkHc,
       costPartsHc: params.costPartsHc,
+      shortNote: params.shortNote,
+    };
+  }
+
+  /**
+ * Extract revenue-specific fields from params
+ */
+  private extractRevenueFields(params: any): any {
+    return {
+      kindId: params.kindId,
       shortNote: params.shortNote,
     };
   }
@@ -695,6 +724,13 @@ class ExpenseCore extends AppCore {
           ...expenseFields,
         });
         extension = expenseFields;
+      } else if (expenseBase.expenseType === EXPENSE_TYPES.REVENUE) {
+        const revenueFields = this.extractRevenueFields(convertedParams);
+        await this.getGateways().revenueGw.create({
+          id: expenseBase.id,
+          ...revenueFields,
+        });
+        extension = revenueFields;
       }
 
       // Update car stats
@@ -794,6 +830,8 @@ class ExpenseCore extends AppCore {
       oldExtension = await this.getGateways().refuelGw.get(id);
     } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
       oldExtension = await this.getGateways().expenseGw.get(id);
+    } else if (expenseBase.expenseType === EXPENSE_TYPES.REVENUE) {
+      oldExtension = await this.getGateways().revenueGw.get(id);
     }
 
     // Don't allow changing accountId, userId, or expenseType
@@ -859,6 +897,14 @@ class ExpenseCore extends AppCore {
         }
         // Fetch updated extension for stats
         newExtension = await this.getGateways().expenseGw.get(expenseId);
+      } else if (expenseType === EXPENSE_TYPES.REVENUE) {
+        const revenueFields = this.extractRevenueFields(extensionParams);
+        const hasRevenueFields = Object.values(revenueFields).some((v) => v !== undefined);
+        if (hasRevenueFields) {
+          await this.getGateways().revenueGw.update({ id: expenseId }, revenueFields);
+        }
+        // Fetch updated extension for stats
+        newExtension = await this.getGateways().revenueGw.get(expenseId);
       }
 
       // Update car stats with delta
@@ -975,6 +1021,8 @@ class ExpenseCore extends AppCore {
       extension = await this.getGateways().refuelGw.get(id);
     } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
       extension = await this.getGateways().expenseGw.get(id);
+    } else if (expenseBase.expenseType === EXPENSE_TYPES.REVENUE) {
+      extension = await this.getGateways().revenueGw.get(id);
     }
 
     // Store expense data for afterRemove stats update
@@ -1069,6 +1117,8 @@ class ExpenseCore extends AppCore {
           extension = await this.getGateways().refuelGw.get(id);
         } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
           extension = await this.getGateways().expenseGw.get(id);
+        } else if (expenseBase.expenseType === EXPENSE_TYPES.REVENUE) {
+          extension = await this.getGateways().revenueGw.get(id);
         }
 
         // Store for afterRemoveMany

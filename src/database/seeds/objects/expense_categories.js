@@ -1,3 +1,4 @@
+// ./src/database/seeds/objects/expense_categories.js
 const { expenseCategoriesWithKinds } = require('./expenseCategoriesAndKindsData');
 const { STATUSES } = require('@sdflc/utils');
 

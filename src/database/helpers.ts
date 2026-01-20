@@ -26,6 +26,10 @@ export const TABLES = {
   EXPENSE_CATEGORY_L10N: 'expense_category_l_10_n',
   EXPENSE_KINDS: 'expense_kinds',
   EXPENSE_KIND_L10N: 'expense_kind_l_10_n',
+  REVENUE_CATEGORIES: 'revenue_categories',
+  REVENUE_CATEGORY_L10N: 'revenue_category_l_10_n',
+  REVENUE_KINDS: 'revenue_kinds',
+  REVENUE_KIND_L10N: 'revenue_kind_l_10_n',
   SERVICE_INTERVAL_DEFAULTS: 'service_interval_defaults',
 
   // ---------------------------------------------------------------------------
@@ -48,6 +52,7 @@ export const TABLES = {
   EXPENSE_BASES: 'expense_bases',
   EXPENSES: 'expenses',
   REFUELS: 'refuels',
+  REVENUES: 'revenues',
 
   // ---------------------------------------------------------------------------
   // Junction/Relationship Tables
@@ -146,6 +151,12 @@ export const FIELDS = {
   EXPENSE_KIND_ID: 'expense_kind_id',
   CAN_SCHEDULE: 'can_schedule',
   IS_IT_MAINTENANCE: 'is_it_maintenance',
+
+  // Revenue Category
+  REVENUE_CATEGORY_ID: 'revenue_category_id',
+
+  // Revenue Kind
+  REVENUE_KIND_ID: 'revenue_kind_id',
 
   // Service Interval Defaults
   KIND_ID: 'kind_id',
@@ -423,12 +434,15 @@ export const STATUS = {
 };
 
 // =============================================================================
-// EXPENSE TYPES
+// EXPENSE TYPES (expense_bases.expense_type)
 // =============================================================================
 
 export const EXPENSE_TYPES = {
   REFUEL: 1,
   EXPENSE: 2,
+  CHECKPOINT: 3,
+  TRAVEL_POINT: 4,
+  REVENUE: 5,
 };
 
 // =============================================================================
@@ -528,6 +542,7 @@ export const ENTITY_TYPES = {
   EXPENSE: 2,
   REFUEL: 3,
   TRAVEL: 4,
+  REVENUE: 5,
 };
 
 // =============================================================================

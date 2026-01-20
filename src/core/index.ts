@@ -30,3 +30,5 @@ export * from './ReportCore';
 export * from './DataTransferCore';
 export * from './GloveboxDocTypeCore';
 export * from './GloveboxDocumentCore';
+export * from './RevenueCategoryCore';
+export * from './RevenueKindCore';

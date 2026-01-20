@@ -39,3 +39,9 @@ export * from './GloveboxDocTypeGw';
 export * from './GloveboxDocTypeL10NGw';
 export * from './GloveboxDocumentGw';
 export * from './GloveboxDocumentFileGw';
+
+export * from './RevenueCategoryGw';
+export * from './RevenueCategoryL10NGw';
+export * from './RevenueKindGw';
+export * from './RevenueKindL10NGw';
+export * from './RevenueGw';

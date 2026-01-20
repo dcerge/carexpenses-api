@@ -1,3 +1,4 @@
+// ./src/database/seeds/objects/expense_kind_l_10_n.js
 const { expenseCategoriesWithKinds } = require('./expenseCategoriesAndKindsData');
 
 const seeds = expenseCategoriesWithKinds.reduce((acc, category) => {

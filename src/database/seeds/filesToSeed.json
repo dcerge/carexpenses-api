@@ -8,6 +8,10 @@
     ["vehicle_makes"],
     ["service_interval_defaults"],
     ["glovebox_doc_types"],
-    ["glovebox_doc_type_l_10_n"]
+    ["glovebox_doc_type_l_10_n"],
+    ["revenue_categories"],
+    ["revenue_category_l_10_n"],
+    ["revenue_kinds"],
+    ["revenue_kind_l_10_n"]
   ]
 }

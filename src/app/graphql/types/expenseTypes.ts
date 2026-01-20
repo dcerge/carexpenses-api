@@ -1,50 +1,114 @@
 // ./src/app/graphql/types/expenseTypes.ts
 const typeDefs = `#graphql
+  """
+  Unified type for all financial records: expenses, refuels, checkpoints, travel points, and revenues.
+  The expenseType field determines which specific fields are populated:
+  - 1 = Refuel: uses refuel-specific fields (refuelVolume, pricePerVolume, etc.)
+  - 2 = Expense: uses expense-specific fields (kindId references expense_kinds, costWork, costParts, etc.)
+  - 3 = Checkpoint: uses only common fields (odometer, fuelInTank, comments)
+  - 4 = Travel Point: uses only common fields, linked to a travel via travelId
+  - 5 = Revenue: uses revenue-specific fields (kindId references revenue_kinds, shortNote)
+  """
   type Expense @key(fields: "id") {
     id: ID
     accountId: ID
     userId: ID
     carId: ID
+    
+    """
+    Discriminator field: 1=Refuel, 2=Expense, 3=Checkpoint, 4=Travel Point, 5=Revenue
+    """
     expenseType: Int
     
-    # Common fields (from expense_bases)
+    # ==========================================================================
+    # Common fields (from expense_bases) - used by ALL expense types
+    # ==========================================================================
+    
+    "Odometer reading at time of record"
     odometer: Float
+    "Trip meter reading"
     tripMeter: Float
+    "Calculated fuel consumption (derived)"
     consumption: Float
+    "Date/time when the record occurred"
     whenDone: String
+    "Location/address"
     location: String
+    "Place name (gas station, service center, etc.)"
     whereDone: String
+    "Subtotal before tax and fees"
     subtotal: Float
+    "Tax amount"
     tax: Float
+    "Additional fees"
     fees: Float
+    """
+    Total amount in payment currency.
+    For expenses/refuels: money spent (positive = cost)
+    For revenues: money earned (positive = income)
+    """
     totalPrice: Float
+    "Currency used for payment (ISO 4217 code)"
     paidInCurrency: String
+    "Total price converted to user's home currency"
     totalPriceInHc: Float
+    "User's home currency at time of record (ISO 4217 code)"
     homeCurrency: String
+    "Legacy picture ID (deprecated, use uploadedFiles)"
     expensePictureId: ID
+    "Additional comments/notes"
     comments: String
+    "Estimated fuel percentage in tank (0-100)"
     fuelInTank: Float
+    "Reference to user-defined label for categorization"
     labelId: ID
+    "Reference to travel record if this record is part of a trip"
     travelId: ID
+    "Owner number at time of record (for vehicles with multiple owners over time)"
     ownerNumber: Int
     
+    # ==========================================================================
     # Expense-specific fields (expenseType = 2)
+    # ==========================================================================
+    
+    """
+    Kind ID - interpretation depends on expenseType:
+    - For expenseType=2 (Expense): references expense_kinds table
+    - For expenseType=5 (Revenue): references revenue_kinds table
+    """
     kindId: Int
+    "Cost of labor/work portion (expenseType=2 only)"
     costWork: Float
+    "Cost of parts/materials portion (expenseType=2 only)"
     costParts: Float
+    "Cost of labor in home currency (expenseType=2 only)"
     costWorkHc: Float
+    "Cost of parts in home currency (expenseType=2 only)"
     costPartsHc: Float
+    "Brief note about the expense or revenue (expenseType=2,5)"
     shortNote: String
     
+    # ==========================================================================
     # Refuel-specific fields (expenseType = 1)
+    # ==========================================================================
+    
+    "Volume of fuel added (expenseType=1 only)"
     refuelVolume: Float
+    "Unit for volume: 'l' (liters), 'gal-us', 'gal-uk' (expenseType=1 only)"
     volumeEnteredIn: String
+    "Price per unit volume (expenseType=1 only)"
     pricePerVolume: Float
+    "Whether tank was filled completely (expenseType=1 only)"
     isFullTank: Boolean
+    "Estimated fuel remaining before refuel (expenseType=1 only)"
     remainingInTankBefore: Float
+    "Fuel grade/type: Regular, Premium, Diesel, etc. (expenseType=1 only)"
     fuelGrade: String
     
+    # ==========================================================================
     # Audit fields
+    # ==========================================================================
+    
     status: Int
     version: Int
     createdBy: ID
@@ -53,18 +117,26 @@ const typeDefs = `#graphql
     createdAt: String
     updatedAt: String
     
-    # References
+    # ==========================================================================
+    # Resolved references
+    # ==========================================================================
+    
     user: User
     account: Account
     car: Car
     travel: Travel
+    "Expense kind - populated when expenseType=2"
     expenseKind: ExpenseKind
+    "Revenue kind - populated when expenseType=5"
+    revenueKind: RevenueKind
     userCreated: User
     userUpdated: User
     userRemoved: User
-    "References to uploaded files"
+    "References to uploaded file IDs"
     uploadedFilesIds: [ID]
+    "Resolved uploaded files"
     uploadedFiles: [UploadedFile]
+    "Associated tags"
     tags: [ExpenseTag]
   }
 
@@ -78,6 +150,10 @@ const typeDefs = `#graphql
     id: ID
     accountId: ID
     carId: ID
+    
+    """
+    Record type: 1=Refuel, 2=Expense, 3=Checkpoint, 4=Travel Point, 5=Revenue
+    """
     expenseType: Int
     
     # Common fields
@@ -98,11 +174,22 @@ const typeDefs = `#graphql
     travelId: ID
     
     # Expense-specific fields (expenseType = 2)
+    # Revenue-specific fields (expenseType = 5) - only kindId and shortNote apply
+    """
+    Kind ID:
+    - For expenseType=2: ID from expense_kinds
+    - For expenseType=5: ID from revenue_kinds
+    """
     kindId: Int
+    "Cost of labor (expenseType=2 only)"
     costWork: Float
+    "Cost of parts (expenseType=2 only)"
     costParts: Float
+    "Cost of labor in home currency (expenseType=2 only)"
     costWorkHc: Float
+    "Cost of parts in home currency (expenseType=2 only)"
     costPartsHc: Float
+    "Brief note (expenseType=2,5)"
     shortNote: String
     
     # Refuel-specific fields (expenseType = 1)
@@ -125,7 +212,14 @@ const typeDefs = `#graphql
     accountId: [ID]
     userId: [ID]
     carId: [ID]
+    """
+    Filter by expense type: 1=Refuel, 2=Expense, 3=Checkpoint, 4=Travel Point, 5=Revenue
+    """
     expenseType: [Int]
+    """
+    Filter by kind ID. Note: kindId meaning depends on expenseType.
+    Use with expenseType filter to ensure correct interpretation.
+    """
     kindId: [Int]
     labelId: [ID]
     travelId: [ID]

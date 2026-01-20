@@ -1,6 +1,4 @@
 // ./src/app/graphql/resolvers/appEssentialsResolvers.ts
-//
-// ADD the gloveboxDocTypes resolver to the existing AppEssentials type resolvers:
 
 import { OpResult } from '@sdflc/api-helpers';
 import { buildDefaultResolvers } from '@sdflc/backend-helpers';
@@ -43,6 +41,10 @@ const resolvers = buildDefaultResolvers({
         const result = await context.cores.expenseCategoryCore.list({});
         return result.data ?? [];
       },
+      async revenueCategories(parent, args, context) {
+        const result = await context.cores.revenueCategoryCore.list({});
+        return result.data ?? [];
+      },
       async gloveboxDocTypes(parent, args, context) {
         const result = await context.cores.gloveboxDocTypeCore.list({});
         return result.data ?? [];
@@ -59,6 +61,7 @@ const resolvers = buildDefaultResolvers({
           carTransmissionTypes: [],
           vehicleMakes: [],
           expenseCategories: [],
+          revenueCategories: [],
           gloveboxDocTypes: [],
         },
       ]);

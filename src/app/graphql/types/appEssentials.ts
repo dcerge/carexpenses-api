@@ -7,6 +7,7 @@ const typeDefs = `#graphql
     carTransmissionTypes: [CarTransmissionType]
     vehicleMakes: [VehicleMake]
     expenseCategories: [ExpenseCategory]
+    revenueCategories: [RevenueCategory]
     gloveboxDocTypes: [GloveboxDocType]
   }
 

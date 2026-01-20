@@ -40,9 +40,6 @@ export const up = (knex: Knex) =>
     table
       .integer(FIELDS.DOC_TYPE_ID)
       .notNullable()
-      .references(FIELDS.ID)
-      .inTable(`${dbSchema}.${TABLES.GLOVEBOX_DOC_TYPES}`)
-      .onDelete('RESTRICT')
       .comment('Reference to glovebox_doc_types');
 
     table
@@ -111,7 +108,7 @@ export const up = (knex: Knex) =>
 
     table
       .uuid(FIELDS.UPLOADED_FILE_ID)
-      .notNullable()
+      .nullable()
       .comment('Reference to ms_storage uploaded file');
 
     dbFieldAddDefaults(table, {
