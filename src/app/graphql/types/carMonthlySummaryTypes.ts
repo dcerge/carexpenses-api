@@ -1,4 +1,3 @@
-// ./src/app/graphql/types/carMonthlySummaryTypes.ts
 const typeDefs = `#graphql
   type CarMonthlySummary @key(fields: "id") {
     id: ID
@@ -16,6 +15,21 @@ const typeDefs = `#graphql
     expensesTaxes: Float
     expensesCost: Float
     refuelsVolume: Float
+    # Revenue tracking
+    revenuesCount: Int
+    revenuesAmount: Float
+    # Maintenance tracking (expenses where is_it_maintenance = true)
+    maintenanceCount: Int
+    maintenanceCost: Float
+    # Consumption tracking
+    consumptionVolume: Float
+    isFirstRefuelMonth: Boolean
+    # Checkpoint tracking
+    checkpointsCount: Int
+    # Travel tracking
+    travelsCount: Int
+    travelsDistance: Float
+    # Timestamps
     firstRecordAt: String
     lastRecordAt: String
     updatedAt: String

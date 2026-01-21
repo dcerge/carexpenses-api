@@ -1,3 +1,4 @@
+// ./src/database/migrations/20260109000000_930_alter_service_interval_accounts.ts
 import { Knex } from 'knex';
 
 import config from '../../config';

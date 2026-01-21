@@ -73,6 +73,8 @@ export const TABLES = {
   CAR_TOTAL_EXPENSES: 'car_total_expenses',
   CAR_MONTHLY_SUMMARIES: 'car_monthly_summaries',
   CAR_MONTHLY_EXPENSES: 'car_monthly_expenses',
+  CAR_TOTAL_REVENUES: 'car_total_revenues',
+  CAR_MONTHLY_REVENUES: 'car_monthly_revenues',
 
   // ---------------------------------------------------------------------------
   // Service Intervals
@@ -419,6 +421,47 @@ export const FIELDS = {
   NOTES: 'notes',
   IS_PRIMARY: 'is_primary',
   VEHICLE_ID: 'vehicle_id',
+
+  // ---------------------------------------------------------------------------
+  // Revenue Tracking Fields
+  // ---------------------------------------------------------------------------
+  TOTAL_REVENUES_COUNT: 'total_revenues_count',
+  TOTAL_REVENUES_AMOUNT: 'total_revenues_amount',
+  LATEST_REVENUE_ID: 'latest_revenue_id',
+  REVENUES_COUNT: 'revenues_count',
+  REVENUES_AMOUNT: 'revenues_amount',
+
+  // ---------------------------------------------------------------------------
+  // Maintenance Tracking Fields
+  // ---------------------------------------------------------------------------
+  TOTAL_MAINTENANCE_COUNT: 'total_maintenance_count',
+  TOTAL_MAINTENANCE_COST: 'total_maintenance_cost',
+  MAINTENANCE_COUNT: 'maintenance_count',
+  MAINTENANCE_COST: 'maintenance_cost',
+
+  // ---------------------------------------------------------------------------
+  // Consumption Tracking Fields
+  // ---------------------------------------------------------------------------
+  FIRST_REFUEL_ID: 'first_refuel_id',
+  FIRST_REFUEL_ODOMETER: 'first_refuel_odometer',
+  FIRST_REFUEL_VOLUME: 'first_refuel_volume',
+  CONSUMPTION_VOLUME: 'consumption_volume',
+  CONSUMPTION_DISTANCE: 'consumption_distance',
+  IS_FIRST_REFUEL_MONTH: 'is_first_refuel_month',
+
+  // ---------------------------------------------------------------------------
+  // Checkpoint Tracking Fields
+  // ---------------------------------------------------------------------------
+  TOTAL_CHECKPOINTS_COUNT: 'total_checkpoints_count',
+  CHECKPOINTS_COUNT: 'checkpoints_count',
+
+  // ---------------------------------------------------------------------------
+  // Travel Tracking Fields
+  // ---------------------------------------------------------------------------
+  TOTAL_TRAVELS_COUNT: 'total_travels_count',
+  TOTAL_TRAVELS_DISTANCE: 'total_travels_distance',
+  TRAVELS_COUNT: 'travels_count',
+  TRAVELS_DISTANCE: 'travels_distance',
 };
 
 // =============================================================================

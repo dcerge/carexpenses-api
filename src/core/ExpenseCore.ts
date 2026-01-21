@@ -95,10 +95,17 @@ class ExpenseCore extends AppCore {
     return this.serviceIntervalUpdater;
   }
 
+  private async isExpenseKindMaintenance(kindId: number | null | undefined): Promise<boolean> {
+    if (!kindId) return false;
+
+    const expenseKind = await this.getGateways().expenseKindGw.get(kindId);
+    return expenseKind?.isItMaintenance === true;
+  }
+
   /**
    * Build StatsOperationParams from expense base and extension data
    */
-  private buildStatsParams(expenseBase: any, extension: any, homeCurrency: string): StatsOperationParams {
+  private buildStatsParams(expenseBase: any, extension: any, homeCurrency: string, isMaintenance?: boolean): StatsOperationParams {
     const params: StatsOperationParams = {
       recordId: expenseBase.id,
       carId: expenseBase.carId,
@@ -111,11 +118,18 @@ class ExpenseCore extends AppCore {
 
     if (expenseBase.expenseType === EXPENSE_TYPES.REFUEL) {
       params.refuelVolume = extension?.refuelVolume;
-      params.refuelTaxesHc = expenseBase.tax; // Tax for refuels
+      // Only include tax if paid currency matches home currency
+      if (expenseBase.paidInCurrency === homeCurrency) {
+        params.refuelTaxesHc = expenseBase.tax;
+      }
     } else if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE) {
       params.kindId = extension?.kindId;
-      params.expenseFeesHc = expenseBase.fees;
-      params.expenseTaxesHc = expenseBase.tax;
+      // Only include fees/tax if paid currency matches home currency
+      if (expenseBase.paidInCurrency === homeCurrency) {
+        params.expenseFeesHc = expenseBase.fees;
+        params.expenseTaxesHc = expenseBase.tax;
+      }
+      params.isMaintenance = isMaintenance;
     } else if (expenseBase.expenseType === EXPENSE_TYPES.REVENUE) {
       params.kindId = extension?.kindId;
       // Note: For revenues, totalPriceInHc represents income earned
@@ -736,7 +750,13 @@ class ExpenseCore extends AppCore {
       // Update car stats
       try {
         const homeCurrency = await this.getHomeCurrencyForStats(expenseBase);
-        const statsParams = this.buildStatsParams(expenseBase, extension, homeCurrency);
+        // Look up isMaintenance for expenses
+        let isMaintenance: boolean | undefined;
+        if (expenseBase.expenseType === EXPENSE_TYPES.EXPENSE && extension?.kindId) {
+          isMaintenance = await this.isExpenseKindMaintenance(extension.kindId);
+        }
+
+        const statsParams = this.buildStatsParams(expenseBase, extension, homeCurrency, isMaintenance);
         await this.getStatsUpdater().onRecordCreated(statsParams);
       } catch (error) {
         // Log error but don't fail the create operation
@@ -922,25 +942,32 @@ class ExpenseCore extends AppCore {
         console.error('Failed to update car stats on update:', error);
       }
 
-      // Update service interval next (only for expenses with kindId)
+      // Update car stats with delta
       try {
-        const oldServiceIntervalParams = this.buildServiceIntervalParams(oldExpenseBase, oldExtension);
-        const newServiceIntervalParams = this.buildServiceIntervalParams(item, newExtension);
+        if (oldExpenseBase) {
+          const oldHomeCurrency = await this.getHomeCurrencyForStats(oldExpenseBase);
+          const newHomeCurrency = await this.getHomeCurrencyForStats(item);
 
-        if (oldServiceIntervalParams || newServiceIntervalParams) {
-          // If both old and new have params, it's an update
-          if (oldServiceIntervalParams && newServiceIntervalParams) {
-            await this.getServiceIntervalUpdater().onExpenseUpdated(oldServiceIntervalParams, newServiceIntervalParams);
-          } else if (newServiceIntervalParams) {
-            // New expense has kindId but old didn't (shouldn't happen since expenseType can't change)
-            await this.getServiceIntervalUpdater().onExpenseCreated(newServiceIntervalParams);
-          } else if (oldServiceIntervalParams) {
-            // Old had kindId but new doesn't (kindId changed to null - unlikely but handle it)
-            await this.getServiceIntervalUpdater().onExpenseRemoved(oldServiceIntervalParams);
+          // Look up isMaintenance for old and new (only for expenses)
+          let oldIsMaintenance: boolean | undefined;
+          let newIsMaintenance: boolean | undefined;
+
+          if (expenseType === EXPENSE_TYPES.EXPENSE) {
+            if (oldExtension?.kindId) {
+              oldIsMaintenance = await this.isExpenseKindMaintenance(oldExtension.kindId);
+            }
+            if (newExtension?.kindId) {
+              newIsMaintenance = await this.isExpenseKindMaintenance(newExtension.kindId);
+            }
           }
+
+          const oldStatsParams = this.buildStatsParams(oldExpenseBase, oldExtension, oldHomeCurrency, oldIsMaintenance);
+          const newStatsParams = this.buildStatsParams(item, newExtension, newHomeCurrency, newIsMaintenance);
+
+          await this.getStatsUpdater().onRecordUpdated(oldStatsParams, newStatsParams);
         }
       } catch (error) {
-        console.error('Failed to update service interval on update:', error);
+        console.error('Failed to update car stats on update:', error);
       }
 
       if (Array.isArray(updateInfo.uploadedFilesIds)) {
@@ -1057,7 +1084,14 @@ class ExpenseCore extends AppCore {
         // Update car stats
         try {
           const homeCurrency = await this.getHomeCurrencyForStats(removeInfo.oldExpenseBase);
-          const statsParams = this.buildStatsParams(removeInfo.oldExpenseBase, removeInfo.oldExtension, homeCurrency);
+
+          // Look up isMaintenance for expenses
+          let isMaintenance: boolean | undefined;
+          if (removeInfo.oldExpenseBase.expenseType === EXPENSE_TYPES.EXPENSE && removeInfo.oldExtension?.kindId) {
+            isMaintenance = await this.isExpenseKindMaintenance(removeInfo.oldExtension.kindId);
+          }
+
+          const statsParams = this.buildStatsParams(removeInfo.oldExpenseBase, removeInfo.oldExtension, homeCurrency, isMaintenance);
           await this.getStatsUpdater().onRecordRemoved(statsParams);
         } catch (error) {
           console.error('Failed to update car stats on remove:', error);
@@ -1154,7 +1188,14 @@ class ExpenseCore extends AppCore {
         // Update car stats
         try {
           const homeCurrency = await this.getHomeCurrencyForStats(removeInfo.oldExpenseBase);
-          const statsParams = this.buildStatsParams(removeInfo.oldExpenseBase, removeInfo.oldExtension, homeCurrency);
+
+          // Look up isMaintenance for expenses
+          let isMaintenance: boolean | undefined;
+          if (removeInfo.oldExpenseBase.expenseType === EXPENSE_TYPES.EXPENSE && removeInfo.oldExtension?.kindId) {
+            isMaintenance = await this.isExpenseKindMaintenance(removeInfo.oldExtension.kindId);
+          }
+
+          const statsParams = this.buildStatsParams(removeInfo.oldExpenseBase, removeInfo.oldExtension, homeCurrency, isMaintenance);
           await this.getStatsUpdater().onRecordRemoved(statsParams);
         } catch (error) {
           console.error('Failed to update car stats on removeMany:', error);
