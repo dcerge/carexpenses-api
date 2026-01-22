@@ -1,7 +1,7 @@
 import { OP_RESULT_CODES, OpResult } from '@sdflc/api-helpers';
 import { castArray } from 'lodash';
 import isUUID from 'is-uuid';
-import { TRAVEL_STATUS } from 'database';
+import { TRAVEL_STATUS } from '../../database';
 
 export const rulesMultipleUuidInId = (key?: string) => {
   return {
