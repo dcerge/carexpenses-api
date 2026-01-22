@@ -462,6 +462,61 @@ export const FIELDS = {
   TOTAL_TRAVELS_DISTANCE: 'total_travels_distance',
   TRAVELS_COUNT: 'travels_count',
   TRAVELS_DISTANCE: 'travels_distance',
+
+
+  //
+  ODOMETER_IN: 'odometer_in',
+  DISTANCE: 'distance',
+  DISTANCE_KM: 'distance_km',
+
+  // ---------------------------------------------------------------------------
+  // Travel Tax/Reimbursement Fields
+  // ---------------------------------------------------------------------------
+  TRAVEL_TYPE: 'travel_type',
+  IS_ROUND_TRIP: 'is_round_trip',
+  REIMBURSEMENT_RATE: 'reimbursement_rate',
+  REIMBURSEMENT_RATE_CURRENCY: 'reimbursement_rate_currency',
+  CALCULATED_REIMBURSEMENT: 'calculated_reimbursement',
+  ACTIVE_MINUTES: 'active_minutes',
+  TOTAL_MINUTES: 'total_minutes',
+  POINT_TYPE: 'point_type',
+
+};
+
+// =============================================================================
+// TRAVEL TYPES (for tax categorization)
+// =============================================================================
+
+export const TRAVEL_TYPES = {
+  BUSINESS: 'business',
+  PERSONAL: 'personal',
+  MEDICAL: 'medical',
+  CHARITY: 'charity',
+  COMMUTE: 'commute',
+};
+
+// =============================================================================
+// POINT TYPES (for travel waypoints)
+// =============================================================================
+
+export const POINT_TYPES = {
+  HOME: 'home',
+  OFFICE: 'office',
+  CLIENT: 'client',
+  OTHER: 'other',
+};
+
+// =============================================================================
+// TRAVEL STATUS VALUES (using existing status field)
+// =============================================================================
+
+export const TRAVEL_STATUS = {
+  IN_PROGRESS: 100,        // In progress / being recorded
+  COMPLETED: 200,    // Trip finished
+  SUBMITTED: 300,    // Submitted for reimbursement
+  APPROVED: 400,     // Reimbursement approved
+  REJECTED: 500,     // Reimbursement rejected
+  REIMBURSED: 600,   // Payment received
 };
 
 // =============================================================================

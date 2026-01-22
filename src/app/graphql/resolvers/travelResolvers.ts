@@ -1,5 +1,5 @@
-// ./src/app/graphql/resolvers/travelResolvers.ts
 import { buildDefaultResolvers } from '@sdflc/backend-helpers';
+import { EXPENSE_TYPES } from '../../../database';
 
 const resolvers = buildDefaultResolvers({
   prefix: 'travel',
@@ -15,8 +15,14 @@ const resolvers = buildDefaultResolvers({
       userUpdated(parent, args, context) {
         return parent.updatedBy ? { __typename: 'User', id: parent.updatedBy } : null;
       },
+      userRemoved(parent, args, context) {
+        return parent.removedBy ? { __typename: 'User', id: parent.removedBy } : null;
+      },
       user(parent, args, context) {
         return parent.userId ? { __typename: 'User', id: parent.userId } : null;
+      },
+      account(parent, args, context) {
+        return parent.accountId ? { __typename: 'Account', id: parent.accountId } : null;
       },
       async car(parent, args, context) {
         const { car, carId } = parent || {};
@@ -27,16 +33,67 @@ const resolvers = buildDefaultResolvers({
 
         return car ?? null;
       },
-      async label(parent, args, context) {
-        const { label, labelId } = parent || {};
+      async tags(parent, args, context) {
+        const { tags, id } = parent || {};
 
-        if (!label && labelId) {
-          return context.gateways.expenseLabelGw
-            .get(labelId)
-            .then((item) => context.cores.expenseLabelCore.processItemOnOut(item));
+        if (!tags && id) {
+          const travelExpenseTags = await context.gateways.travelExpenseTagGw.list({
+            filter: {
+              travelId: id,
+            },
+          });
+
+          return context.gateways.expenseTagGw.getMany(
+            travelExpenseTags.map((travelExpenseTag) => travelExpenseTag.expenseTagId),
+          );
         }
 
-        return label ?? null;
+        return tags ?? [];
+      },
+      async firstRecord(parent, args, context) {
+        const { firstRecord, firstRecordId } = parent || {};
+
+        if (!firstRecord && firstRecordId) {
+          return context.gateways.expenseBaseGw
+            .get(firstRecordId)
+            .then((item) => context.cores.expenseCore.processItemOnOut(item));
+        }
+
+        return firstRecord ?? null;
+      },
+      async lastRecord(parent, args, context) {
+        const { lastRecord, lastRecordId } = parent || {};
+
+        if (!lastRecord && lastRecordId) {
+          return context.gateways.expenseBaseGw
+            .get(lastRecordId)
+            .then((item) => context.cores.expenseCore.processItemOnOut(item));
+        }
+
+        return lastRecord ?? null;
+      },
+      async waypoints(parent, args, context) {
+        const { waypoints, id } = parent || {};
+
+        if (!waypoints && id) {
+          // Get all travel points (expense_type = 4) linked to this travel
+          const records = await context.gateways.expenseBaseGw.list({
+            filter: {
+              travelId: id,
+              expenseType: EXPENSE_TYPES.TRAVEL_POINT,
+            },
+            params: {
+              sorting: [
+                { name: 'whenDone', order: 'asc' },
+                { name: 'odometer', order: 'asc' },
+              ],
+            },
+          });
+
+          return records.map((record) => context.cores.expenseCore.processItemOnOut(record));
+        }
+
+        return waypoints ?? [];
       },
     },
   },

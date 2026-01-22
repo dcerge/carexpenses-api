@@ -1,6 +1,7 @@
 import { OP_RESULT_CODES, OpResult } from '@sdflc/api-helpers';
 import { castArray } from 'lodash';
 import isUUID from 'is-uuid';
+import { TRAVEL_STATUS } from 'database';
 
 export const rulesMultipleUuidInId = (key?: string) => {
   return {
@@ -56,6 +57,25 @@ export const ruleStatus = () => {
           const supportedStatuses = [0, 100];
           if (supportedStatuses.includes(Number(value)) == false) {
             throw new Error(`Allowed status value is one of: ${supportedStatuses.join(', ')}`);
+          }
+        },
+      },
+    ],
+  };
+};
+
+export const ruleTravelStatus = () => {
+  return {
+    status: [
+      {
+        rule: 'integer',
+        message: 'Travel should be an integer',
+      },
+      {
+        rule: function (value) {
+          const supportedStatuses = Object.values(TRAVEL_STATUS);
+          if (supportedStatuses.includes(Number(value)) == false) {
+            throw new Error(`Allowed travel status value is one of: ${supportedStatuses.join(', ')}`);
           }
         },
       },

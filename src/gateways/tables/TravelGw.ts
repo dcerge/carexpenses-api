@@ -1,11 +1,10 @@
-// ./src/gateways/tables/TravelGw.ts
 import { castArray } from 'lodash';
 
 import { BaseGateway, BaseGatewayPropsInterface } from '@sdflc/backend-helpers';
 import { SORT_ORDER } from '@sdflc/utils';
 
 import config from '../../config';
-import { FIELDS, TABLES } from '../../database';
+import { FIELDS, TABLES, TRAVEL_STATUS } from '../../database';
 
 class TravelGw extends BaseGateway {
   constructor(props: BaseGatewayPropsInterface) {
@@ -27,6 +26,14 @@ class TravelGw extends BaseGateway {
       selectFields: [`${TABLES.TRAVELS}.*`],
       idField: `${TABLES.TRAVELS}.${FIELDS.ID}`,
       idFieldUpdateRemove: FIELDS.ID,
+      activeStatuses: [
+        TRAVEL_STATUS.IN_PROGRESS,
+        TRAVEL_STATUS.COMPLETED,
+        TRAVEL_STATUS.APPROVED,
+        TRAVEL_STATUS.REIMBURSED,
+        TRAVEL_STATUS.REJECTED,
+        TRAVEL_STATUS.SUBMITTED
+      ],
       defaultSorting: [
         {
           name: FIELDS.FIRST_DTTM,
@@ -41,7 +48,22 @@ class TravelGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { accountId, userId, carId, labelId, isActive, purpose, destination, searchKeyword } = filterParams || {};
+    const {
+      accountId,
+      userId,
+      carId,
+      isActive,
+      purpose,
+      destination,
+      searchKeyword,
+      // New filters
+      travelType,
+      isRoundTrip,
+      firstDttmFrom,
+      firstDttmTo,
+      lastDttmFrom,
+      lastDttmTo,
+    } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
 
@@ -57,10 +79,6 @@ class TravelGw extends BaseGateway {
       query.whereIn(FIELDS.CAR_ID, castArray(carId));
     }
 
-    if (labelId) {
-      query.whereIn(FIELDS.LABEL_ID, castArray(labelId));
-    }
-
     if (isActive != null) {
       query.where(FIELDS.IS_ACTIVE, isActive);
     }
@@ -71,6 +89,33 @@ class TravelGw extends BaseGateway {
 
     if (destination) {
       query.whereIn(FIELDS.DESTINATION, castArray(destination));
+    }
+
+    // New field filters
+    if (travelType) {
+      query.whereIn(FIELDS.TRAVEL_TYPE, castArray(travelType));
+    }
+
+    if (isRoundTrip != null) {
+      query.where(FIELDS.IS_ROUND_TRIP, isRoundTrip);
+    }
+
+    // Date range filters for trip start
+    if (firstDttmFrom) {
+      query.where(FIELDS.FIRST_DTTM, '>=', firstDttmFrom);
+    }
+
+    if (firstDttmTo) {
+      query.where(FIELDS.FIRST_DTTM, '<=', firstDttmTo);
+    }
+
+    // Date range filters for trip end
+    if (lastDttmFrom) {
+      query.where(FIELDS.LAST_DTTM, '>=', lastDttmFrom);
+    }
+
+    if (lastDttmTo) {
+      query.where(FIELDS.LAST_DTTM, '<=', lastDttmTo);
     }
 
     if (searchKeyword) {
@@ -129,7 +174,7 @@ class TravelGw extends BaseGateway {
   }
 
   async count(filterParams: any): Promise<number> {
-    const { accountId, userId, carId } = filterParams ?? {};
+    const { accountId, userId, carId, travelType } = filterParams ?? {};
 
     const sqlFilter: string[] = [];
     const bindings: any[] = [];
@@ -147,6 +192,11 @@ class TravelGw extends BaseGateway {
     if (carId) {
       sqlFilter.push(`${FIELDS.CAR_ID} = ?`);
       bindings.push(carId);
+    }
+
+    if (travelType) {
+      sqlFilter.push(`${FIELDS.TRAVEL_TYPE} = ?`);
+      bindings.push(travelType);
     }
 
     const filterStr = sqlFilter.length > 0 ? ' AND ' + sqlFilter.join(' AND ') : '';

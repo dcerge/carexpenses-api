@@ -1,4 +1,3 @@
-// ./src/app/graphql/types/expenseTypes.ts
 const typeDefs = `#graphql
   """
   Unified type for all financial records: expenses, refuels, checkpoints, travel points, and revenues.
@@ -6,7 +5,7 @@ const typeDefs = `#graphql
   - 1 = Refuel: uses refuel-specific fields (refuelVolume, pricePerVolume, etc.)
   - 2 = Expense: uses expense-specific fields (kindId references expense_kinds, costWork, costParts, etc.)
   - 3 = Checkpoint: uses only common fields (odometer, fuelInTank, comments)
-  - 4 = Travel Point: uses only common fields, linked to a travel via travelId
+  - 4 = Travel Point: uses common fields + pointType, linked to a travel via travelId
   - 5 = Revenue: uses revenue-specific fields (kindId references revenue_kinds, shortNote)
   """
   type Expense @key(fields: "id") {
@@ -60,12 +59,21 @@ const typeDefs = `#graphql
     comments: String
     "Estimated fuel percentage in tank (0-100)"
     fuelInTank: Float
-    "Reference to user-defined label for categorization"
-    labelId: ID
     "Reference to travel record if this record is part of a trip"
     travelId: ID
     "Owner number at time of record (for vehicles with multiple owners over time)"
     ownerNumber: Int
+    
+    # ==========================================================================
+    # Travel Point-specific fields (expenseType = 4)
+    # ==========================================================================
+    
+    """
+    Type of location for travel waypoints (expenseType=4 only).
+    Used for tax compliance - IRS/CRA rules differ based on start/end point types.
+    Values: home, office, client, other
+    """
+    pointType: String
     
     # ==========================================================================
     # Expense-specific fields (expenseType = 2)
@@ -170,8 +178,14 @@ const typeDefs = `#graphql
     homeCurrency: String
     comments: String
     fuelInTank: Float
-    labelId: ID
     travelId: ID
+    
+    # Travel Point-specific fields (expenseType = 4)
+    """
+    Type of location for travel waypoints (expenseType=4 only).
+    Values: home, office, client, other
+    """
+    pointType: String
     
     # Expense-specific fields (expenseType = 2)
     # Revenue-specific fields (expenseType = 5) - only kindId and shortNote apply
@@ -204,6 +218,7 @@ const typeDefs = `#graphql
 
     "References to uploaded files"
     uploadedFilesIds: [ID]
+    "Tag IDs to associate with this record"
     tags: [ID]
   }
 
@@ -221,13 +236,17 @@ const typeDefs = `#graphql
     Use with expenseType filter to ensure correct interpretation.
     """
     kindId: [Int]
-    labelId: [ID]
+    "Filter by travel ID (for records linked to a trip)"
     travelId: [ID]
+    """
+    Filter by point type (expenseType=4 only): home, office, client, other
+    """
+    pointType: [String]
     isFullTank: Boolean
     fuelGrade: [String]
     whenDoneFrom: String
     whenDoneTo: String
-    expenseLabel: [ID]
+    "Filter by tag IDs"
     tags: [ID]
     status: [Int]
     searchKeyword: String
@@ -238,15 +257,22 @@ const typeDefs = `#graphql
   }
 
   type Query {
+    "List expenses/refuels/checkpoints/travel points/revenues with filtering and pagination"
     expenseList(filter: ExpenseFilter, params: PaginationAndSorting): ExpenseResult
+    "Get a single record by ID"
     expenseGet(id: ID): ExpenseResult
+    "Get multiple records by IDs"
     expenseGetMany(ids: [ID]): ExpenseResult
   }
 
   type Mutation {
+    "Create a new expense/refuel/checkpoint/travel point/revenue record"
     expenseCreate(params: ExpenseInput): ExpenseResult
+    "Update an existing record"
     expenseUpdate(where: ExpenseWhereInput, params: ExpenseInput): ExpenseResult
+    "Soft-delete a record"
     expenseRemove(where: ExpenseWhereInput): ExpenseResult
+    "Soft-delete multiple records"
     expenseRemoveMany(where: [ExpenseWhereInput]): ExpenseResult
   }
 `;

@@ -27,6 +27,21 @@ interface StatsOperationParams {
 }
 
 /**
+ * Parameters for travel stats delta operations.
+ * Travels are currency-independent, so they update all currency rows for a car.
+ */
+interface TravelStatsParams {
+  travelId: string;
+  carId: string;
+  firstDttm: Date | string | null;  // For month bucket determination (falls back to createdAt)
+  createdAt: Date | string;         // Fallback if firstDttm is null
+  distanceKm: number | null;        // Pre-normalized distance (preferred)
+  firstOdometer?: number | null;    // Fallback for distance calc
+  lastOdometer?: number | null;     // Fallback for distance calc
+  status: number;                   // Only count if status >= TRAVEL_STATUS.COMPLETED (200)
+}
+
+/**
  * CarStatsUpdater handles incremental and full recalculation of car statistics.
  *
  * Design considerations:
@@ -164,6 +179,113 @@ class CarStatsUpdater {
       const volumeChanged = oldParams.refuelVolume !== newParams.refuelVolume;
       if (odometerChanged || volumeChanged) {
         await this.recalculateConsumptionStats(newParams.carId, newParams.homeCurrency);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // Public Methods - Travel Delta Operations
+  // ===========================================================================
+
+  /**
+   * Apply stats delta when a travel is created.
+   * Only counts completed travels (status >= 200).
+   * Travels are currency-independent, so updates ALL currency rows for the car.
+   */
+  async onTravelCreated(params: TravelStatsParams): Promise<void> {
+    // Only count completed travels
+    if (!this.isTravelCountable(params.status)) {
+      return;
+    }
+
+    const { carId } = params;
+    const effectiveDistance = this.getEffectiveDistance(params);
+    const { year, month } = this.parseYearMonth(this.getTravelYearMonth(params));
+
+    // Update total summary for all currency rows
+    await this.updateTotalSummaryTravelDelta(carId, 1, effectiveDistance);
+
+    // Recalculate latest_travel_id
+    await this.recalculateTotalSummaryLatestTravel(carId);
+
+    // Update monthly summary for all currency rows (if rows exist)
+    await this.updateMonthlySummaryTravelDelta(carId, year, month, 1, effectiveDistance);
+  }
+
+  /**
+   * Apply stats delta when a travel is removed.
+   * Only affects stats if the travel was previously counted (status >= 200).
+   * Travels are currency-independent, so updates ALL currency rows for the car.
+   */
+  async onTravelRemoved(params: TravelStatsParams): Promise<void> {
+    // Only decrement if travel was previously counted
+    if (!this.isTravelCountable(params.status)) {
+      return;
+    }
+
+    const { carId } = params;
+    const effectiveDistance = this.getEffectiveDistance(params);
+    const { year, month } = this.parseYearMonth(this.getTravelYearMonth(params));
+
+    // Update total summary for all currency rows
+    await this.updateTotalSummaryTravelDelta(carId, -1, -effectiveDistance);
+
+    // Recalculate latest_travel_id
+    await this.recalculateTotalSummaryLatestTravel(carId);
+
+    // Update monthly summary for all currency rows
+    await this.updateMonthlySummaryTravelDelta(carId, year, month, -1, -effectiveDistance);
+  }
+
+  /**
+   * Apply stats delta when a travel is updated.
+   * Handles car changes, month changes, status changes, and distance changes.
+   */
+  async onTravelUpdated(oldParams: TravelStatsParams, newParams: TravelStatsParams): Promise<void> {
+    const carChanged = oldParams.carId !== newParams.carId;
+    const monthChanged = this.getTravelYearMonth(oldParams) !== this.getTravelYearMonth(newParams);
+    const statusChanged = oldParams.status !== newParams.status;
+
+    const wasCountable = this.isTravelCountable(oldParams.status);
+    const isCountable = this.isTravelCountable(newParams.status);
+
+    // If structural change (car, month, or countability status), do remove + add
+    if (carChanged || monthChanged || (statusChanged && (wasCountable || isCountable))) {
+      // Remove from old stats if it was counted
+      if (wasCountable) {
+        await this.onTravelRemoved(oldParams);
+      }
+      // Add to new stats if it should be counted
+      if (isCountable) {
+        await this.onTravelCreated(newParams);
+      }
+      return;
+    }
+
+    // No structural change - apply distance delta only if countable
+    if (isCountable) {
+      const oldDistance = this.getEffectiveDistance(oldParams);
+      const newDistance = this.getEffectiveDistance(newParams);
+      const distanceDelta = newDistance - oldDistance;
+
+      if (distanceDelta !== 0) {
+        const { carId } = newParams;
+        const { year, month } = this.parseYearMonth(this.getTravelYearMonth(newParams));
+
+        // Update total summary
+        await this.updateTotalSummaryTravelDelta(carId, 0, distanceDelta);
+
+        // Update monthly summary
+        await this.updateMonthlySummaryTravelDelta(carId, year, month, 0, distanceDelta);
+      }
+
+      // Recalculate latest_travel_id in case dates changed
+      const datesChanged =
+        oldParams.firstDttm !== newParams.firstDttm ||
+        (oldParams as any).lastDttm !== (newParams as any).lastDttm;
+
+      if (datesChanged) {
+        await this.recalculateTotalSummaryLatestTravel(newParams.carId);
       }
     }
   }
@@ -595,7 +717,7 @@ class CarStatsUpdater {
           t.${FIELDS.ID} AS latest_travel_id
         FROM ${this.schema}.${TABLES.TRAVELS} t
         WHERE t.${FIELDS.CAR_ID} IS NOT NULL
-          AND t.${FIELDS.STATUS} = 100
+          AND t.${FIELDS.STATUS} >= 200
           AND t.${FIELDS.REMOVED_AT} IS NULL
           ${carId ? ` AND t.${FIELDS.CAR_ID} = ?` : ''}
         ORDER BY t.${FIELDS.CAR_ID}, COALESCE(t.${FIELDS.LAST_DTTM}, t.${FIELDS.FIRST_DTTM}, t.${FIELDS.CREATED_AT}) DESC
@@ -604,11 +726,18 @@ class CarStatsUpdater {
         SELECT 
           t.${FIELDS.CAR_ID},
           COUNT(*) AS total_travels_count,
-          COALESCE(SUM(CASE WHEN t.${FIELDS.LAST_ODOMETER} IS NOT NULL AND t.${FIELDS.FIRST_ODOMETER} IS NOT NULL 
-            THEN t.${FIELDS.LAST_ODOMETER} - t.${FIELDS.FIRST_ODOMETER} ELSE 0 END), 0) AS total_travels_distance
+          COALESCE(SUM(
+            COALESCE(
+              NULLIF(t.${FIELDS.DISTANCE_KM}, 0),
+              CASE WHEN t.${FIELDS.LAST_ODOMETER} IS NOT NULL AND t.${FIELDS.FIRST_ODOMETER} IS NOT NULL 
+                THEN GREATEST(t.${FIELDS.LAST_ODOMETER} - t.${FIELDS.FIRST_ODOMETER}, 0)
+                ELSE 0 
+              END
+            )
+          ), 0) AS total_travels_distance
         FROM ${this.schema}.${TABLES.TRAVELS} t
         WHERE t.${FIELDS.CAR_ID} IS NOT NULL
-          AND t.${FIELDS.STATUS} = 100
+          AND t.${FIELDS.STATUS} >= 200
           AND t.${FIELDS.REMOVED_AT} IS NULL
           ${carId ? ` AND t.${FIELDS.CAR_ID} = ?` : ''}
         GROUP BY t.${FIELDS.CAR_ID}
@@ -956,13 +1085,17 @@ class CarStatsUpdater {
         EXTRACT(MONTH FROM COALESCE(t.${FIELDS.FIRST_DTTM}, t.${FIELDS.CREATED_AT}))::int AS month,
         COUNT(*) AS travels_count,
         COALESCE(SUM(
-          CASE WHEN t.${FIELDS.LAST_ODOMETER} IS NOT NULL AND t.${FIELDS.FIRST_ODOMETER} IS NOT NULL 
-          THEN t.${FIELDS.LAST_ODOMETER} - t.${FIELDS.FIRST_ODOMETER} 
-          ELSE 0 END
+          COALESCE(
+            NULLIF(t.${FIELDS.DISTANCE_KM}, 0),
+            CASE WHEN t.${FIELDS.LAST_ODOMETER} IS NOT NULL AND t.${FIELDS.FIRST_ODOMETER} IS NOT NULL 
+              THEN GREATEST(t.${FIELDS.LAST_ODOMETER} - t.${FIELDS.FIRST_ODOMETER}, 0)
+              ELSE 0 
+            END
+          )
         ), 0) AS travels_distance
       FROM ${this.schema}.${TABLES.TRAVELS} t
       WHERE t.${FIELDS.CAR_ID} IS NOT NULL
-        AND t.${FIELDS.STATUS} = 100
+        AND t.${FIELDS.STATUS} >= 200
         AND t.${FIELDS.REMOVED_AT} IS NULL
         ${carId ? ` AND t.${FIELDS.CAR_ID} = ?` : ''}
       GROUP BY t.${FIELDS.CAR_ID}, 
@@ -2266,6 +2399,108 @@ class CarStatsUpdater {
   }
 
   // ===========================================================================
+  // Private Methods - Travel Delta Operations
+  // ===========================================================================
+
+  /**
+   * Update total summary travel stats with delta.
+   * Travels are currency-independent, so this updates ALL currency rows for the car.
+   */
+  private async updateTotalSummaryTravelDelta(
+    carId: string,
+    countDelta: number,
+    distanceDelta: number,
+  ): Promise<void> {
+    // Skip if no changes
+    if (countDelta === 0 && distanceDelta === 0) return;
+
+    const updates: string[] = [];
+    const bindings: any[] = [];
+
+    if (countDelta !== 0) {
+      updates.push(`${FIELDS.TOTAL_TRAVELS_COUNT} = GREATEST(COALESCE(${FIELDS.TOTAL_TRAVELS_COUNT}, 0) + ?, 0)`);
+      bindings.push(countDelta);
+    }
+
+    if (distanceDelta !== 0) {
+      updates.push(`${FIELDS.TOTAL_TRAVELS_DISTANCE} = GREATEST(COALESCE(${FIELDS.TOTAL_TRAVELS_DISTANCE}, 0) + ?, 0)`);
+      bindings.push(distanceDelta);
+    }
+
+    updates.push(`${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP`);
+
+    const sql = `
+      UPDATE ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES}
+      SET ${updates.join(', ')}
+      WHERE ${FIELDS.CAR_ID} = ?
+    `;
+
+    await this.db.runRawQuery(sql, [...bindings, carId]);
+  }
+
+  /**
+   * Update monthly summary travel stats with delta.
+   * Travels are currency-independent, so this updates ALL currency rows for the car/year/month.
+   */
+  private async updateMonthlySummaryTravelDelta(
+    carId: string,
+    year: number,
+    month: number,
+    countDelta: number,
+    distanceDelta: number,
+  ): Promise<void> {
+    // Skip if no changes
+    if (countDelta === 0 && distanceDelta === 0) return;
+
+    const updates: string[] = [];
+    const bindings: any[] = [];
+
+    if (countDelta !== 0) {
+      updates.push(`${FIELDS.TRAVELS_COUNT} = GREATEST(COALESCE(${FIELDS.TRAVELS_COUNT}, 0) + ?, 0)`);
+      bindings.push(countDelta);
+    }
+
+    if (distanceDelta !== 0) {
+      updates.push(`${FIELDS.TRAVELS_DISTANCE} = GREATEST(COALESCE(${FIELDS.TRAVELS_DISTANCE}, 0) + ?, 0)`);
+      bindings.push(distanceDelta);
+    }
+
+    updates.push(`${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP`);
+
+    const sql = `
+      UPDATE ${this.schema}.${TABLES.CAR_MONTHLY_SUMMARIES}
+      SET ${updates.join(', ')}
+      WHERE ${FIELDS.CAR_ID} = ? AND ${FIELDS.YEAR} = ? AND ${FIELDS.MONTH} = ?
+    `;
+
+    await this.db.runRawQuery(sql, [...bindings, carId, year, month]);
+  }
+
+  /**
+   * Recalculate latest_travel_id for a car's total summaries.
+   * Called after travel create/update/remove to ensure accuracy.
+   */
+  private async recalculateTotalSummaryLatestTravel(carId: string): Promise<void> {
+    const sql = `
+      UPDATE ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES} cts
+      SET 
+        ${FIELDS.LATEST_TRAVEL_ID} = (
+          SELECT t.${FIELDS.ID}
+          FROM ${this.schema}.${TABLES.TRAVELS} t
+          WHERE t.${FIELDS.CAR_ID} = ?
+            AND t.${FIELDS.STATUS} >= 200
+            AND t.${FIELDS.REMOVED_AT} IS NULL
+          ORDER BY COALESCE(t.${FIELDS.LAST_DTTM}, t.${FIELDS.FIRST_DTTM}, t.${FIELDS.CREATED_AT}) DESC
+          LIMIT 1
+        ),
+        ${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP
+      WHERE cts.${FIELDS.CAR_ID} = ?
+    `;
+
+    await this.db.runRawQuery(sql, [carId, carId]);
+  }
+
+  // ===========================================================================
   // Private Methods - Utility Functions
   // ===========================================================================
 
@@ -2306,6 +2541,40 @@ class CarStatsUpdater {
     if (value == null) return null;
     return -value;
   }
+
+  /**
+   * Get effective distance from travel params.
+   * Prefers distanceKm, falls back to odometer calculation.
+   */
+  private getEffectiveDistance(params: TravelStatsParams): number {
+    // Prefer pre-calculated distance_km
+    if (params.distanceKm != null && params.distanceKm > 0) {
+      return params.distanceKm;
+    }
+
+    // Fall back to odometer calculation
+    if (params.lastOdometer != null && params.firstOdometer != null) {
+      return Math.max(params.lastOdometer - params.firstOdometer, 0);
+    }
+
+    return 0;
+  }
+
+  /**
+   * Get year-month string for a travel, using firstDttm with createdAt fallback.
+   */
+  private getTravelYearMonth(params: TravelStatsParams): string {
+    const dateToUse = params.firstDttm || params.createdAt;
+    return dayjs.utc(dateToUse).format('YYYY-MM');
+  }
+
+  /**
+   * Check if a travel should be counted in stats.
+   * Only completed travels (status >= 200) are counted.
+   */
+  private isTravelCountable(status: number): boolean {
+    return status >= 200; // TRAVEL_STATUS.COMPLETED and beyond
+  }
 }
 
-export { CarStatsUpdater, StatsOperationParams };
+export { CarStatsUpdater, StatsOperationParams, TravelStatsParams };

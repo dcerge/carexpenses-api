@@ -1,4 +1,3 @@
-// ./src/core/validators/expenseValidators.ts
 import Checkit from 'checkit';
 import {
   BaseCoreActionsInterface,
@@ -8,6 +7,10 @@ import {
 } from '@sdflc/backend-helpers';
 import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { rulesMultipleUuidInId, ruleStatus } from './commonRules';
+import { POINT_TYPES } from '../../database';
+
+// Valid point types for travel waypoints (expenseType = 4)
+const validPointTypes = Object.values(POINT_TYPES);
 
 const rulesList = new Checkit({
   ...rulesMultipleUuidInId(),
@@ -35,16 +38,16 @@ const rulesList = new Checkit({
       message: 'Kind IDs should be an array of integers',
     },
   ],
-  labelId: [
-    {
-      rule: 'array',
-      message: 'Label IDs should be an array of UUIDs',
-    },
-  ],
   travelId: [
     {
       rule: 'array',
       message: 'Travel IDs should be an array of UUIDs',
+    },
+  ],
+  pointType: [
+    {
+      rule: 'array',
+      message: 'Point types should be an array of strings',
     },
   ],
   isFullTank: [
@@ -69,6 +72,12 @@ const rulesList = new Checkit({
     {
       rule: 'string',
       message: 'When done to should be a valid datetime string',
+    },
+  ],
+  tags: [
+    {
+      rule: 'array',
+      message: 'Tags should be an array of UUIDs',
     },
   ],
   status: [
@@ -205,16 +214,21 @@ const rulesCreate = new Checkit({
       message: 'Fuel in tank should be a number',
     },
   ],
-  labelId: [
-    {
-      rule: 'uuid',
-      message: 'Label ID should be a valid UUID',
-    },
-  ],
   travelId: [
     {
       rule: 'uuid',
       message: 'Travel ID should be a valid UUID',
+    },
+  ],
+  // Travel Point-specific fields (expenseType = 4)
+  pointType: [
+    {
+      rule: 'string',
+      message: 'Point type should be a string',
+    },
+    {
+      rule: 'maxLength:32',
+      message: 'Point type should not exceed 32 characters',
     },
   ],
   // Expense-specific fields (expenseType = 2)
@@ -301,6 +315,13 @@ const rulesCreate = new Checkit({
     {
       rule: 'maxLength:16',
       message: 'Fuel grade should not exceed 16 characters',
+    },
+  ],
+  // Tags
+  tags: [
+    {
+      rule: 'array',
+      message: 'Tags should be an array of UUIDs',
     },
   ],
   ...ruleStatus(),
@@ -420,16 +441,21 @@ const rulesUpdate = new Checkit({
       message: 'Fuel in tank should be a number',
     },
   ],
-  labelId: [
-    {
-      rule: 'uuid',
-      message: 'Label ID should be a valid UUID',
-    },
-  ],
   travelId: [
     {
       rule: 'uuid',
       message: 'Travel ID should be a valid UUID',
+    },
+  ],
+  // Travel Point-specific fields (expenseType = 4)
+  pointType: [
+    {
+      rule: 'string',
+      message: 'Point type should be a string',
+    },
+    {
+      rule: 'maxLength:32',
+      message: 'Point type should not exceed 32 characters',
     },
   ],
   // Expense-specific fields (expenseType = 2)
@@ -518,11 +544,18 @@ const rulesUpdate = new Checkit({
       message: 'Fuel grade should not exceed 16 characters',
     },
   ],
+  // Tags
+  tags: [
+    {
+      rule: 'array',
+      message: 'Tags should be an array of UUIDs',
+    },
+  ],
   ...ruleStatus(),
 });
 
 const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpdate?: boolean) => {
-  const { carId, labelId, travelId } = args?.params || {};
+  const { carId, travelId, pointType, expenseType, tags } = args?.params || {};
   const { accountId } = opt.core.getContext();
 
   const dependencies = {};
@@ -541,26 +574,6 @@ const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpd
     dependencies['car'] = car;
   }
 
-  if (labelId) {
-    const expenseLabel = await opt.core.getGateways().expenseLabelGw.get(labelId);
-
-    if (!expenseLabel) {
-      return [
-        new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError('labelId', 'Expense label not found'),
-        {},
-      ];
-    }
-
-    if (expenseLabel.accountId !== accountId) {
-      return [
-        new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError('labelId', 'Expense label not found'),
-        {},
-      ];
-    }
-
-    dependencies['expenseLabel'] = expenseLabel;
-  }
-
   if (travelId) {
     const travel = await opt.core.getGateways().travelGw.get(travelId);
 
@@ -573,6 +586,53 @@ const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpd
     }
 
     dependencies['travel'] = travel;
+  }
+
+  // Validate pointType only for travel points (expenseType = 4)
+  if (pointType) {
+    if (!validPointTypes.includes(pointType)) {
+      return [
+        new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError(
+          'pointType',
+          `Point type must be one of: ${validPointTypes.join(', ')}`,
+        ),
+        {},
+      ];
+    }
+
+    // pointType should only be used with travel points
+    if (expenseType && expenseType !== 4) {
+      return [
+        new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError(
+          'pointType',
+          'Point type can only be set for travel points (expenseType = 4)',
+        ),
+        {},
+      ];
+    }
+  }
+
+  // Validate tags exist and belong to the account
+  if (tags && Array.isArray(tags) && tags.length > 0) {
+    const existingTags = await opt.core.getGateways().expenseTagGw.list({
+      id: tags,
+      accountId,
+    });
+
+    const existingTagIds = existingTags.map((t: any) => t.id);
+    const invalidTags = tags.filter((tagId: string) => !existingTagIds.includes(tagId));
+
+    if (invalidTags.length > 0) {
+      return [
+        new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError(
+          'tags',
+          `Invalid tag IDs: ${invalidTags.join(', ')}`,
+        ),
+        {},
+      ];
+    }
+
+    dependencies['tags'] = existingTags;
   }
 
   return [true, dependencies];

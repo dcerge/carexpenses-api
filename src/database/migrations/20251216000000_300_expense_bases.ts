@@ -22,7 +22,7 @@ export const up = (knex: Knex) =>
     table
       .integer(FIELDS.EXPENSE_TYPE)
       .notNullable()
-      .comment('Expense type: 1=Refuel, 2=Expense, 3=Checkpoint, 4=Travel Point');
+      .comment('Expense type: 1=Refuel, 2=Expense, 3=Checkpoint, 4=Travel Point, 5=revenue');
 
     // Mileage tracking
     table.decimal(FIELDS.ODOMETER, 19, 4).nullable().comment('Odometer reading at time of expense');

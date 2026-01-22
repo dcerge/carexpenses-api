@@ -50,7 +50,7 @@ export const up = (knex: Knex) =>
       .defaultTo('')
       .comment('Purpose of the travel (e.g., Business, Vacation)');
 
-    table.string(FIELDS.DESTINATION, 128).notNullable().defaultTo('').comment('Travel destination');
+    table.string(FIELDS.DESTINATION, 128).nullable().defaultTo('').comment('Travel destination');
 
     table.text(FIELDS.COMMENTS).nullable().comment('Additional comments about the travel');
 

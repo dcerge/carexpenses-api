@@ -1,4 +1,3 @@
-// ./src/gateways/tables/ExpenseBaseGw.ts
 import { castArray } from 'lodash';
 
 import { BaseGateway, BaseGatewayPropsInterface } from '@sdflc/backend-helpers';
@@ -47,12 +46,13 @@ class ExpenseBaseGw extends BaseGateway {
       userId,
       carId,
       expenseType,
-      labelId,
       travelId,
       whenDoneFrom,
       whenDoneTo,
       searchKeyword,
       withOdometer,
+      // New filter
+      pointType,
     } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
@@ -73,10 +73,6 @@ class ExpenseBaseGw extends BaseGateway {
       query.whereIn(FIELDS.EXPENSE_TYPE, castArray(expenseType));
     }
 
-    if (labelId) {
-      query.whereIn(FIELDS.LABEL_ID, castArray(labelId));
-    }
-
     if (travelId) {
       query.whereIn(FIELDS.TRAVEL_ID, castArray(travelId));
     }
@@ -95,6 +91,11 @@ class ExpenseBaseGw extends BaseGateway {
       } else {
         query.whereNull(FIELDS.ODOMETER);
       }
+    }
+
+    // New filter for travel waypoint type
+    if (pointType) {
+      query.whereIn(FIELDS.POINT_TYPE, castArray(pointType));
     }
 
     if (searchKeyword) {
@@ -153,7 +154,7 @@ class ExpenseBaseGw extends BaseGateway {
   }
 
   async count(filterParams: any): Promise<number> {
-    const { accountId, userId, carId, expenseType } = filterParams ?? {};
+    const { accountId, userId, carId, expenseType, travelId, pointType } = filterParams ?? {};
 
     const sqlFilter: string[] = [];
     const bindings: any[] = [];
@@ -176,6 +177,16 @@ class ExpenseBaseGw extends BaseGateway {
     if (expenseType) {
       sqlFilter.push(`${FIELDS.EXPENSE_TYPE} = ?`);
       bindings.push(expenseType);
+    }
+
+    if (travelId) {
+      sqlFilter.push(`${FIELDS.TRAVEL_ID} = ?`);
+      bindings.push(travelId);
+    }
+
+    if (pointType) {
+      sqlFilter.push(`${FIELDS.POINT_TYPE} = ?`);
+      bindings.push(pointType);
     }
 
     const filterStr = sqlFilter.length > 0 ? ' AND ' + sqlFilter.join(' AND ') : '';
