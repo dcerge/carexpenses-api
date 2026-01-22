@@ -4,6 +4,8 @@ import utc from 'dayjs/plugin/utc';
 
 import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInterface } from '@sdflc/backend-helpers';
+import { weatherGateway } from '../weatherClient';
+import { mapWeatherToDbFields } from '../gateways/apis/weather';
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/expenseValidators';
@@ -67,6 +69,76 @@ class ExpenseCore extends AppCore {
       ...super.getValidators(),
       ...validators,
     };
+  }
+
+  // ===========================================================================
+  // Weather Integration
+  // ===========================================================================
+
+  /**
+   * Fetch and store weather data for an expense record.
+   * This is non-blocking - errors are logged but don't fail the main operation.
+   */
+  private async enrichWithWeather(
+    expenseBaseId: string,
+    latitude: number | null,
+    longitude: number | null,
+    whenDone: string | Date | null
+  ): Promise<void> {
+    // Skip if no weather gateway configured or no coordinates
+    if (!weatherGateway || latitude == null || longitude == null) {
+      return;
+    }
+
+    try {
+      const recordedAt = whenDone ? new Date(whenDone) : undefined;
+
+      const weather = await weatherGateway.fetchWeather({
+        location: { latitude, longitude },
+        recordedAt,
+      });
+
+      if (weather) {
+        const weatherFields = mapWeatherToDbFields(weather);
+        await this.getGateways().expenseBaseGw.update(
+          { id: expenseBaseId },
+          weatherFields
+        );
+      }
+    } catch (error) {
+      // Log but don't fail the main operation
+      console.error(`Failed to fetch weather for expense ${expenseBaseId}:`, error);
+    }
+  }
+
+  /**
+   * Check if coordinates have changed between old and new expense data
+   */
+  private haveCoordinatesChanged(
+    oldExpenseBase: any,
+    newExpenseBase: any
+  ): boolean {
+    const oldLat = oldExpenseBase?.latitude;
+    const oldLon = oldExpenseBase?.longitude;
+    const newLat = newExpenseBase?.latitude;
+    const newLon = newExpenseBase?.longitude;
+
+    // If new coordinates are null/undefined, no need to fetch weather
+    if (newLat == null || newLon == null) {
+      return false;
+    }
+
+    // If old coordinates were null but new ones exist, fetch weather
+    if (oldLat == null || oldLon == null) {
+      return true;
+    }
+
+    // Compare coordinates (using small epsilon for floating point comparison)
+    const epsilon = 0.0000001;
+    return (
+      Math.abs(oldLat - newLat) > epsilon ||
+      Math.abs(oldLon - newLon) > epsilon
+    );
   }
 
   // ===========================================================================
@@ -774,6 +846,14 @@ class ExpenseCore extends AppCore {
         console.error('Failed to update service interval on create:', error);
       }
 
+      // Fetch and store weather data (non-blocking, fire-and-forget)
+      await this.enrichWithWeather(
+        expenseBase.id,
+        expenseBase.latitude,
+        expenseBase.longitude,
+        expenseBase.whenDone
+      );
+
       this.getGateways().carTotalExpenseGw.clear(expenseBase.carId);
     }
 
@@ -1011,6 +1091,16 @@ class ExpenseCore extends AppCore {
         });
 
         await this.getGateways().expenseExpenseTagGw.create(expenseExpenseTags);
+      }
+
+      // Fetch weather only if coordinates have changed
+      if (this.haveCoordinatesChanged(oldExpenseBase, item)) {
+        await this.enrichWithWeather(
+          item.id,
+          item.latitude,
+          item.longitude,
+          item.whenDone
+        );
       }
 
       // Clean up stored data

@@ -39,7 +39,6 @@ export class WeatherGateway {
 
     // Initialize configured providers
     if (config.google?.apiKey) {
-      console.log('=== config.google', config.google)
       this.providers.set('google', new GoogleWeatherGateway(config.google));
     }
 

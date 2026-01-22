@@ -8,6 +8,8 @@ import { AppCore } from './AppCore';
 import { validators } from './validators/travelValidators';
 import { EXPENSE_TYPES, STATUS } from '../database';
 import { CarStatsUpdater, TravelStatsParams } from '../utils/CarStatsUpdater';
+import { weatherGateway } from '../weatherClient';
+import { mapWeatherToDbFields } from '../gateways/apis/weather';
 
 dayjs.extend(utc);
 
@@ -148,7 +150,17 @@ class TravelCore extends AppCore {
     const result = await this.getGateways().expenseBaseGw.create(travelPointData);
 
     if (result && result.length > 0) {
-      return result[0];
+      const createdPoint = result[0];
+
+      // Fetch and store weather data (non-blocking)
+      await this.enrichWithWeather(
+        createdPoint.id,
+        createdPoint.latitude,
+        createdPoint.longitude,
+        createdPoint.whenDone
+      );
+
+      return createdPoint;
     }
 
     return null;
@@ -160,6 +172,9 @@ class TravelCore extends AppCore {
   private async updateTravelPoint(pointId: string, pointData: any): Promise<any> {
     const { accountId, userId } = this.getContext();
 
+    // Fetch existing point to check if coordinates changed
+    const existingPoint = await this.getGateways().expenseBaseGw.get(pointId);
+
     const updateData: any = {
       updatedBy: userId,
       updatedAt: this.now(),
@@ -169,7 +184,19 @@ class TravelCore extends AppCore {
     const result = await this.getGateways().expenseBaseGw.update({ id: pointId, accountId }, updateData);
 
     if (result && result.length > 0) {
-      return result[0];
+      const updatedPoint = result[0];
+
+      // Fetch weather only if coordinates have changed
+      if (this.haveCoordinatesChanged(existingPoint, updatedPoint)) {
+        await this.enrichWithWeather(
+          updatedPoint.id,
+          updatedPoint.latitude,
+          updatedPoint.longitude,
+          updatedPoint.whenDone
+        );
+      }
+
+      return updatedPoint;
     }
 
     return null;
@@ -223,6 +250,76 @@ class TravelCore extends AppCore {
     const db = this.getGateways().travelGw.getDb();
     const schema = this.getDb().getSchema();
     return new CarStatsUpdater(db, schema);
+  }
+
+  // ===========================================================================
+  // Weather Integration
+  // ===========================================================================
+
+  /**
+   * Fetch and store weather data for a travel point (expense_base record).
+   * This is non-blocking - errors are logged but don't fail the main operation.
+   */
+  private async enrichWithWeather(
+    expenseBaseId: string,
+    latitude: number | null,
+    longitude: number | null,
+    whenDone: string | Date | null
+  ): Promise<void> {
+    // Skip if no weather gateway configured or no coordinates
+    if (!weatherGateway || latitude == null || longitude == null) {
+      return;
+    }
+
+    try {
+      const recordedAt = whenDone ? new Date(whenDone) : undefined;
+
+      const weather = await weatherGateway.fetchWeather({
+        location: { latitude, longitude },
+        recordedAt,
+      });
+
+      if (weather) {
+        const weatherFields = mapWeatherToDbFields(weather);
+        await this.getGateways().expenseBaseGw.update(
+          { id: expenseBaseId },
+          weatherFields
+        );
+      }
+    } catch (error) {
+      // Log but don't fail the main operation
+      console.error(`Failed to fetch weather for travel point ${expenseBaseId}:`, error);
+    }
+  }
+
+  /**
+   * Check if coordinates have changed between old and new data
+   */
+  private haveCoordinatesChanged(
+    oldData: any,
+    newData: any
+  ): boolean {
+    const oldLat = oldData?.latitude;
+    const oldLon = oldData?.longitude;
+    const newLat = newData?.latitude;
+    const newLon = newData?.longitude;
+
+    // If new coordinates are null/undefined, no need to fetch weather
+    if (newLat == null || newLon == null) {
+      return false;
+    }
+
+    // If old coordinates were null but new ones exist, fetch weather
+    if (oldLat == null || oldLon == null) {
+      return true;
+    }
+
+    // Compare coordinates (using small epsilon for floating point comparison)
+    const epsilon = 0.0000001;
+    return (
+      Math.abs(oldLat - newLat) > epsilon ||
+      Math.abs(oldLon - newLon) > epsilon
+    );
   }
 
   // ===========================================================================

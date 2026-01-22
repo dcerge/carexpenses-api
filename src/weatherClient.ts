@@ -28,8 +28,6 @@ const openWeatherMapApiKey = config.openweathermapApiKey;
 const defaultProvider = config.weatherDefaultProvider || 'google';
 const cacheTtl = config.weatherCacheTtl ? parseInt(config.weatherCacheTtl, 10) : 1800;
 
-console.log('=== googleApiKey', googleApiKey)
-
 const weatherGateway = googleApiKey || openWeatherMapApiKey
   ? createWeatherGateway(
     {
