@@ -24,6 +24,7 @@ import config from './config';
 
 import * as controllers from './app/restapi';
 import { redisClient } from './redisClient';
+import { weatherGateway } from './weatherClient';
 
 import packageJson from '../package.json';
 import { cleanupOrphanedTempFiles } from './utils';

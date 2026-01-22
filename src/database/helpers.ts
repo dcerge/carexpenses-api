@@ -481,6 +481,33 @@ export const FIELDS = {
   TOTAL_MINUTES: 'total_minutes',
   POINT_TYPE: 'point_type',
 
+  // ADDRESS AND COORDINATES
+  ADDRESS_1: 'address_1',
+  ADDRESS_2: 'address_2',
+  CITY: 'city',
+  POSTAL_CODE: 'postal_code',
+  STATE_PROVINCE: 'state_province',
+  COUNTRY: 'country',
+  COUNTRY_ID: 'country_id',
+  LONGITUDE: 'longitude',
+  LATITUDE: 'latitude',
+
+  // WEATHER
+  WEATHER_TEMP_C: 'weather_temp_c',
+  WEATHER_FEELS_LIKE_C: 'weather_feels_like_c',
+  WEATHER_CONDITION_CODE: 'weather_condition_code',
+  WEATHER_CONDITION_ICON: 'weather_condition_icon',
+  WEATHER_DESCRIPTION: 'weather_description',
+  WEATHER_HUMIDITY_PCT: 'weather_humidity_pct',
+  WEATHER_PRESSURE_HPA: 'weather_pressure_hpa',
+  WEATHER_CLOUD_PCT: 'weather_cloud_pct',
+  WEATHER_VISIBILITY_M: 'weather_visibility_m',
+  WEATHER_WIND_SPEED_MPS: 'weather_wind_speed_mps',
+  WEATHER_WIND_DIR_DEG: 'weather_wind_dir_deg',
+  WEATHER_PRECIP_MM: 'weather_precip_mm',
+  WEATHER_UV_INDEX: 'weather_uv_index',
+  WEATHER_PROVIDER: 'weather_provider',
+  WEATHER_FETCHED_AT: 'weather_fetched_at',
 };
 
 // =============================================================================

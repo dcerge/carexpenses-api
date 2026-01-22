@@ -18,6 +18,7 @@ Add and manage multiple vehicles (quantity depends on subscription plan):
 - **Purchase details**: Price, date, seller information
 - **Media**: Vehicle photo and attached documents (registration, title, etc.)
 - **Notes**: Free-form notes field
+- **Designated Drivers**: Assign users to vehicles as drivers or owners so only they can add records (_coming soon_)
 
 ---
 
@@ -84,6 +85,96 @@ Log trips for mileage records, business expense reports, or personal tracking:
 3. **End travel**: Close the trip to calculate total distance and duration
 4. **Trip summary**: View all expenses incurred during the trip
 5. **Tags**: Assign custom tags for reporting and organization
+6. **Trip Categorization**: Assign to the trip type like business, personal, medical, charity, other and the use the information to get taxe deductions from IRS/CRA.
+
+---
+
+## Digital Glove Box
+
+Store important vehicle documents digitally:
+
+- Insurance policies with expiration date tracking
+- Registration and title documents
+- Warranty information
+- Any other vehicle or driver-related paperwork
+- Driver license and other driver related documents
+
+---
+
+## Revenue Tracking
+
+Track income generated through vehicle usage, with optional linkage to trips for accurate profit and tax reporting.
+
+Revenue entries can exist independently or be associated with a specific travel record.
+
+Revenue record includes:
+
+-	Date/Time: When the revenue was earned or received
+- Amount: Gross earned amount
+- Currency: Multi-currency support with conversion to home currency
+- Revenue type: Delivery, ride, service call, rental, mileage reimbursement, bonus, other (extensible)
+- Description & notes: Short summary and detailed context
+- Attachments: Invoices, payout statements, receipts, contracts
+- Tags: Custom tags (e.g., Business, Taxable, Reimbursed, Cash, Platform:Uber)
+- Linked travel (optional): Associate revenue with a specific travel to calculate per-trip or per-distance profitability. Potentially let user link several revenues for a single travel (_coming soon_)
+- Vehicle: Selected manually or automatically derived from linked travel 
+
+Reporting & Analytics (Revenue-aware): (_coming soon_)
+
+- Revenue per vehicle
+- Revenue per travel
+- Revenue per distance (e.g., $/km or $/mile)
+- Net profit calculations (revenue minus expenses)
+- Yearly and monthly income summaries
+- Export-ready records for accounting and tax filing (IRS / CRA)
+
+## Checklists (_coming soon_)
+
+Create structured, repeatable checklists to enforce consistency, safety, and compliance before or after vehicle usage.
+
+Checklists can be attached to travels, vehicles, or triggered manually.
+
+Checklist capabilities:
+
+- Checklist types:
+ - Pre-travel
+ - Post-travel
+ - Maintenance
+ - Custom (user-defined)
+- Checklist items:
+ - Yes / No
+ - Pass / Fail
+ - Notes-required
+- Attachments per item: Photos or documents as proof (e.g., tire condition, damage photos)
+- Required vs optional items
+- Reusable templates: Create once, reuse across vehicles or drivers
+
+Assignment & Execution:
+- Assign checklists to:
+ - Specific vehicles
+ - Specific drivers
+ - Specific travel types (business, personal, medical, etc.)
+- Enforce completion:
+ - Block travel start until required pre-travel checklist is completed
+ - Require post-travel checklist before closing a trip
+ - Timestamped completion records with user attribution
+
+Use cases:
+- Safety verification before long trips
+- Damage inspection before and after vehicle usage
+- Business compliance for shared or fleet vehicles
+- Driver accountability in multi-user setups
+- Personal routines (e.g., “Did I lock the car?”, “Check child seat”)
+
+---
+
+## Tags
+
+Create custom tags to organize and filter data:
+
+- Assign tags to expenses, refuels, checkpoints, and travels
+- Use tags in reports for flexible grouping and analysis
+- Examples: "Business", "Vacation", "Tax Deductible", "Warranty Repair"
 
 ---
 
@@ -99,28 +190,7 @@ Gain insights into vehicle costs and usage:
 
 ---
 
-## Digital Glove Box _(Coming Soon)_
-
-Store important vehicle documents digitally:
-
-- Insurance policies with expiration date tracking
-- Registration and title documents
-- Warranty information
-- Any other vehicle-related paperwork
-
----
-
-## Tags
-
-Create custom tags to organize and filter data:
-
-- Assign tags to expenses, refuels, checkpoints, and travels
-- Use tags in reports for flexible grouping and analysis
-- Examples: "Business", "Vacation", "Tax Deductible", "Warranty Repair"
-
----
-
-## Multi-User & Roles
+## Multi-User & Roles (_coming soon_)
 
 Share vehicle access with family members or team:
 
@@ -174,3 +244,12 @@ Share vehicle access with family members or team:
 - **Multi-currency with home currency conversion** — essential for travelers and cross-border users
 - **Checkpoints** as a first-class feature — anchor odometer/fuel state, correct data drift, enable future automation
 - **Web-based PWA** — works on any device without app store dependencies
+
+# Roadmap
+
+- Add tracking income 
+- Add 2 tanks support for a vehicle
+- Add AWD/FWD/etc for a vehicle
+- Add more fuel types (in addition to petrol, etc)
+- Add support of electrical vehicle
+- Add weather info for refuel

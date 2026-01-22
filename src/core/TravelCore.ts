@@ -132,12 +132,6 @@ class TravelCore extends AppCore {
       expenseType: EXPENSE_TYPES.TRAVEL_POINT,
       travelId,
       whenDone: pointData.whenDone || this.now(),
-      odometer: pointData.odometer ?? null,
-      location: pointData.location ?? null,
-      whereDone: pointData.whereDone ?? null,
-      pointType: pointData.pointType ?? null,
-      comments: pointData.comments ?? null,
-      fuelInTank: pointData.fuelInTank ?? null,
       // Financial fields default to 0 for travel points
       //subtotal: 0,
       tax: 0,
@@ -147,6 +141,8 @@ class TravelCore extends AppCore {
       status: STATUS.ACTIVE,
       createdBy: userId,
       createdAt: this.now(),
+      //
+      ...(pointData || {})
     };
 
     const result = await this.getGateways().expenseBaseGw.create(travelPointData);
@@ -167,16 +163,8 @@ class TravelCore extends AppCore {
     const updateData: any = {
       updatedBy: userId,
       updatedAt: this.now(),
+      ...(pointData || {})
     };
-
-    // Only update provided fields
-    if (pointData.whenDone !== undefined) updateData.whenDone = pointData.whenDone;
-    if (pointData.odometer !== undefined) updateData.odometer = pointData.odometer;
-    if (pointData.location !== undefined) updateData.location = pointData.location;
-    if (pointData.whereDone !== undefined) updateData.whereDone = pointData.whereDone;
-    if (pointData.pointType !== undefined) updateData.pointType = pointData.pointType;
-    if (pointData.comments !== undefined) updateData.comments = pointData.comments;
-    if (pointData.fuelInTank !== undefined) updateData.fuelInTank = pointData.fuelInTank;
 
     const result = await this.getGateways().expenseBaseGw.update({ id: pointId, accountId }, updateData);
 

@@ -31,7 +31,7 @@ const typeDefs = `#graphql
     consumption: Float
     "Date/time when the record occurred"
     whenDone: String
-    "Location/address"
+    "Location/address (legacy field - use structured address fields instead)"
     location: String
     "Place name (gas station, service center, etc.)"
     whereDone: String
@@ -63,6 +63,69 @@ const typeDefs = `#graphql
     travelId: ID
     "Owner number at time of record (for vehicles with multiple owners over time)"
     ownerNumber: Int
+    
+    # ==========================================================================
+    # Address fields
+    # ==========================================================================
+    
+    "Street address"
+    address1: String
+    "PO Box, Apartment, Suite, etc."
+    address2: String
+    "City"
+    city: String
+    "Postal Code/Zip"
+    postalCode: String
+    "State or Province"
+    stateProvince: String
+    "Country full name"
+    country: String
+    "Country code: US, CA, FR, RU, etc."
+    countryId: String
+    
+    # ==========================================================================
+    # Coordinates
+    # ==========================================================================
+    
+    "Location longitude"
+    longitude: Float
+    "Location latitude"
+    latitude: Float
+    
+    # ==========================================================================
+    # Weather data (auto-populated based on location and time)
+    # ==========================================================================
+    
+    "Temperature in Celsius"
+    weatherTempC: Float
+    "Feels like temperature (wind chill/heat index) in Celsius"
+    weatherFeelsLikeC: Float
+    "Weather condition code: clear, rain, snow, etc."
+    weatherConditionCode: String
+    "Weather provider icon code for UI display"
+    weatherConditionIcon: String
+    "Human-readable weather description"
+    weatherDescription: String
+    "Humidity percentage 0-100"
+    weatherHumidityPct: Int
+    "Atmospheric pressure in hectopascals"
+    weatherPressureHpa: Int
+    "Cloud cover percentage 0-100"
+    weatherCloudPct: Int
+    "Visibility in meters"
+    weatherVisibilityM: Int
+    "Wind speed in meters per second"
+    weatherWindSpeedMps: Float
+    "Wind direction in degrees 0-359"
+    weatherWindDirDeg: Int
+    "Precipitation in mm (last hour)"
+    weatherPrecipMm: Float
+    "UV index"
+    weatherUvIndex: Float
+    "Weather data provider: openweathermap, weatherapi, etc."
+    weatherProvider: String
+    "When weather data was retrieved from provider"
+    weatherFetchedAt: String
     
     # ==========================================================================
     # Travel Point-specific fields (expenseType = 4)
@@ -180,6 +243,37 @@ const typeDefs = `#graphql
     fuelInTank: Float
     travelId: ID
     
+    # ==========================================================================
+    # Address fields
+    # ==========================================================================
+    
+    "Street address"
+    address1: String
+    "PO Box, Apartment, Suite, etc."
+    address2: String
+    "City"
+    city: String
+    "Postal Code/Zip"
+    postalCode: String
+    "State or Province"
+    stateProvince: String
+    "Country full name"
+    country: String
+    "Country code: US, CA, FR, RU, etc."
+    countryId: String
+    
+    # ==========================================================================
+    # Coordinates
+    # ==========================================================================
+    
+    "Location longitude"
+    longitude: Float
+    "Location latitude"
+    latitude: Float
+    
+    # Note: Weather fields are NOT included in input - they are auto-populated
+    # by the backend based on location coordinates and whenDone timestamp
+    
     # Travel Point-specific fields (expenseType = 4)
     """
     Type of location for travel waypoints (expenseType=4 only).
@@ -246,6 +340,19 @@ const typeDefs = `#graphql
     fuelGrade: [String]
     whenDoneFrom: String
     whenDoneTo: String
+    
+    # Location filters
+    "Filter by city"
+    city: [String]
+    "Filter by state/province"
+    stateProvince: [String]
+    "Filter by country code (US, CA, FR, RU, etc.)"
+    countryId: [String]
+    
+    # Weather condition filter
+    "Filter by weather condition code: clear, rain, snow, etc."
+    weatherConditionCode: [String]
+    
     "Filter by tag IDs"
     tags: [ID]
     status: [Int]
