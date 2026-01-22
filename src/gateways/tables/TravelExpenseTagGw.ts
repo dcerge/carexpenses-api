@@ -1,5 +1,5 @@
 // ./src/gateways/tables/TravelExpenseTagGw.ts
-import { castArray } from 'lodash';
+import { castArray, omit } from 'lodash';
 
 import { BaseGateway, BaseGatewayPropsInterface } from '@sdflc/backend-helpers';
 import { SORT_ORDER } from '@sdflc/utils';
@@ -24,8 +24,9 @@ class TravelExpenseTagGw extends BaseGateway {
       hasRemovedAtStr: false,
       filterByUserField: undefined,
       selectFields: [`${TABLES.TRAVEL_EXPENSE_TAGS}.*`],
-      idField: `${TABLES.TRAVEL_EXPENSE_TAGS}.${FIELDS.TRAVEL_ID}`,
-      idFieldUpdateRemove: FIELDS.TRAVEL_ID,
+      // idField: `${TABLES.TRAVEL_EXPENSE_TAGS}.${FIELDS.TRAVEL_ID}`,
+      // idFieldUpdateRemove: FIELDS.TRAVEL_ID,
+      noCache: true,
       defaultSorting: [
         {
           name: FIELDS.ORDER_NO,
@@ -33,6 +34,10 @@ class TravelExpenseTagGw extends BaseGateway {
         },
       ],
     });
+  }
+
+  async transformOnCreate(params: any) {
+    return omit(params, 'id');
   }
 
   async onListFilter(query: any, filterParams: any) {

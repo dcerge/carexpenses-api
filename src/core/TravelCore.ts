@@ -190,22 +190,26 @@ class TravelCore extends AppCore {
   /**
    * Sync tags for a travel record
    */
-  private async syncTravelTags(travelId: string, tagIds: string[]): Promise<void> {
-    const gateway = this.getGateways().travelExpenseTagGw;
+  private async syncTravelTags(travelId: string, tagIds: string[] | null | undefined): Promise<void> {
+    // on tagsId undefiened we do nothing
+    if (tagIds === undefined) {
+      return;
+    }
 
     // Delete existing tags for this travel
-    await gateway.remove({ travelId });
+    await this.getGateways().travelExpenseTagGw.remove({ travelId });
 
-    // Insert new tags
-    if (tagIds && tagIds.length > 0) {
-      for (let i = 0; i < tagIds.length; i++) {
-        await gateway.create({
-          travelId,
-          expenseTagId: tagIds[i],
-          orderNo: i + 1,
-        });
-      }
+    if (!tagIds || tagIds.length == 0) {
+      return;
     }
+
+    const travelExpenseTags = tagIds.map((tagId, idx) => ({
+      travelId,
+      expenseTagId: tagIds[idx],
+      orderNo: idx + 1,
+    }));
+
+    this.getGateways().travelExpenseTagGw.create(travelExpenseTags);
   }
 
   /**
@@ -417,9 +421,7 @@ class TravelCore extends AppCore {
       }
 
       // Sync tags
-      if (tagIds && tagIds.length > 0) {
-        await this.syncTravelTags(travel.id, tagIds);
-      }
+      await this.syncTravelTags(travel.id, tagIds);
 
       // Clean up stored data
       this.operationData.delete(`create-${requestId}`);
@@ -596,9 +598,7 @@ class TravelCore extends AppCore {
       }
 
       // Sync tags if provided
-      if (tagIds !== undefined) {
-        await this.syncTravelTags(travel.id, tagIds || []);
-      }
+      await this.syncTravelTags(travel.id, tagIds);
 
       // Update car stats
       // Need to handle: old car, new car, or both if car changed
