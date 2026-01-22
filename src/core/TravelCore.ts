@@ -178,7 +178,7 @@ class TravelCore extends AppCore {
     if (pointData.comments !== undefined) updateData.comments = pointData.comments;
     if (pointData.fuelInTank !== undefined) updateData.fuelInTank = pointData.fuelInTank;
 
-    const result = await this.getGateways().expenseBaseGw.update(updateData, { id: pointId, accountId });
+    const result = await this.getGateways().expenseBaseGw.update({ id: pointId, accountId }, updateData);
 
     if (result && result.length > 0) {
       return result[0];
@@ -673,17 +673,12 @@ class TravelCore extends AppCore {
         const existingTravel = removeInfo.existingTravel;
 
         // Soft-delete associated travel points
-        await this.getGateways().expenseBaseGw.update(
-          {
-            removedAt: this.now(),
-            removedBy: userId,
-          },
+        await this.getGateways().expenseBaseGw.remove(
           {
             travelId: existingTravel.id,
             accountId,
             expenseType: EXPENSE_TYPES.TRAVEL_POINT,
-          },
-        );
+          });
 
         // Remove tag associations
         await this.getGateways().travelExpenseTagGw.remove({ travelId: existingTravel.id });
@@ -753,11 +748,7 @@ class TravelCore extends AppCore {
         const existingTravel = removeInfo.existingTravel;
 
         // Soft-delete associated travel points
-        await this.getGateways().expenseBaseGw.update(
-          {
-            removedAt: this.now(),
-            removedBy: userId,
-          },
+        await this.getGateways().expenseBaseGw.remove(
           {
             travelId: existingTravel.id,
             accountId,

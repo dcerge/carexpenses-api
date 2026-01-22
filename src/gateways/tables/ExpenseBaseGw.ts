@@ -108,9 +108,14 @@ class ExpenseBaseGw extends BaseGateway {
   }
 
   async onUpdateFilter(query: any, whereParams: any): Promise<number> {
-    const { accountId, userId, carId } = whereParams || {};
+    const { accountId, userId, carId, travelId, expenseType, id } = whereParams || {};
 
     let filtersAppliedQty = await super.onUpdateFilter(query, whereParams);
+
+    if (id != null) {
+      filtersAppliedQty++;
+      query.whereIn(FIELDS.ID, castArray(id));
+    }
 
     if (accountId != null) {
       filtersAppliedQty++;
@@ -125,15 +130,30 @@ class ExpenseBaseGw extends BaseGateway {
     if (carId != null) {
       filtersAppliedQty++;
       query.whereIn(FIELDS.CAR_ID, castArray(carId));
+    }
+
+    if (travelId != null) {
+      filtersAppliedQty++;
+      query.whereIn(FIELDS.TRAVEL_ID, castArray(travelId));
+    }
+
+    if (expenseType != null) {
+      filtersAppliedQty++;
+      query.whereIn(FIELDS.EXPENSE_TYPE, castArray(expenseType));
     }
 
     return filtersAppliedQty;
   }
 
   async onRemoveFilter(query: any, whereParams: any): Promise<number> {
-    const { accountId, userId, carId } = whereParams || {};
+    const { accountId, userId, carId, travelId, expenseType, id } = whereParams || {};
 
     let filtersAppliedQty = await super.onRemoveFilter(query, whereParams);
+
+    if (id != null) {
+      filtersAppliedQty++;
+      query.whereIn(FIELDS.ID, castArray(id));
+    }
 
     if (accountId != null) {
       filtersAppliedQty++;
@@ -148,6 +168,16 @@ class ExpenseBaseGw extends BaseGateway {
     if (carId != null) {
       filtersAppliedQty++;
       query.whereIn(FIELDS.CAR_ID, castArray(carId));
+    }
+
+    if (travelId != null) {
+      filtersAppliedQty++;
+      query.whereIn(FIELDS.TRAVEL_ID, castArray(travelId));
+    }
+
+    if (expenseType != null) {
+      filtersAppliedQty++;
+      query.whereIn(FIELDS.EXPENSE_TYPE, castArray(expenseType));
     }
 
     return filtersAppliedQty;
