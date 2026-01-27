@@ -416,7 +416,15 @@ class ReportCore extends AppCore {
     const mileage = fromMetricDistanceRounded(mileageKm, distanceIn);
 
     // Calculate consumption
-    const consumption = calculateConsumption(mileageKm, rawData.totalVolumeLiters, consumptionIn);
+    const consumption = calculateConsumption(mileageKm, rawData.consumableVolumeLiters, consumptionIn);
+
+    console.log('==== WE ARE HERE', {
+      consumption,
+      mileageKm,
+      consumableVolumeLiters: rawData.consumableVolumeLiters,
+      totalVolumeLiters: rawData.totalVolumeLiters,
+      consumptionIn
+    })
 
     // Calculate fuel volume in user's unit
     const fuelPurchased = fromMetricVolume(rawData.totalVolumeLiters, volumeIn);

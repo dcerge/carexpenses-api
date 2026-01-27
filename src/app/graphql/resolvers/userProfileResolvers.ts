@@ -12,12 +12,7 @@ const resolvers = buildDefaultResolvers({
   disableSet: true,
   types: {
     UserProfile: {
-      userCreated(parent, args, context) {
-        return parent.createdBy ? { __typename: 'User', id: parent.createdBy } : null;
-      },
-      userUpdated(parent, args, context) {
-        return parent.updatedBy ? { __typename: 'User', id: parent.updatedBy } : null;
-      },
+      
     },
   },
 });

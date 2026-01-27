@@ -359,7 +359,7 @@ class ExpenseCore extends AppCore {
       if (processed.isFullTank && processed.tripMeter !== null) {
         // Use the metric values (before conversion) for consumption calculation
         const tripMeterMetric = item.tripMeter; // Original metric value
-        const refuelVolumeMetric = item.refuelVolume; // Original metric value (liters)
+        const refuelVolumeMetric = item.refuelVolume // Original metric value (liters)
 
         processed.consumption = calculateConsumption(tripMeterMetric, refuelVolumeMetric, userProfile.consumptionIn);
       } else {
@@ -456,6 +456,7 @@ class ExpenseCore extends AppCore {
           merged.isFullTank = refuel.isFullTank;
           merged.remainingInTankBefore = refuel.remainingInTankBefore;
           merged.fuelGrade = refuel.fuelGrade;
+          merged.tankType = refuel.tankType;
         }
       } else if (base.expenseType === EXPENSE_TYPES.EXPENSE) {
         const expense = expenseMap.get(base.id);
@@ -593,6 +594,7 @@ class ExpenseCore extends AppCore {
       isFullTank,
       remainingInTankBefore,
       fuelGrade,
+      tankType,
       ...baseFields
     } = params;
 
@@ -634,6 +636,7 @@ class ExpenseCore extends AppCore {
       isFullTank: params.isFullTank,
       remainingInTankBefore: params.remainingInTankBefore,
       fuelGrade: params.fuelGrade,
+      tankType: params.tankType,
     };
   }
 

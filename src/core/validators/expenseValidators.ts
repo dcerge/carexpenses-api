@@ -62,6 +62,12 @@ const rulesList = new Checkit({
       message: 'Fuel grades should be an array of strings',
     },
   ],
+  tankType: [
+    {
+      rule: 'array',
+      message: 'Thank type should be a array of strings',
+    },
+  ],
   whenDoneFrom: [
     {
       rule: 'string',
@@ -317,6 +323,16 @@ const rulesCreate = new Checkit({
       message: 'Fuel grade should not exceed 16 characters',
     },
   ],
+  tankType: [
+    {
+      rule: 'string',
+      message: 'Thank type should be a string',
+    },
+    {
+      rule: 'maxLength:8',
+      message: 'Tank type should not exceed 8 characters',
+    },
+  ],
   // Tags
   tags: [
     {
@@ -542,6 +558,16 @@ const rulesUpdate = new Checkit({
     {
       rule: 'maxLength:16',
       message: 'Fuel grade should not exceed 16 characters',
+    },
+  ],
+  tankType: [
+    {
+      rule: 'string',
+      message: 'Thank type should be a string',
+    },
+    {
+      rule: 'maxLength:8',
+      message: 'Tank type should not exceed 8 characters',
     },
   ],
   // Tags

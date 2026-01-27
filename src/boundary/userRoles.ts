@@ -1,3 +1,4 @@
+// ./src/boundary/userRoles.ts
 export const USER_ROLES = {
   OWNER: '54dfb3ec-7942-4b65-ba51-5ae62e79c860',
   ADMIN: 'b7a5a5a1-82a5-433e-860d-fb7e7a374ad8', // can do everything except subscription and removal of an account

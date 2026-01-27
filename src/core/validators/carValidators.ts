@@ -59,6 +59,18 @@ const rulesList = new Checkit({
       message: 'Make IDs should be an array of integers',
     },
   ],
+  driveType: [
+    {
+      rule: 'array',
+      message: 'Drive types should be an array of strings',
+    },
+  ],
+  mainTankFuelType: [
+    {
+      rule: 'array',
+      message: 'Main tank fuel types should be an array of strings',
+    },
+  ],
   status: [
     {
       rule: 'array',
@@ -66,6 +78,105 @@ const rulesList = new Checkit({
     },
   ],
 });
+
+// Shared rules for new tank fields (used in both create and update)
+const rulesTankFields = {
+  // Drive type and license plate
+  driveType: [
+    {
+      rule: 'string',
+      message: 'Drive type should be a string',
+    },
+    {
+      rule: 'maxLength:8',
+      message: 'Drive type should not exceed 8 characters',
+    },
+  ],
+  licensePlate: [
+    {
+      rule: 'string',
+      message: 'License plate should be a string',
+    },
+    {
+      rule: 'maxLength:32',
+      message: 'License plate should not exceed 32 characters',
+    },
+  ],
+  // Main tank fields
+  mainTankFuelType: [
+    {
+      rule: 'string',
+      message: 'Main tank fuel type should be a string',
+    },
+    {
+      rule: 'maxLength:16',
+      message: 'Main tank fuel type should not exceed 16 characters',
+    },
+  ],
+  mainTankVolume: [
+    {
+      rule: 'numeric',
+      message: 'Main tank volume should be a number',
+    },
+  ],
+  mainTankVolumeEnteredIn: [
+    {
+      rule: 'string',
+      message: 'Main tank volume unit should be a string',
+    },
+    {
+      rule: 'maxLength:8',
+      message: 'Main tank volume unit should not exceed 8 characters',
+    },
+  ],
+  mainTankDefaultGrade: [
+    {
+      rule: 'string',
+      message: 'Main tank default grade should be a string',
+    },
+    {
+      rule: 'maxLength:16',
+      message: 'Main tank default grade should not exceed 16 characters',
+    },
+  ],
+  // Additional tank fields
+  addlTankFuelType: [
+    {
+      rule: 'string',
+      message: 'Additional tank fuel type should be a string',
+    },
+    {
+      rule: 'maxLength:16',
+      message: 'Additional tank fuel type should not exceed 16 characters',
+    },
+  ],
+  addlTankVolume: [
+    {
+      rule: 'numeric',
+      message: 'Additional tank volume should be a number',
+    },
+  ],
+  addlTankVolumeEnteredIn: [
+    {
+      rule: 'string',
+      message: 'Additional tank volume unit should be a string',
+    },
+    {
+      rule: 'maxLength:8',
+      message: 'Additional tank volume unit should not exceed 8 characters',
+    },
+  ],
+  addlTankDefaultGrade: [
+    {
+      rule: 'string',
+      message: 'Additional tank default grade should be a string',
+    },
+    {
+      rule: 'maxLength:16',
+      message: 'Additional tank default grade should not exceed 16 characters',
+    },
+  ],
+};
 
 const rulesCreate = new Checkit({
   label: [
@@ -160,32 +271,6 @@ const rulesCreate = new Checkit({
       message: 'Initial mileage should be an integer',
     },
   ],
-  typeOfFuel: [
-    {
-      rule: 'string',
-      message: 'Type of fuel should be a string',
-    },
-    {
-      rule: 'maxLength:16',
-      message: 'Type of fuel should not exceed 16 characters',
-    },
-  ],
-  tankVolume: [
-    {
-      rule: 'required',
-      message: 'Tank volume is required',
-    },
-    {
-      rule: 'integer',
-      message: 'Tank volume should be an integer',
-    },
-  ],
-  additionalTankVolume: [
-    {
-      rule: 'integer',
-      message: 'Additional tank volume should be an integer',
-    },
-  ],
   whenBought: [
     {
       rule: 'string',
@@ -193,10 +278,6 @@ const rulesCreate = new Checkit({
     },
   ],
   boughtFor: [
-    {
-      rule: 'required',
-      message: 'Purchase price is required',
-    },
     {
       rule: 'numeric',
       message: 'Bought for should be a number',
@@ -272,17 +353,7 @@ const rulesCreate = new Checkit({
       message: 'Transmission type ID should be an integer',
     },
   ],
-  engineTypeId: [
-    {
-      rule: 'integer',
-      message: 'Engine type ID should be an integer',
-    },
-  ],
   makeId: [
-    {
-      rule: 'required',
-      message: 'Make is required',
-    },
     {
       rule: 'integer',
       message: 'Make ID should be an integer',
@@ -300,6 +371,37 @@ const rulesCreate = new Checkit({
       message: "Reference to the vehicle's image should be a valid UUID",
     },
   ],
+  // Deprecated fields - kept for backward compatibility
+  engineTypeId: [
+    {
+      rule: 'integer',
+      message: 'Engine type ID should be an integer',
+    },
+  ],
+  typeOfFuel: [
+    {
+      rule: 'string',
+      message: 'Type of fuel should be a string',
+    },
+    {
+      rule: 'maxLength:16',
+      message: 'Type of fuel should not exceed 16 characters',
+    },
+  ],
+  tankVolume: [
+    {
+      rule: 'integer',
+      message: 'Tank volume should be an integer',
+    },
+  ],
+  additionalTankVolume: [
+    {
+      rule: 'integer',
+      message: 'Additional tank volume should be an integer',
+    },
+  ],
+  // New tank fields
+  ...rulesTankFields,
   ...ruleStatus(),
 });
 
@@ -402,6 +504,7 @@ const rulesUpdate = new Checkit({
       message: 'Initial mileage should be an integer',
     },
   ],
+  // Deprecated fields - kept for backward compatibility
   typeOfFuel: [
     {
       rule: 'string',
@@ -530,6 +633,8 @@ const rulesUpdate = new Checkit({
       message: "Reference to the vehicle's image should be a valid UUID",
     },
   ],
+  // New tank fields
+  ...rulesTankFields,
   ...ruleStatus(),
 });
 

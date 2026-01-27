@@ -40,6 +40,7 @@ export interface ExpenseSummaryRawData {
 
   // Fuel (all refuels)
   totalVolumeLiters: number;
+  consumableVolumeLiters: number;
   refuelsCount: number;
 
   // Mileage (all records)

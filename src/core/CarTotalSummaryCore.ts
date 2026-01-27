@@ -6,9 +6,40 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/carTotalSummaryValidators';
-import { OpResult } from '@sdflc/api-helpers';
+import {
+  fromMetricDistance,
+  fromMetricVolume,
+  deriveConsumptionUnit,
+  calculateConsumption,
+} from '../utils/unitConversions';
+import { UserProfile } from '../boundary';
 
 dayjs.extend(utc);
+
+/**
+ * Interface for the converted units object
+ */
+interface TotalSummaryUnits {
+  distanceUnit: string;
+  volumeUnit: string;
+  consumptionUnit: string;
+  latestKnownMileage: number | null;
+  firstRefuelOdometer: number | null;
+  consumptionDistance: number | null;
+  totalTravelsDistance: number | null;
+  totalRefuelsVolume: number | null;
+  firstRefuelVolume: number | null;
+  consumptionVolume: number | null;
+  consumption: number | null;
+}
+
+/**
+ * Context for unit conversions stored in opt.validatedItems
+ */
+interface ConversionContext {
+  carsMap?: Map<string, any>;
+  userProfile?: UserProfile;
+}
 
 class CarTotalSummaryCore extends AppCore {
   constructor(props: BaseCorePropsInterface) {
@@ -40,34 +71,120 @@ class CarTotalSummaryCore extends AppCore {
     };
   }
 
+  // ===========================================================================
+  // Unit Conversion Helpers
+  // ===========================================================================
+
+  /**
+   * Create a TotalSummaryUnits object with converted values
+   * @param item The summary item with metric values
+   * @param distanceUnit Target distance unit (km, mi)
+   * @param volumeUnit Target volume unit (l, gal-us, gal-uk)
+   * @param consumptionUnit Target consumption unit (l100km, mpg-us, etc.)
+   * @returns TotalSummaryUnits object with converted values
+   */
+  private createUnitsObject(
+    item: any,
+    distanceUnit: string,
+    volumeUnit: string,
+    consumptionUnit: string,
+  ): TotalSummaryUnits {
+    return {
+      distanceUnit,
+      volumeUnit,
+      consumptionUnit,
+      latestKnownMileage: fromMetricDistance(item.latestKnownMileage, distanceUnit),
+      firstRefuelOdometer: fromMetricDistance(item.firstRefuelOdometer, distanceUnit),
+      consumptionDistance: fromMetricDistance(item.consumptionDistance, distanceUnit),
+      totalTravelsDistance: fromMetricDistance(item.totalTravelsDistance, distanceUnit),
+      totalRefuelsVolume: fromMetricVolume(item.totalRefuelsVolume, volumeUnit),
+      firstRefuelVolume: fromMetricVolume(item.firstRefuelVolume, volumeUnit),
+      consumptionVolume: fromMetricVolume(item.consumptionVolume, volumeUnit),
+      consumption: calculateConsumption(item.consumptionDistance, item.consumptionVolume, consumptionUnit),
+    };
+  }
+
+  /**
+   * Add unit conversion objects to a summary item
+   * @param item The summary item with metric values
+   * @param car The car object (or undefined)
+   * @param userProfile The user profile (or undefined)
+   * @returns Item with inCarUnits and inUserUnits added
+   */
+  private addUnitConversions(item: any, car: any, userProfile?: UserProfile): any {
+    // Car units: use car's mileageIn and mainTankVolumeEnteredIn
+    // Default to metric if car not found
+    const carDistanceUnit = car?.mileageIn || 'km';
+    const carVolumeUnit = car?.mainTankVolumeEnteredIn || 'l';
+    const carConsumptionUnit = deriveConsumptionUnit(carDistanceUnit, carVolumeUnit);
+
+    item.inCarUnits = this.createUnitsObject(item, carDistanceUnit, carVolumeUnit, carConsumptionUnit);
+
+    // User units: use user profile preferences
+    // Default to metric if profile not found
+    const userDistanceUnit = userProfile?.distanceIn || 'km';
+    const userVolumeUnit = userProfile?.volumeIn || 'l';
+    const userConsumptionUnit = userProfile?.consumptionIn || 'l100km';
+
+    item.inUserUnits = this.createUnitsObject(item, userDistanceUnit, userVolumeUnit, userConsumptionUnit);
+
+    return item;
+  }
+
+  // ===========================================================================
+  // Item Processing
+  // ===========================================================================
+
+  /**
+   * Process item for output: format dates and add unit conversions
+   * Conversion context (carsMap, userProfile) is passed via opt.validatedItems
+   */
   public processItemOnOut(item: any, opt?: BaseCoreActionsInterface): any {
     if (!item) return item;
 
+    // Format timestamps to UTC ISO format
     if (item.updatedAt !== null && item.updatedAt !== undefined) {
       item.updatedAt = dayjs(item.updatedAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
     }
 
-    if (item.firstRecordDttm !== null && item.firstRecordDttm !== undefined) {
-      item.firstRecordDttm = dayjs(item.firstRecordDttm).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
+    if (item.firstRecordAt !== null && item.firstRecordAt !== undefined) {
+      item.firstRecordAt = dayjs(item.firstRecordAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
     }
 
-    if (item.lastRecordDttm !== null && item.lastRecordDttm !== undefined) {
-      item.lastRecordDttm = dayjs(item.lastRecordDttm).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
+    if (item.lastRecordAt !== null && item.lastRecordAt !== undefined) {
+      item.lastRecordAt = dayjs(item.lastRecordAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
     }
+
+    // Get conversion context from opt.validatedItems
+    const context = (opt?.validatedItems as ConversionContext) || {};
+    const { carsMap, userProfile } = context;
+
+    // Get car from map if available
+    const car = item.carId && carsMap ? carsMap.get(item.carId) : undefined;
+
+    // Add unit conversions
+    this.addUnitConversions(item, car, userProfile);
 
     return item;
   }
+
+  // ===========================================================================
+  // List Operations
+  // ===========================================================================
 
   public async beforeList(args: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { filter } = args || {};
     const { accountId } = this.getContext();
 
-    // Security is handled via gateway join to cars
+    // Use AppCore's filterAccessibleCarIds for DRIVER role restriction
+    const carIdFilter = await this.filterAccessibleCarIds(filter?.carId);
+
     return {
       ...args,
       filter: {
         ...filter,
         accountId,
+        ...(carIdFilter ? { carId: carIdFilter } : {}),
       },
     };
   }
@@ -77,31 +194,75 @@ class CarTotalSummaryCore extends AppCore {
       return items;
     }
 
+    // Get user profile for conversions
+    const userProfile = await this.getCurrentUserProfile();
+
+    // Collect unique car IDs
+    const carIds = [...new Set(items.filter((item) => item?.carId).map((item) => item.carId))];
+
+    // Batch fetch all cars
+    const carsMap = new Map<string, any>();
+
+    if (carIds.length > 0) {
+      const carsResult = await this.getGateways().carGw.list({ filter: { id: carIds } });
+      const cars = carsResult.data || carsResult || [];
+
+      for (const car of cars) {
+        carsMap.set(car.id, car);
+      }
+    }
+
+    // Store conversion context in opt.validatedItems for processItemOnOut
+    if (opt) {
+      opt.validatedItems = { carsMap, userProfile } as ConversionContext;
+    }
+
+    // Process each item
     return items.map((item: any) => this.processItemOnOut(item, opt));
   }
+
+  // ===========================================================================
+  // Get Single Item
+  // ===========================================================================
 
   public async afterGet(item: any, opt?: BaseCoreActionsInterface): Promise<any> {
     if (!item) {
       return item;
     }
 
-    // Security check via car ownership
-    const { accountId } = this.getContext();
+    // Fetch the car and validate access using AppCore's method
     const car = await this.getGateways().carGw.get(item.carId);
+    const hasAccess = await this.validateCarAccess(car);
 
-    if (!car || car.accountId !== accountId) {
+    if (!hasAccess) {
       return null; // Return null so the core returns NOT_FOUND
+    }
+
+    // Get user profile for conversions
+    const userProfile = await this.getCurrentUserProfile();
+
+    // Store conversion context in opt.validatedItems for processItemOnOut
+    const carsMap = new Map<string, any>();
+    carsMap.set(car.id, car);
+
+    if (opt) {
+      opt.validatedItems = { carsMap, userProfile } as ConversionContext;
     }
 
     return this.processItemOnOut(item, opt);
   }
+
+  // ===========================================================================
+  // Get Multiple Items
+  // ===========================================================================
 
   public async afterGetMany(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
     if (!Array.isArray(items) || items.length === 0) {
       return items;
     }
 
-    const { accountId } = this.getContext();
+    // Get user profile for conversions
+    const userProfile = await this.getCurrentUserProfile();
 
     // Batch fetch cars for all summaries
     const carIds = [...new Set(items.filter((item) => item?.carId).map((item) => item.carId))];
@@ -111,20 +272,29 @@ class CarTotalSummaryCore extends AppCore {
     }
 
     const carsResult = await this.getGateways().carGw.list({ filter: { id: carIds } });
-    const cars = carsResult.data || [];
+    const cars = carsResult.data || carsResult || [];
 
-    // Create lookup map of valid car IDs (owned by account)
-    const validCarIds = new Set<string>();
+    // Use AppCore's getAccessibleCarIdsFromCars for batch validation
+    const accessibleCarIds = await this.getAccessibleCarIdsFromCars(cars);
+
+    // Create lookup map of accessible cars only
+    const carsMap = new Map<string, any>();
+
     for (const car of cars) {
-      if (car.accountId === accountId) {
-        validCarIds.add(car.id);
+      if (accessibleCarIds.has(car.id)) {
+        carsMap.set(car.id, car);
       }
     }
 
-    // Filter items to only include those with valid cars
-    const filteredItems = items.filter((item) => item && validCarIds.has(item.carId));
+    // Store conversion context in opt.validatedItems for processItemOnOut
+    if (opt) {
+      opt.validatedItems = { carsMap, userProfile } as ConversionContext;
+    }
 
-    return filteredItems.map((item: any) => this.processItemOnOut(item, opt));
+    // Filter items to only include those with accessible cars and process
+    return items
+      .filter((item) => item && carsMap.has(item.carId))
+      .map((item: any) => this.processItemOnOut(item, opt));
   }
 }
 

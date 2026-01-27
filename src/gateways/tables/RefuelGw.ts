@@ -36,7 +36,7 @@ class RefuelGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { id, accountId, isFullTank, fuelGrade } = filterParams || {};
+    const { id, accountId, isFullTank, fuelGrade, tankType } = filterParams || {};
     const self = this;
 
     await super.onListFilter(query, filterParams);
@@ -51,6 +51,10 @@ class RefuelGw extends BaseGateway {
 
     if (fuelGrade) {
       query.whereIn(FIELDS.FUEL_GRADE, castArray(fuelGrade));
+    }
+
+    if (tankType) {
+      query.whereIn(FIELDS.TANK_TYPE, castArray(tankType));
     }
 
     // Security filter through expense_bases join

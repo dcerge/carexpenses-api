@@ -67,6 +67,34 @@ and "expires_at" <= '2026-02-19'
 and "expires_at" >= '2026-01-20'
 order by "expires_at" ASC, "created_at" DESC limit 10
 
+-- Check total travels count matches actual data
+SELECT 
+  car_id,
+  COUNT(*) as actual_count,
+  SUM(COALESCE(distance_km, GREATEST(last_odometer - first_odometer, 0))) as actual_distance
+FROM carexpenses.travels
+WHERE status >= 200 AND removed_at IS NULL AND car_id IS NOT NULL
+GROUP BY car_id;
+
+842993f1-fb3c-45fd-93ad-1c742a6026ec	113	27192.0000
+-- Compare with car_total_summaries
+SELECT car_id, total_travels_count, total_travels_distance
+FROM carexpenses.car_total_summaries
+where car_id = '73195b0e-ebfe-49bb-a076-ca5465707d34';
+
+select * from carexpenses.expense_bases eb where eb.travel_id in (
+'0cdd7745-49f4-41df-b3ac-8b651ebe8364'
+)
+
+select when_done, odometer, where_done, total_price, fuel_in_tank, refuel_volume, r.is_full_tank, fuel_grade
+  from carexpenses.expense_bases eb 
+  join carexpenses.refuels r on (eb.id = r.id)
+  where car_id = '172e8894-dbbe-49a7-81d0-d9e1494d7d24'
+    and eb.expense_type = 1
+    order by eb.when_done desc
+
+update carexpenses.travels set status = 200, is_active = false where status = 100
+
 --------
 
 select account_id, 

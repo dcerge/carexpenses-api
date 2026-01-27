@@ -1,6 +1,7 @@
 // ./src/app/graphql/resolvers/carResolvers.ts
 import { buildDefaultResolvers } from '@sdflc/backend-helpers';
 import { ENTITY_TYPE_IDS } from '../../../boundary';
+import { STATUS } from '../../../database';
 
 const resolvers = buildDefaultResolvers({
   prefix: 'car',
@@ -13,38 +14,41 @@ const resolvers = buildDefaultResolvers({
       user(parent, args, context) {
         return parent.userId ? { __typename: 'User', id: parent.userId } : null;
       },
+      account(parent, args, context) {
+        return parent.accountId ? { __typename: 'Account', id: parent.accountId } : null;
+      },
       userCreated(parent, args, context) {
         return parent.createdBy ? { __typename: 'User', id: parent.createdBy } : null;
       },
       userUpdated(parent, args, context) {
         return parent.updatedBy ? { __typename: 'User', id: parent.updatedBy } : null;
       },
-      async bodyType(parent, args, context) {
-        const { bodyType, bodyTypeId } = parent || {};
+      async carBodyType(parent, args, context) {
+        const { carBodyType, bodyTypeId } = parent || {};
 
-        if (!bodyType && bodyTypeId) {
+        if (!carBodyType && bodyTypeId) {
           return context.gateways.carBodyTypeGw.get(bodyTypeId);
         }
 
-        return bodyType ?? null;
+        return carBodyType ?? null;
       },
-      async transmissionType(parent, args, context) {
-        const { transmissionType, transmissionTypeId } = parent || {};
+      async carTransmissionType(parent, args, context) {
+        const { carTransmissionType, transmissionTypeId } = parent || {};
 
-        if (!transmissionType && transmissionTypeId) {
+        if (!carTransmissionType && transmissionTypeId) {
           return context.gateways.carTransmissionTypeGw.get(transmissionTypeId);
         }
 
-        return transmissionType ?? null;
+        return carTransmissionType ?? null;
       },
-      async engineType(parent, args, context) {
-        const { engineType, engineTypeId } = parent || {};
+      async carEngineType(parent, args, context) {
+        const { carEngineType, engineTypeId } = parent || {};
 
-        if (!engineType && engineTypeId) {
+        if (!carEngineType && engineTypeId) {
           return context.gateways.carEngineTypeGw.get(engineTypeId);
         }
 
-        return engineType ?? null;
+        return carEngineType ?? null;
       },
       async vehicleMake(parent, args, context) {
         const { vehicleMake, makeId } = parent || {};
@@ -110,6 +114,26 @@ const resolvers = buildDefaultResolvers({
             id: uploadedFileId,
           }
           : null;
+      },
+      async carUsers(parent, args, context) {
+        const { carUsers, id } = parent || {};
+
+        // Return cached carUsers if already loaded
+        if (carUsers) {
+          return carUsers;
+        }
+
+        // Fetch user-car assignments for this car
+        if (id) {
+          return context.gateways.userCarGw.list({
+            filter: {
+              carId: id,
+              status: [STATUS.ACTIVE],
+            },
+          });
+        }
+
+        return [];
       },
     },
   },

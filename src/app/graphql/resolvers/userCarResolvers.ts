@@ -18,23 +18,17 @@ const resolvers = buildDefaultResolvers({
       user(parent, args, context) {
         return parent.userId ? { __typename: 'User', id: parent.userId } : null;
       },
+      account(parent, args, context) {
+        return parent.accountId ? { __typename: 'Account', id: parent.accountId } : null;
+      },
       async car(parent, args, context) {
         const { car, carId } = parent || {};
 
         if (!car && carId) {
-          return context.gateways.carGw.get(carId).then((item) => context.cores.carCore.processItemOnOut(item));
+          return context.gateways.carGw.get(carId);
         }
 
         return car ?? null;
-      },
-      async role(parent, args, context) {
-        const { role, roleId } = parent || {};
-
-        if (!role && roleId) {
-          return context.gateways.carRoleGw.get(roleId);
-        }
-
-        return role ?? null;
       },
     },
   },

@@ -175,6 +175,8 @@ const typeDefs = `#graphql
     remainingInTankBefore: Float
     "Fuel grade/type: Regular, Premium, Diesel, etc. (expenseType=1 only)"
     fuelGrade: String
+    "Which tank was refueled: main, addl (expenseType=1 only)"
+    tankType: String
     
     # ==========================================================================
     # Audit fields
@@ -307,6 +309,8 @@ const typeDefs = `#graphql
     isFullTank: Boolean
     remainingInTankBefore: Float
     fuelGrade: String
+    "Which tank was refueled: main, addl (expenseType=1 only, defaults to 'main')"
+    tankType: String
     
     status: Int
 
@@ -338,6 +342,8 @@ const typeDefs = `#graphql
     pointType: [String]
     isFullTank: Boolean
     fuelGrade: [String]
+    "Filter by tank type: main, addl"
+    tankType: [String]
     whenDoneFrom: String
     whenDoneTo: String
     

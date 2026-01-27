@@ -281,6 +281,8 @@ export const FIELDS = {
   IS_FULL_TANK: 'is_full_tank',
   REMAINING_IN_TANK_BEFORE: 'remaining_in_tank_before',
   FUEL_GRADE: 'fuel_grade',
+  TANK_TYPE: 'tank_type',
+  REMAINING_IN_TANK_AFTER: 'remaining_in_tank_after',
 
   // ---------------------------------------------------------------------------
   // Entity Attachment Fields
@@ -508,6 +510,24 @@ export const FIELDS = {
   WEATHER_UV_INDEX: 'weather_uv_index',
   WEATHER_PROVIDER: 'weather_provider',
   WEATHER_FETCHED_AT: 'weather_fetched_at',
+
+  // ---------------------------------------------------------------------------
+  // Car Fields - New additions
+  // ---------------------------------------------------------------------------
+  DRIVE_TYPE: 'drive_type',
+  LICENSE_PLATE: 'license_plate',
+
+  // Main tank fields
+  MAIN_TANK_FUEL_TYPE: 'main_tank_fuel_type',
+  MAIN_TANK_VOLUME: 'main_tank_volume',
+  MAIN_TANK_VOLUME_ENTERED_IN: 'main_tank_volume_entered_in',
+  MAIN_TANK_DEFAULT_GRADE: 'main_tank_default_grade',
+
+  // Additional tank fields
+  ADDL_TANK_FUEL_TYPE: 'addl_tank_fuel_type',
+  ADDL_TANK_VOLUME: 'addl_tank_volume',
+  ADDL_TANK_VOLUME_ENTERED_IN: 'addl_tank_volume_entered_in',
+  ADDL_TANK_DEFAULT_GRADE: 'addl_tank_default_grade',
 };
 
 // =============================================================================
@@ -670,12 +690,7 @@ export const ENTITY_TYPES = {
   REVENUE: 5,
 };
 
-// =============================================================================
-// USER CAR ROLES
-// =============================================================================
-
-export const USER_CAR_ROLES = {
-  OWNER: 1,
-  EDITOR: 2,
-  VIEWER: 3,
+export const TANK_TYPES = {
+  MAIN: 'main',
+  ADDITIONAL: 'addl',
 };

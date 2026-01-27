@@ -124,6 +124,7 @@ class ReportExpenseSummaryGw extends BaseGateway {
 
       // Fuel
       totalVolumeLiters: fuelTotals.totalVolumeLiters,
+      consumableVolumeLiters: fuelTotals.consumableVolumeLiters,
       refuelsCount: fuelTotals.refuelsCount,
 
       // Mileage
@@ -225,27 +226,43 @@ class ReportExpenseSummaryGw extends BaseGateway {
   }
 
   /**
-   * Get fuel totals (all refuels regardless of currency)
-   */
-  private async getFuelTotals(params: GetDataParams): Promise<{ totalVolumeLiters: number; refuelsCount: number }> {
+ * Get fuel totals (all refuels regardless of currency)
+ * Returns both total volume and consumable volume (excluding first refuel per car)
+ */
+  private async getFuelTotals(params: GetDataParams): Promise<{
+    totalVolumeLiters: number;
+    consumableVolumeLiters: number;
+    refuelsCount: number;
+  }> {
     const schema = config.dbSchema;
     const [whereClause, bindings] = this.buildBaseWhereClause(params);
 
     const sql = `
-      SELECT
-        COALESCE(SUM(r.${FIELDS.REFUEL_VOLUME}), 0) AS total_volume_liters,
-        COUNT(*) AS refuels_count
+    WITH ranked_refuels AS (
+      SELECT 
+        r.${FIELDS.REFUEL_VOLUME} AS volume,
+        ROW_NUMBER() OVER (
+          PARTITION BY eb.${FIELDS.CAR_ID} 
+          ORDER BY eb.${FIELDS.ODOMETER} ASC, eb.${FIELDS.WHEN_DONE} ASC
+        ) AS rn
       FROM ${schema}.${TABLES.EXPENSE_BASES} eb
       INNER JOIN ${schema}.${TABLES.REFUELS} r ON r.${FIELDS.ID} = eb.${FIELDS.ID}
       ${whereClause}
         AND eb.${FIELDS.EXPENSE_TYPE} = ${EXPENSE_TYPES.REFUEL}
-    `;
+    )
+    SELECT
+      COALESCE(SUM(volume), 0) AS total_volume_liters,
+      COALESCE(SUM(CASE WHEN rn > 1 THEN volume ELSE 0 END), 0) AS consumable_volume_liters,
+      COUNT(*) AS refuels_count
+    FROM ranked_refuels
+  `;
 
     const result = await this.getDb().runRawQuery(sql, bindings);
     const row = result?.rows?.[0] || {};
 
     return {
       totalVolumeLiters: this.parseFloat(row.total_volume_liters),
+      consumableVolumeLiters: this.parseFloat(row.consumable_volume_liters),
       refuelsCount: this.parseInt(row.refuels_count),
     };
   }

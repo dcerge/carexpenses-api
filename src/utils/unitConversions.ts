@@ -111,6 +111,39 @@ export function fromMetricVolume(value: number | null | undefined, unit: string)
 // =============================================================================
 
 /**
+ * Derive a sensible consumption unit based on distance and volume units.
+ * Used when no explicit consumption preference is available (e.g., for car units).
+ *
+ * @param distanceUnit Distance unit: 'km' or 'mi'
+ * @param volumeUnit Volume unit: 'l', 'gal-us', or 'gal-uk'
+ * @returns Appropriate consumption unit string
+ */
+export function deriveConsumptionUnit(distanceUnit: string, volumeUnit: string): string {
+  if (distanceUnit === 'mi') {
+    // Miles-based systems
+    switch (volumeUnit) {
+      case 'gal-us':
+        return 'mpg-us'; // US: miles per US gallon
+      case 'gal-uk':
+        return 'mpg-uk'; // UK: miles per UK gallon
+      case 'l':
+      default:
+        return 'mi-l'; // Hybrid: miles per liter
+    }
+  }
+
+  // Kilometers-based systems
+  switch (volumeUnit) {
+    case 'gal-us':
+    case 'gal-uk':
+      return 'km-l'; // Unusual combo, use km per liter
+    case 'l':
+    default:
+      return 'l100km'; // Standard metric: liters per 100 km
+  }
+}
+
+/**
  * Calculate fuel consumption in user's preferred unit
  * @param distanceKm Distance in kilometers (metric)
  * @param volumeLiters Volume in liters (metric)

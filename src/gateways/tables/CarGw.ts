@@ -42,6 +42,7 @@ class CarGw extends BaseGateway {
 
   async onListFilter(query: any, filterParams: any) {
     const {
+      id,
       accountId,
       userId,
       label,
@@ -57,6 +58,10 @@ class CarGw extends BaseGateway {
     } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
+
+    if (id) {
+      query.whereIn(FIELDS.ID, castArray(id));
+    }
 
     if (hasNoUploadedFileId) {
       query.whereNull(FIELDS.UPLOADED_FILE_ID);
