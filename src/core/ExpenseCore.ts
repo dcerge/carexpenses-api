@@ -790,6 +790,7 @@ class ExpenseCore extends AppCore {
 
       const previousRefuel = await this.findPreviousRecord(
         merged.carId,
+        merged.expenseType,
         merged.whenDone,
         merged.id,
         accountId,
