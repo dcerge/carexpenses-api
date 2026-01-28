@@ -1,3 +1,4 @@
+// ./src/core/ReportCore.ts
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 
@@ -5,7 +6,20 @@ import { BaseCorePropsInterface, BaseCoreActionsInterface } from '@sdflc/backend
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/reportValidators';
-import { fromMetricDistanceRounded, fromMetricVolume, calculateConsumption } from '../utils/unitConversions';
+import {
+  fromMetricDistanceRounded,
+  fromMetricVolume,
+  calculateConsumption,
+} from '../utils/unitConversions';
+import {
+  calculateConsumptionFromData,
+  FuelTypeConsumption,
+  ConsumptionCalculationResult,
+  isElectricFuelType,
+  isHydrogenFuelType,
+  getConsumptionUnitLabel,
+  getFuelVolumeUnitLabel,
+} from '../utils/consumptionCalculator';
 import {
   ExpenseSummaryRawData,
   CurrencyAmountRaw,
@@ -84,8 +98,25 @@ class ReportCore extends AppCore {
           dateTo,
         });
 
-        // 5. Build and return the report
-        const report = this.buildReport(rawData, dateFrom, dateTo, userProfile);
+        // 5. Fetch consumption data and calculate
+        const [consumptionDataPoints, carTankConfigs] = await Promise.all([
+          this.getGateways().reportExpenseSummaryGw.getConsumptionDataPoints({
+            accountId,
+            carIds,
+            tagIds: tagId || [],
+            dateFrom,
+            dateTo,
+          }),
+          this.getGateways().reportExpenseSummaryGw.getCarTankConfigs({ accountId, carIds }),
+        ]);
+
+        const consumptionResult = calculateConsumptionFromData({
+          dataPoints: consumptionDataPoints,
+          carConfigs: carTankConfigs,
+        });
+
+        // 6. Build and return the report
+        const report = this.buildReport(rawData, dateFrom, dateTo, userProfile, consumptionResult);
 
         return this.success(report);
       },
@@ -113,7 +144,7 @@ class ReportCore extends AppCore {
 
         // 1. Get user preferences
         const userProfile = await this.getCurrentUserProfile();
-        const { distanceIn, volumeIn, homeCurrency } = userProfile;
+        const { distanceIn, volumeIn, consumptionIn, homeCurrency } = userProfile;
 
         // 2. Resolve car IDs (all if not specified)
         let carIds: string[] = [];
@@ -129,21 +160,80 @@ class ReportCore extends AppCore {
           return this.success(this.buildEmptyYearlyReport(year, userProfile));
         }
 
-        // 4. Fetch raw data from gateway
-        const rawData: YearlyReportRawData = await this.getGateways().reportYearlyGw.getData({
-          accountId,
-          carIds,
-          year,
+        // 4. Fetch raw data and consumption data in parallel
+        const [rawData, yearlyConsumptionDataPoints, carTankConfigs] = await Promise.all([
+          this.getGateways().reportYearlyGw.getData({ accountId, carIds, year }),
+          this.getGateways().reportYearlyGw.getYearlyConsumptionDataPoints({ accountId, carIds, year }),
+          this.getGateways().reportYearlyGw.getCarTankConfigs({ accountId, carIds }),
+        ]);
+
+        // 5. Calculate annual consumption
+        const annualConsumption = calculateConsumptionFromData({
+          dataPoints: yearlyConsumptionDataPoints,
+          carConfigs: carTankConfigs,
         });
 
-        // 5. Build and return the report
-        const report = this.buildYearlyReport(rawData, userProfile);
+        // 6. Calculate monthly consumption for each month
+        const monthlyConsumptions = await this.calculateMonthlyConsumptions(
+          accountId || '',
+          carIds,
+          year,
+          carTankConfigs,
+        );
+
+        // 7. Build and return the report
+        const report = this.buildYearlyReport(
+          rawData,
+          userProfile,
+          annualConsumption,
+          monthlyConsumptions,
+        );
 
         return this.success(report);
       },
       hasTransaction: false,
       doingWhat: 'generating yearly report',
     });
+  }
+
+  /**
+   * Calculate consumption for each month of the year
+   */
+  private async calculateMonthlyConsumptions(
+    accountId: string,
+    carIds: string[],
+    year: number,
+    carTankConfigs: any[],
+  ): Promise<Map<number, ConsumptionCalculationResult>> {
+    const monthlyConsumptions = new Map<number, ConsumptionCalculationResult>();
+
+    // Fetch data for all 12 months in parallel
+    const monthPromises: any[] = [];
+    for (let month = 1; month <= 12; month++) {
+      monthPromises.push(
+        this.getGateways().reportYearlyGw.getMonthlyConsumptionDataPoints({
+          accountId,
+          carIds,
+          year,
+          month,
+        }).then(dataPoints => ({ month, dataPoints }))
+      );
+    }
+
+    const monthlyDataResults = await Promise.all(monthPromises);
+
+    // Calculate consumption for each month
+    for (const { month, dataPoints } of monthlyDataResults) {
+      if (dataPoints.length > 0) {
+        const consumption = calculateConsumptionFromData({
+          dataPoints,
+          carConfigs: carTankConfigs,
+        });
+        monthlyConsumptions.set(month, consumption);
+      }
+    }
+
+    return monthlyConsumptions;
   }
 
   // ===========================================================================
@@ -155,9 +245,11 @@ class ReportCore extends AppCore {
    */
   private buildYearlyReport(
     rawData: YearlyReportRawData,
-    userProfile: { distanceIn: string; volumeIn: string; homeCurrency: string },
+    userProfile: UserProfile,
+    annualConsumption: ConsumptionCalculationResult,
+    monthlyConsumptions: Map<number, ConsumptionCalculationResult>,
   ): any {
-    const { distanceIn, volumeIn, homeCurrency } = userProfile;
+    const { distanceIn, volumeIn, consumptionIn, homeCurrency } = userProfile;
 
     // Create a map of existing month data for quick lookup
     const monthDataMap = new Map<number, MonthlyBreakdownRaw>();
@@ -188,10 +280,11 @@ class ReportCore extends AppCore {
 
     for (let month = 1; month <= 12; month++) {
       const monthData = monthDataMap.get(month);
+      const monthConsumption = monthlyConsumptions.get(month);
 
       if (monthData) {
-        // Calculate mileage for this month
-        const monthMileageKm = this.calculateMileageKm(monthData.startMileageKm, monthData.endMileageKm);
+        // Use the pre-calculated totalMileageKm from gateway
+        const monthMileageKm = monthData.totalMileageKm;
         const monthMileage = fromMetricDistanceRounded(monthMileageKm, distanceIn);
 
         // Convert fuel volume to user's unit
@@ -201,6 +294,9 @@ class ReportCore extends AppCore {
         const foreignRefuels = this.transformCurrencyAmounts(monthData.foreignRefuels);
         const foreignExpenses = this.transformCurrencyAmounts(monthData.foreignExpenses);
         const foreignCurrencyTotals = this.transformCurrencyAmounts(monthData.foreignCurrencyTotals);
+
+        // Build consumption data for this month
+        const monthConsumptionData = this.buildConsumptionOutput(monthConsumption, userProfile);
 
         months.push({
           month,
@@ -217,6 +313,8 @@ class ReportCore extends AppCore {
           mileage: monthMileage,
           refuelsCount: monthData.refuelsCount,
           expensesCount: monthData.expensesCount,
+          // NEW: Consumption data
+          consumption: monthConsumptionData,
         });
 
         // Accumulate HC totals
@@ -267,6 +365,7 @@ class ReportCore extends AppCore {
           mileage: null,
           refuelsCount: 0,
           expensesCount: 0,
+          consumption: null,
         });
       }
     }
@@ -292,6 +391,9 @@ class ReportCore extends AppCore {
     // Calculate total foreign records count
     const totalForeignRecordsCount = foreignCurrencyTotals.reduce((sum, item) => sum + item.recordsCount, 0);
 
+    // Build annual consumption data
+    const annualConsumptionData = this.buildConsumptionOutput(annualConsumption, userProfile);
+
     return {
       year: rawData.year,
 
@@ -314,12 +416,16 @@ class ReportCore extends AppCore {
       totalRefuelsCount,
       totalExpensesCount,
 
+      // NEW: Annual consumption
+      consumption: annualConsumptionData,
+
       // Monthly breakdown
       months,
 
       // User preferences
       distanceUnit: distanceIn,
       volumeUnit: volumeIn,
+      consumptionUnit: consumptionIn,
       homeCurrency,
       vehiclesCount: rawData.vehiclesCount,
     };
@@ -330,7 +436,7 @@ class ReportCore extends AppCore {
    */
   private buildEmptyYearlyReport(
     year: number,
-    userProfile: { distanceIn: string; volumeIn: string; homeCurrency: string },
+    userProfile: UserProfile,
   ): any {
     // Build 12 empty months
     const months: any[] = [];
@@ -350,6 +456,7 @@ class ReportCore extends AppCore {
         mileage: null,
         refuelsCount: 0,
         expensesCount: 0,
+        consumption: null,
       });
     }
 
@@ -372,10 +479,13 @@ class ReportCore extends AppCore {
       totalRefuelsCount: 0,
       totalExpensesCount: 0,
 
+      consumption: null,
+
       months,
 
       distanceUnit: userProfile.distanceIn,
       volumeUnit: userProfile.volumeIn,
+      consumptionUnit: userProfile.consumptionIn,
       homeCurrency: userProfile.homeCurrency,
       vehiclesCount: 0,
     };
@@ -405,26 +515,21 @@ class ReportCore extends AppCore {
   /**
    * Build the complete expense summary report
    */
-  private buildReport(rawData: ExpenseSummaryRawData, dateFrom: string, dateTo: string, userProfile: UserProfile): any {
+  private buildReport(
+    rawData: ExpenseSummaryRawData,
+    dateFrom: string,
+    dateTo: string,
+    userProfile: UserProfile,
+    consumptionResult: ConsumptionCalculationResult,
+  ): any {
     const { distanceIn, volumeIn, consumptionIn, homeCurrency } = userProfile;
 
     // Calculate period days
     const periodDays = this.calculatePeriodDays(dateFrom, dateTo);
 
-    // Calculate mileage in user's unit
-    const mileageKm = this.calculateMileageKm(rawData.minOdometerKm, rawData.maxOdometerKm);
+    // Use pre-calculated totalMileageKm from gateway (correctly handles multiple vehicles)
+    const mileageKm = rawData.totalMileageKm;
     const mileage = fromMetricDistanceRounded(mileageKm, distanceIn);
-
-    // Calculate consumption
-    const consumption = calculateConsumption(mileageKm, rawData.consumableVolumeLiters, consumptionIn);
-
-    console.log('==== WE ARE HERE', {
-      consumption,
-      mileageKm,
-      consumableVolumeLiters: rawData.consumableVolumeLiters,
-      totalVolumeLiters: rawData.totalVolumeLiters,
-      consumptionIn
-    })
 
     // Calculate fuel volume in user's unit
     const fuelPurchased = fromMetricVolume(rawData.totalVolumeLiters, volumeIn);
@@ -441,6 +546,9 @@ class ReportCore extends AppCore {
 
     // Calculate foreign records count
     const totalForeignRecordsCount = this.sumForeignRecordsCount(rawData.foreignCurrencyTotals);
+
+    // Build consumption output
+    const consumptionData = this.buildConsumptionOutput(consumptionResult, userProfile);
 
     return {
       // Period info
@@ -490,8 +598,14 @@ class ReportCore extends AppCore {
       mileage,
       avgMileagePerDay: this.roundToTwoDecimals(this.safeDivide(mileage, periodDays)),
 
-      // Efficiency metrics
-      consumption: consumption != null ? this.roundToTwoDecimals(consumption) : null,
+      // Consumption metrics (NEW - grouped by fuel type)
+      consumption: consumptionData,
+
+      // Legacy: Simple consumption (for backward compatibility, uses first fuel type)
+      consumptionValue: consumptionData?.byFuelType?.[0]?.consumption ?? null,
+      consumptionConfidence: consumptionData?.byFuelType?.[0]?.confidence ?? null,
+
+      // Cost efficiency
       costPerDistanceHc: costPerDistanceHc != null ? this.roundToTwoDecimals(costPerDistanceHc) : null,
 
       // Counts
@@ -516,7 +630,7 @@ class ReportCore extends AppCore {
   private buildEmptyReport(
     dateFrom: string,
     dateTo: string,
-    userProfile: { distanceIn: string; volumeIn: string; consumptionIn: string; homeCurrency: string },
+    userProfile: UserProfile,
   ): any {
     const periodDays = this.calculatePeriodDays(dateFrom, dateTo);
 
@@ -561,6 +675,9 @@ class ReportCore extends AppCore {
       avgMileagePerDay: null,
 
       consumption: null,
+      consumptionValue: null,
+      consumptionConfidence: null,
+
       costPerDistanceHc: null,
 
       totalRecordsCount: 0,
@@ -574,6 +691,129 @@ class ReportCore extends AppCore {
       consumptionUnit: userProfile.consumptionIn,
       homeCurrency: userProfile.homeCurrency,
     };
+  }
+
+  // ===========================================================================
+  // Consumption Output Helpers
+  // ===========================================================================
+
+  /**
+   * Build consumption output structure from calculation result
+   * Converts to user's preferred units and formats for API response
+   */
+  private buildConsumptionOutput(
+    result: ConsumptionCalculationResult | null | undefined,
+    userProfile: UserProfile,
+  ): any {
+    if (!result || result.byFuelType.length === 0) {
+      return null;
+    }
+
+    const { distanceIn, volumeIn, consumptionIn } = userProfile;
+
+    const byFuelType = result.byFuelType.map((ft) => {
+      // Convert consumption to user's preferred unit
+      const consumption = this.convertConsumption(
+        ft.consumptionPer100Km,
+        ft.distanceKm,
+        ft.fuelConsumedLiters,
+        ft.fuelType,
+        consumptionIn,
+      );
+
+      // Convert distance to user's unit
+      const distance = fromMetricDistanceRounded(ft.distanceKm, distanceIn);
+
+      // Convert fuel to user's unit (or keep as kWh for electric)
+      const fuelUsed = this.convertFuelVolume(ft.fuelConsumedLiters, ft.fuelType, volumeIn);
+
+      // Get appropriate unit labels
+      const consumptionUnitLabel = getConsumptionUnitLabel(ft.fuelType, consumptionIn);
+      const fuelUnitLabel = getFuelVolumeUnitLabel(ft.fuelType, volumeIn);
+
+      return {
+        fuelType: ft.fuelType,
+        consumption: consumption != null ? this.roundToTwoDecimals(consumption) : null,
+        consumptionUnit: consumptionUnitLabel,
+        fuelUsed: fuelUsed != null ? this.roundToTwoDecimals(fuelUsed) : null,
+        fuelUnit: fuelUnitLabel,
+        distance,
+        distanceUnit: distanceIn,
+        confidence: ft.confidence,
+        confidenceReasons: ft.confidenceReasons,
+        vehiclesCount: ft.vehiclesCount,
+        refuelsCount: ft.refuelsCount,
+        dataPointsCount: ft.dataPointsCount,
+      };
+    });
+
+    // Total distance across all fuel types
+    const totalDistance = fromMetricDistanceRounded(result.totalDistanceKm, distanceIn);
+
+    return {
+      byFuelType,
+      totalDistance,
+      distanceUnit: distanceIn,
+      totalVehiclesCount: result.totalVehiclesCount,
+    };
+  }
+
+  /**
+   * Convert consumption from L/100km to user's preferred unit
+   * Handles electric vehicles specially
+   */
+  private convertConsumption(
+    consumptionPer100Km: number | null,
+    distanceKm: number,
+    fuelLiters: number,
+    fuelType: string,
+    consumptionUnit: string,
+  ): number | null {
+    if (consumptionPer100Km === null || distanceKm <= 0 || fuelLiters <= 0) {
+      return null;
+    }
+
+    // For electric and hydrogen, the stored "liters" are actually kWh or kg
+    // So we use the same calculation but the unit interpretation differs
+    if (isElectricFuelType(fuelType) || isHydrogenFuelType(fuelType)) {
+      // Electric: kWh/100km or mi/kWh
+      // Hydrogen: kg/100km or mi/kg
+      switch (consumptionUnit) {
+        case 'mpg-us':
+        case 'mpg-uk':
+          // Convert to mi/kWh or mi/kg (higher is better)
+          const milesPerKm = 1 / 1.60934;
+          return (distanceKm * milesPerKm) / fuelLiters;
+        case 'l100km':
+        default:
+          // kWh/100km or kg/100km
+          return consumptionPer100Km;
+      }
+    }
+
+    // For liquid fuels, use standard conversion
+    return calculateConsumption(distanceKm, fuelLiters, consumptionUnit);
+  }
+
+  /**
+   * Convert fuel volume from liters to user's preferred unit
+   * For electric vehicles, keeps as kWh
+   */
+  private convertFuelVolume(
+    liters: number,
+    fuelType: string,
+    volumeUnit: string,
+  ): number | null {
+    if (liters <= 0) {
+      return null;
+    }
+
+    // Electric and hydrogen store energy/mass directly, not volume
+    if (isElectricFuelType(fuelType) || isHydrogenFuelType(fuelType)) {
+      return liters; // Already in kWh or kg
+    }
+
+    return fromMetricVolume(liters, volumeUnit);
   }
 
   // ===========================================================================
@@ -636,16 +876,6 @@ class ReportCore extends AppCore {
     const from = dayjs.utc(dateFrom);
     const to = dayjs.utc(dateTo);
     return to.diff(from, 'day') + 1;
-  }
-
-  /**
-   * Calculate mileage from min/max odometer in km
-   */
-  private calculateMileageKm(minKm: number | null, maxKm: number | null): number | null {
-    if (minKm === null || maxKm === null) {
-      return null;
-    }
-    return maxKm - minKm;
   }
 
   /**

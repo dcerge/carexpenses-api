@@ -46,6 +46,7 @@ export interface ExpenseSummaryRawData {
   // Mileage (all records)
   minOdometerKm: number | null;
   maxOdometerKm: number | null;
+  totalMileageKm: number | null;
 
   // Counts
   expensesCount: number;
@@ -95,6 +96,7 @@ export interface MonthlyBreakdownRaw {
   refuelsVolumeLiters: number;
   startMileageKm: number | null;
   endMileageKm: number | null;
+  totalMileageKm: number | null;
 
   // Foreign currency breakdowns
   foreignRefuels: CurrencyAmountRaw[];

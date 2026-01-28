@@ -32,10 +32,6 @@ class ExpenseBaseGw extends BaseGateway {
           name: FIELDS.WHEN_DONE,
           order: SORT_ORDER.DESC,
         },
-        {
-          name: FIELDS.ODOMETER,
-          order: SORT_ORDER.DESC,
-        },
       ],
     });
   }

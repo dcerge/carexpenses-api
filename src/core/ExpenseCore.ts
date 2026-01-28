@@ -19,10 +19,12 @@ import {
 } from '../utils';
 import {
   toMetricDistance,
-  fromMetricDistance,
+  fromMetricDistanceRounded,
   toMetricVolume,
   fromMetricVolume,
   calculateConsumption,
+  isLiquidUnit,
+  getConsumptionUnitForFuelType,
 } from '../utils/unitConversions';
 
 dayjs.extend(utc);
@@ -272,27 +274,44 @@ class ExpenseCore extends AppCore {
   }
 
   /**
-   * Find the immediately previous refuel for a car (by whenDone) to calculate trip meter.
-   * Returns the previous refuel regardless of whether it has an odometer value.
+   * Find the immediately previous record for a car by expenseType.
+   * For refuels, also filters by tankType.
+   * 
+   * @param carId - The car ID
+   * @param expenseType - The expense type to filter by
+   * @param currentWhenDone - The current record's timestamp
+   * @param currentId - The current record's ID (to exclude from results)
+   * @param accountId - The account ID for security filtering
+   * @param tankType - For refuels only: the tank type to filter by ('main' or 'addl')
    */
-  private async findPreviousRefuel(
+  private async findPreviousRecord(
     carId: string,
+    expenseType: number,
     currentWhenDone: string,
     currentId: string,
     accountId: string,
+    tankType?: string,
   ): Promise<any | null> {
-    // Fetch recent refuels up to and including currentWhenDone
-    // Sorted by whenDone DESC, so most recent comes first
-    // We get a few extra in case there are records with the same timestamp
-    const recentRefuels = await this.getGateways().expenseBaseGw.list({
+    // For refuels, we need to filter by tank type
+    let validIds: Set<string> | null = null;
+
+    if (expenseType === EXPENSE_TYPES.REFUEL && tankType) {
+      const refuelRecords = await this.getGateways().refuelGw.list({
+        filter: { tankType },
+      });
+      validIds = new Set(refuelRecords.map((r: any) => r.id));
+    }
+
+    // Fetch recent records up to and including currentWhenDone
+    const recentRecords = await this.getGateways().expenseBaseGw.list({
       filter: {
         carId,
         accountId,
-        expenseType: EXPENSE_TYPES.REFUEL,
+        expenseType,
         whenDoneTo: currentWhenDone,
       },
       params: {
-        pagination: { pageSize: 10 },
+        pagination: { pageSize: 20 },
         sortBy: [
           { name: 'whenDone', order: 'DESC' },
           { name: 'odometer', order: 'DESC' },
@@ -300,15 +319,57 @@ class ExpenseCore extends AppCore {
       },
     });
 
-    // Find the first refuel that is not the current one
-    // Since sorted by whenDone DESC, the first non-current record is the previous one
-    for (const refuel of recentRefuels) {
-      if (refuel.id !== currentId) {
-        return refuel;
+    // Find the first record that is not the current one (and matches tankType for refuels)
+    for (const record of recentRecords) {
+      if (record.id !== currentId) {
+        // For refuels, check tank type match
+        if (validIds && !validIds.has(record.id)) {
+          continue;
+        }
+        return record;
       }
     }
 
     return null;
+  }
+
+  // ===========================================================================
+  // Car Data Fetching (for mileageIn)
+  // ===========================================================================
+
+  /**
+   * Batch fetch cars by IDs and return a map of carId -> car
+   */
+  private async batchFetchCars(carIds: string[]): Promise<Map<string, any>> {
+    const carMap = new Map<string, any>();
+
+    if (!carIds || carIds.length === 0) {
+      return carMap;
+    }
+
+    // Remove duplicates
+    const uniqueCarIds = [...new Set(carIds)];
+
+    const cars = await this.getGateways().carGw.list({
+      filter: { id: uniqueCarIds },
+    });
+
+    for (const car of cars) {
+      carMap.set(car.id, car);
+    }
+
+    return carMap;
+  }
+
+  /**
+   * Fetch a single car by ID
+   */
+  private async fetchCar(carId: string): Promise<any | null> {
+    if (!carId) {
+      return null;
+    }
+
+    return this.getGateways().carGw.get(carId);
   }
 
   // ===========================================================================
@@ -338,32 +399,73 @@ class ExpenseCore extends AppCore {
   }
 
   /**
-   * Process item with user profile for unit conversions
+   * Process item with user profile and car data for unit conversions.
+   *
+   * @param item - The expense item to process
+   * @param userProfile - User's profile with distance/volume preferences
+   * @param carMileageIn - The car's mileage unit ('km' or 'mi'), defaults to 'km'
+   *
+   * Conversion rules:
+   * - Odometer: Uses car's mileageIn (matches what's shown on car's dashboard)
+   * - TripMeter: Uses user's distanceIn preference (for distance calculations)
+   * - Both are rounded to whole numbers (odometers don't show decimals)
    */
-  private processItemWithProfile(item: any, userProfile: UserProfile): any {
+  private processItemWithProfile(item: any, userProfile: UserProfile, carMileageIn: string = 'km'): any {
     if (!item) return item;
 
-    // First apply standard processing
+    // First apply standard processing (date formatting)
     const processed = this.processItemOnOut(item);
 
-    // Convert distance fields from metric to user's preferred unit
-    processed.odometer = fromMetricDistance(processed.odometer, userProfile.distanceIn);
-    processed.tripMeter = fromMetricDistance(processed.tripMeter, userProfile.distanceIn);
+    // Store original metric values before conversion (needed for consumption calculation)
+    const odometerMetric = item.odometer;
+    const tripMeterMetric = item.tripMeter;
+    const refuelVolumeMetric = item.refuelVolume;
+
+    // Convert odometer from metric (km) to car's mileage unit, rounded to whole number
+    processed.odometer = fromMetricDistanceRounded(odometerMetric, carMileageIn);
+    processed.odometerDisplay = fromMetricDistanceRounded(odometerMetric, userProfile.distanceIn);
+
+    // Convert tripMeter from metric (km) to car's mileage unit, rounded to whole number
+    processed.tripMeter = fromMetricDistanceRounded(tripMeterMetric, carMileageIn);
+    processed.tripMeterDisplay = fromMetricDistanceRounded(tripMeterMetric, userProfile.distanceIn);
 
     // For refuels, convert volume and calculate consumption
     if (processed.expenseType === EXPENSE_TYPES.REFUEL) {
-      // Convert refuel volume from liters to user's preferred unit
-      processed.refuelVolume = fromMetricVolume(processed.refuelVolume, userProfile.volumeIn);
+      const volumeEnteredIn = processed.volumeEnteredIn || 'l';
 
-      // Calculate consumption only for full tank refuels
-      if (processed.isFullTank && processed.tripMeter !== null) {
-        // Use the metric values (before conversion) for consumption calculation
-        const tripMeterMetric = item.tripMeter; // Original metric value
-        const refuelVolumeMetric = item.refuelVolume // Original metric value (liters)
+      // Convert refuel volume from metric back to the original entry unit
+      processed.refuelVolume = fromMetricVolume(refuelVolumeMetric, volumeEnteredIn);
 
-        processed.consumption = calculateConsumption(tripMeterMetric, refuelVolumeMetric, userProfile.consumptionIn);
+      // For display: liquid fuels use user's preference, electric/hydrogen stay as entered
+      if (isLiquidUnit(volumeEnteredIn)) {
+        processed.refuelVolumeDisplay = fromMetricVolume(refuelVolumeMetric, userProfile.volumeIn);
+      } else {
+        // kWh and kg - no conversion, display as stored
+        processed.refuelVolumeDisplay = refuelVolumeMetric;
+      }
+
+      // Price per unit (handles all fuel types correctly now)
+      if (processed.refuelVolumeDisplay && processed.refuelVolumeDisplay > 0) {
+        processed.pricePerVolume = processed.totalPrice / processed.refuelVolumeDisplay;
+      } else {
+        processed.pricePerVolume = null;
+      }
+
+      // Calculate consumption only for full tank/charge refuels
+      if (processed.isFullTank && tripMeterMetric !== null && tripMeterMetric > 0) {
+        const effectiveConsumptionUnit = getConsumptionUnitForFuelType(
+          userProfile.consumptionIn,
+          volumeEnteredIn
+        );
+        processed.consumption = calculateConsumption(
+          tripMeterMetric,
+          refuelVolumeMetric,
+          effectiveConsumptionUnit
+        );
+        processed.consumptionUnit = effectiveConsumptionUnit;
       } else {
         processed.consumption = null;
+        processed.consumptionUnit = null;
       }
     }
 
@@ -371,21 +473,26 @@ class ExpenseCore extends AppCore {
   }
 
   /**
-   * Convert input params from user's preferred units to metric
+   * Convert input params from user's preferred units to metric.
+   *
+   * @param params - Input parameters to convert
+   * @param carMileageIn - The car's mileage unit ('km' or 'mi') for odometer conversion
    */
-  private async convertInputToMetric(params: any): Promise<any> {
-    const userProfile = await this.getCurrentUserProfile();
-
+  private async convertInputToMetric(params: any, carMileageIn: string): Promise<any> {
     const converted = { ...params };
 
-    // Convert odometer from user's unit to metric (km)
+    // Convert odometer from car's mileage unit to metric (km)
+    // This matches what the user sees on their car's dashboard
     if (converted.odometer !== undefined && converted.odometer !== null) {
-      converted.odometer = toMetricDistance(converted.odometer, userProfile.distanceIn);
+      converted.odometer = toMetricDistance(converted.odometer, carMileageIn);
     }
 
-    // Convert refuel volume from user's unit to metric (liters)
+    // Convert refuel volume from the unit it was entered in (volumeEnteredIn) to metric (liters)
+    // volumeEnteredIn tells us what unit the user used when entering the value
     if (converted.refuelVolume !== undefined && converted.refuelVolume !== null) {
-      converted.refuelVolume = toMetricVolume(converted.refuelVolume, userProfile.volumeIn);
+      const userProfile = await this.getCurrentUserProfile();
+      const volumeUnit = converted.volumeEnteredIn || userProfile.volumeIn;
+      converted.refuelVolume = toMetricVolume(converted.refuelVolume, volumeUnit);
     }
 
     return converted;
@@ -484,89 +591,46 @@ class ExpenseCore extends AppCore {
   }
 
   /**
-   * Batch calculate trip meters for a list of expense bases
-   * Groups by carId, sorts by whenDone, and calculates differences between consecutive refuels.
-   * If the previous refuel has no odometer, tripMeter is null (not calculated from earlier records).
+   * Batch calculate trip meters for a list of already-merged expense bases.
+   * Single pass through sorted array - O(n log n) sort + O(n) calculation.
+   * No database queries needed.
    */
-  private async batchCalculateTripMeters(expenseBases: any[]): Promise<Map<string, number | null>> {
+  private batchCalculateTripMeters(expenseBases: any[]): Map<string, number | null> {
     const tripMeterMap = new Map<string, number | null>();
 
     if (!expenseBases || expenseBases.length === 0) {
       return tripMeterMap;
     }
 
-    // Get unique car IDs for refuels
-    const carIds = new Set<string>();
-    const refuelIds = new Set<string>();
-
-    for (const base of expenseBases) {
-      if (base.expenseType === EXPENSE_TYPES.REFUEL) {
-        carIds.add(base.carId);
-        refuelIds.add(base.id);
-      }
-    }
-
-    if (refuelIds.size === 0) {
-      return tripMeterMap;
-    }
-
-    // Fetch all refuels for these cars to calculate trip meters efficiently
-    const { accountId } = this.getContext();
-
-    if (!accountId) {
-      return tripMeterMap;
-    }
-
-    const allRefuels = await this.getGateways().expenseBaseGw.list({
-      filter: {
-        carId: Array.from(carIds),
-        accountId,
-        expenseType: EXPENSE_TYPES.REFUEL,
-      },
-      params: {
-        sortBy: [
-          { name: 'whenDone', order: 'ASC' },
-          { name: 'odometer', order: 'ASC' },
-        ],
-      },
+    // Sort once by whenDone ASC, then odometer ASC
+    const sorted = [...expenseBases].sort((a, b) => {
+      const dateA = a.whenDone ? new Date(a.whenDone).getTime() : 0;
+      const dateB = b.whenDone ? new Date(b.whenDone).getTime() : 0;
+      if (dateA !== dateB) return dateA - dateB;
+      return (a.odometer || 0) - (b.odometer || 0);
     });
 
-    // Group refuels by carId (already sorted by whenDone ASC from query)
-    const refuelsByCarId = new Map<string, any[]>();
+    // Track last record for each group: carId + expenseType (+ tankType for refuels)
+    const lastRecordByGroup = new Map<string, any>();
 
-    for (const refuel of allRefuels) {
-      if (!refuelsByCarId.has(refuel.carId)) {
-        refuelsByCarId.set(refuel.carId, []);
+    for (const record of sorted) {
+      // Build group key
+      let groupKey = `${record.carId}:${record.expenseType}`;
+      if (record.expenseType === EXPENSE_TYPES.REFUEL) {
+        groupKey += `:${record.tankType || 'main'}`;
       }
-      refuelsByCarId.get(refuel.carId)!.push(refuel);
-    }
 
-    // Calculate trip meters for each car's refuels
-    for (const [, carRefuels] of refuelsByCarId) {
-      for (let i = 0; i < carRefuels.length; i++) {
-        const current = carRefuels[i];
+      const previous = lastRecordByGroup.get(groupKey);
 
-        // Only calculate for refuels we're returning
-        if (!refuelIds.has(current.id)) {
-          continue;
-        }
-
-        // First refuel has no previous, so tripMeter is null
-        if (i === 0) {
-          tripMeterMap.set(current.id, null);
-          continue;
-        }
-
-        const previous = carRefuels[i - 1];
-
-        // If current or previous odometer is null, tripMeter is null
-        if (current.odometer === null || previous.odometer === null) {
-          tripMeterMap.set(current.id, null);
-        } else {
-          const tripMeter = current.odometer - previous.odometer;
-          tripMeterMap.set(current.id, tripMeter > 0 ? tripMeter : null);
-        }
+      if (!previous || record.odometer === null || previous.odometer === null) {
+        tripMeterMap.set(record.id, null);
+      } else {
+        const tripMeter = record.odometer - previous.odometer;
+        tripMeterMap.set(record.id, tripMeter > 0 ? tripMeter : null);
       }
+
+      // Update last record for this group
+      lastRecordByGroup.set(groupKey, record);
     }
 
     return tripMeterMap;
@@ -679,15 +743,24 @@ class ExpenseCore extends AppCore {
     const mergedItems = await this.batchMergeExpenseData(items);
 
     // Batch calculate trip meters for efficiency
-    const tripMeterMap = await this.batchCalculateTripMeters(mergedItems);
+    const tripMeterMap = this.batchCalculateTripMeters(mergedItems);
 
-    // Apply trip meters and process items
+    // Batch fetch cars to get mileageIn for each car
+    const carIds = mergedItems.map((item) => item.carId);
+    const carMap = await this.batchFetchCars(carIds);
+
+    // Apply trip meters and process items with correct unit conversions
     return mergedItems.map((item: any) => {
       // Apply calculated trip meter if we have one and DB doesn't have it
       if (tripMeterMap.has(item.id) && (item.tripMeter === null || item.tripMeter === undefined)) {
         item.tripMeter = tripMeterMap.get(item.id);
       }
-      return this.processItemWithProfile(item, userProfile);
+
+      // Get car's mileageIn, default to 'km' if car not found
+      const car = carMap.get(item.carId);
+      const carMileageIn = car?.mileageIn || 'km';
+
+      return this.processItemWithProfile(item, userProfile, carMileageIn);
     });
   }
 
@@ -699,16 +772,29 @@ class ExpenseCore extends AppCore {
     // Security check: verify the expense belongs to the current account
     const { accountId } = this.getContext();
     if (!accountId || item.accountId !== accountId) {
-      return null; // Return null so the core returns NOT_FOUND
+      return null;
     }
 
     const userProfile = await this.getCurrentUserProfile();
 
     const [merged] = await this.batchMergeExpenseData([item]);
 
+    // Fetch car to get mileageIn
+    const car = await this.fetchCar(merged.carId);
+    const carMileageIn = car?.mileageIn || 'km';
+
     // Calculate trip meter if this is a refuel
     if (merged.expenseType === EXPENSE_TYPES.REFUEL && merged.whenDone) {
-      const previousRefuel = await this.findPreviousRefuel(merged.carId, merged.whenDone, merged.id, accountId);
+      // Get tank type for this refuel (from merged data)
+      const tankType = merged.tankType || 'main';
+
+      const previousRefuel = await this.findPreviousRecord(
+        merged.carId,
+        merged.whenDone,
+        merged.id,
+        accountId,
+        tankType
+      );
 
       // tripMeter is only calculated if both current and previous have odometer values
       if (previousRefuel && merged.odometer !== null && previousRefuel.odometer !== null) {
@@ -718,7 +804,7 @@ class ExpenseCore extends AppCore {
       }
     }
 
-    return this.processItemWithProfile(merged, userProfile);
+    return this.processItemWithProfile(merged, userProfile, carMileageIn);
   }
 
   public async afterGetMany(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
@@ -743,14 +829,23 @@ class ExpenseCore extends AppCore {
     const mergedItems = await this.batchMergeExpenseData(filteredItems);
 
     // Batch calculate trip meters for efficiency
-    const tripMeterMap = await this.batchCalculateTripMeters(mergedItems);
+    const tripMeterMap = this.batchCalculateTripMeters(mergedItems);
 
-    // Apply trip meters and process items
+    // Batch fetch cars to get mileageIn for each car
+    const carIds = mergedItems.map((item) => item.carId);
+    const carMap = await this.batchFetchCars(carIds);
+
+    // Apply trip meters and process items with correct unit conversions
     return mergedItems.map((item: any) => {
       if (tripMeterMap.has(item.id) && (item.tripMeter === null || item.tripMeter === undefined)) {
         item.tripMeter = tripMeterMap.get(item.id);
       }
-      return this.processItemWithProfile(item, userProfile);
+
+      // Get car's mileageIn, default to 'km' if car not found
+      const car = carMap.get(item.carId);
+      const carMileageIn = car?.mileageIn || 'km';
+
+      return this.processItemWithProfile(item, userProfile, carMileageIn);
     });
   }
 
@@ -759,8 +854,12 @@ class ExpenseCore extends AppCore {
 
     const { uploadedFilesIds, tags, ...restParams } = params;
 
-    // Convert input units to metric
-    const convertedParams = await this.convertInputToMetric(restParams);
+    // Fetch car to get its mileageIn for odometer conversion
+    const car = await this.fetchCar(restParams.carId);
+    const carMileageIn = car?.mileageIn || 'km';
+
+    // Convert input units to metric (odometer uses car's mileageIn, volume uses user's preference)
+    const convertedParams = await this.convertInputToMetric(restParams, carMileageIn);
 
     const baseFields = this.extractBaseFields(convertedParams);
 
@@ -792,8 +891,10 @@ class ExpenseCore extends AppCore {
 
     const userProfile = await this.getCurrentUserProfile();
 
-    // Convert input params to metric for extension table storage
-    const convertedParams = await this.convertInputToMetric(params);
+    // Get the already-converted params from beforeCreate
+    const requestId = this.getRequestId();
+    const createInfo = this.updateData.get(`create-${requestId}`);
+    const convertedParams = createInfo?.extensionParams || {};
 
     // Create extension table record based on expenseType
     for (const expenseBase of items) {
@@ -860,9 +961,6 @@ class ExpenseCore extends AppCore {
       this.getGateways().carTotalExpenseGw.clear(expenseBase.carId);
     }
 
-    const requestId = this.getRequestId();
-    const createInfo = this.updateData.get(`create-${requestId}`);
-
     if (createInfo) {
       if (Array.isArray(createInfo.uploadedFilesIds)) {
         const attachments = createInfo.uploadedFilesIds.map((uploadedFileId, idx) => {
@@ -903,7 +1001,15 @@ class ExpenseCore extends AppCore {
     // Merge and return with conversions
     const mergedItems = await this.batchMergeExpenseData(items);
 
-    return mergedItems.map((item: any) => this.processItemWithProfile(item, userProfile));
+    // Batch fetch cars to get mileageIn
+    const carIds = mergedItems.map((item) => item.carId);
+    const carMap = await this.batchFetchCars(carIds);
+
+    return mergedItems.map((item: any) => {
+      const car = carMap.get(item.carId);
+      const carMileageIn = car?.mileageIn || 'km';
+      return this.processItemWithProfile(item, userProfile, carMileageIn);
+    });
   }
 
   public async beforeUpdate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
@@ -940,8 +1046,13 @@ class ExpenseCore extends AppCore {
     // Don't allow changing accountId, userId, or expenseType
     const { accountId: _, userId: __, expenseType: ___, uploadedFilesIds, tags, ...restParams } = params;
 
-    // Convert input units to metric
-    const convertedParams = await this.convertInputToMetric(restParams);
+    // Fetch car to get its mileageIn for odometer conversion
+    const car = await this.fetchCar(expenseBase.carId);
+    const carMileageIn = car?.mileageIn || 'km';
+
+    // Convert input units to metric (odometer uses car's mileageIn, volume uses user's preference)
+    const convertedParams = await this.convertInputToMetric(restParams, carMileageIn);
+
 
     const baseFields = this.extractBaseFields(convertedParams);
 
@@ -1113,7 +1224,15 @@ class ExpenseCore extends AppCore {
     // Merge and return with conversions
     const mergedItems = await this.batchMergeExpenseData(items);
 
-    return mergedItems.map((item: any) => this.processItemWithProfile(item, userProfile));
+    // Batch fetch cars to get mileageIn
+    const carIds = mergedItems.map((item) => item.carId);
+    const carMap = await this.batchFetchCars(carIds);
+
+    return mergedItems.map((item: any) => {
+      const car = carMap.get(item.carId);
+      const carMileageIn = car?.mileageIn || 'km';
+      return this.processItemWithProfile(item, userProfile, carMileageIn);
+    });
   }
 
   public async beforeRemove(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
@@ -1167,6 +1286,10 @@ class ExpenseCore extends AppCore {
     const userProfile = await this.getCurrentUserProfile();
     const requestId = this.getRequestId();
 
+    // Batch fetch cars to get mileageIn (needed for processing removed items)
+    const carIds = items.map((item: any) => item.carId).filter(Boolean);
+    const carMap = await this.batchFetchCars(carIds);
+
     // Update stats for removed items
     for (const item of items) {
       if (!item.id) continue;
@@ -1210,7 +1333,11 @@ class ExpenseCore extends AppCore {
       this.getGateways().carTotalExpenseGw.clear(item.carId);
     }
 
-    return items.map((item: any) => this.processItemWithProfile(item, userProfile));
+    return items.map((item: any) => {
+      const car = carMap.get(item.carId);
+      const carMileageIn = car?.mileageIn || 'km';
+      return this.processItemWithProfile(item, userProfile, carMileageIn);
+    });
   }
 
   public async beforeRemoveMany(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
@@ -1271,6 +1398,10 @@ class ExpenseCore extends AppCore {
     const userProfile = await this.getCurrentUserProfile();
     const requestId = this.getRequestId();
 
+    // Batch fetch cars to get mileageIn (needed for processing removed items)
+    const carIds = items.map((item: any) => item.carId).filter(Boolean);
+    const carMap = await this.batchFetchCars(carIds);
+
     // Update stats for removed items
     for (const item of items) {
       if (!item.id) continue;
@@ -1312,7 +1443,11 @@ class ExpenseCore extends AppCore {
       this.updateData.delete(`removeMany-${requestId}-${item.id}`);
     }
 
-    return items.map((item: any) => this.processItemWithProfile(item, userProfile));
+    return items.map((item: any) => {
+      const car = carMap.get(item.carId);
+      const carMileageIn = car?.mileageIn || 'km';
+      return this.processItemWithProfile(item, userProfile, carMileageIn);
+    });
   }
 
   public async recalculateAll(args: any) {

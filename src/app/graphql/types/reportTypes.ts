@@ -27,6 +27,71 @@ const typeDefs = `#graphql
   }
 
   # =============================================================================
+  # Consumption Types
+  # =============================================================================
+
+  """
+  Consumption data for a specific fuel type.
+  Supports gasoline, diesel, electric (kWh), hydrogen (kg), and other fuel types.
+  """
+  type FuelTypeConsumption {
+    "Fuel type: gasoline, diesel, electric, lpg, cng, e85, biodiesel, hydrogen"
+    fuelType: String
+
+    "Consumption value in user's preferred unit (e.g., 8.5 for L/100km or 28 for MPG)"
+    consumption: Float
+
+    "Consumption unit label: l100km, mpg-us, mpg-uk, kWh/100km, mi/kWh, kg/100km, etc."
+    consumptionUnit: String
+
+    "Total fuel/energy used in this period"
+    fuelUsed: Float
+
+    "Unit for fuelUsed: l, gal-us, gal-uk, kWh, kg"
+    fuelUnit: String
+
+    "Distance traveled with this fuel type"
+    distance: Float
+
+    "Distance unit: km or mi"
+    distanceUnit: String
+
+    "Confidence level of the consumption calculation"
+    confidence: String
+
+    "Reasons explaining the confidence level"
+    confidenceReasons: [String]
+
+    "Number of vehicles contributing to this fuel type data"
+    vehiclesCount: Int
+
+    "Number of refuel records used in calculation"
+    refuelsCount: Int
+
+    "Total data points (refuels + checkpoints + expenses with odometer) used"
+    dataPointsCount: Int
+  }
+
+  """
+  Complete consumption data with breakdown by fuel type.
+  Allows tracking consumption for vehicles with different fuel types
+  (e.g., gasoline car + electric car, or dual-fuel vehicles).
+  """
+  type ConsumptionData {
+    "Consumption breakdown by fuel type"
+    byFuelType: [FuelTypeConsumption]
+
+    "Total distance across all fuel types"
+    totalDistance: Float
+
+    "Distance unit: km or mi"
+    distanceUnit: String
+
+    "Total number of vehicles included in consumption calculation"
+    totalVehiclesCount: Int
+  }
+
+  # =============================================================================
   # Category Breakdown
   # =============================================================================
 
@@ -141,9 +206,29 @@ const typeDefs = `#graphql
     avgMileagePerDay: Float
 
     # =========================================================================
+    # Consumption Metrics (NEW - with fuel type breakdown)
+    # =========================================================================
+    """
+    Detailed consumption data grouped by fuel type.
+    Includes confidence levels and supporting statistics.
+    """
+    consumption: ConsumptionData
+
+    """
+    @deprecated Use consumption.byFuelType[0].consumption instead.
+    Legacy field for backward compatibility - returns first fuel type's consumption.
+    """
+    consumptionValue: Float
+
+    """
+    @deprecated Use consumption.byFuelType[0].confidence instead.
+    Legacy field for backward compatibility - returns first fuel type's confidence.
+    """
+    consumptionConfidence: String
+
+    # =========================================================================
     # Efficiency Metrics (based on HC costs)
     # =========================================================================
-    consumption: Float
     costPerDistanceHc: Float
 
     # =========================================================================
@@ -204,6 +289,15 @@ const typeDefs = `#graphql
     mileage: Float
     refuelsCount: Int
     expensesCount: Int
+
+    # =========================================================================
+    # Consumption Metrics (NEW)
+    # =========================================================================
+    """
+    Monthly consumption data grouped by fuel type.
+    May be null if no consumption data available for this month.
+    """
+    consumption: ConsumptionData
   }
 
   type YearlyReport {
@@ -235,6 +329,15 @@ const typeDefs = `#graphql
     totalExpensesCount: Int
 
     # =========================================================================
+    # Annual Consumption Metrics (NEW)
+    # =========================================================================
+    """
+    Annual consumption data grouped by fuel type.
+    Provides yearly average consumption with confidence levels.
+    """
+    consumption: ConsumptionData
+
+    # =========================================================================
     # Monthly Breakdown (12 months)
     # =========================================================================
     months: [MonthlyBreakdown]
@@ -244,6 +347,7 @@ const typeDefs = `#graphql
     # =========================================================================
     distanceUnit: String
     volumeUnit: String
+    consumptionUnit: String
     homeCurrency: String
     vehiclesCount: Int
   }

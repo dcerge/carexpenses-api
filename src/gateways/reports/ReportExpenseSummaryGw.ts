@@ -12,6 +12,8 @@ import {
   KindBreakdownRaw,
 } from '../../boundary';
 
+import { ConsumptionDataPoint, CarTankConfig } from '../../utils/consumptionCalculator';
+
 // =============================================================================
 // Gateway Class
 // =============================================================================
@@ -127,9 +129,10 @@ class ReportExpenseSummaryGw extends BaseGateway {
       consumableVolumeLiters: fuelTotals.consumableVolumeLiters,
       refuelsCount: fuelTotals.refuelsCount,
 
-      // Mileage
+      // Mileage (now correctly calculated per vehicle then summed)
       minOdometerKm: mileageStats.minOdometerKm,
       maxOdometerKm: mileageStats.maxOdometerKm,
+      totalMileageKm: mileageStats.totalMileageKm,
 
       // Counts
       expensesCount: recordCounts.expensesCount,
@@ -226,9 +229,9 @@ class ReportExpenseSummaryGw extends BaseGateway {
   }
 
   /**
- * Get fuel totals (all refuels regardless of currency)
- * Returns both total volume and consumable volume (excluding first refuel per car)
- */
+   * Get fuel totals (all refuels regardless of currency)
+   * Returns both total volume and consumable volume (excluding first refuel per car)
+   */
   private async getFuelTotals(params: GetDataParams): Promise<{
     totalVolumeLiters: number;
     consumableVolumeLiters: number;
@@ -268,21 +271,35 @@ class ReportExpenseSummaryGw extends BaseGateway {
   }
 
   /**
-   * Get mileage statistics (min/max odometer)
+   * Get mileage statistics (min/max odometer and total mileage)
+   * FIXED: Calculates mileage per vehicle first, then sums for accurate multi-vehicle totals
    */
   private async getMileageStats(
     params: GetDataParams,
-  ): Promise<{ minOdometerKm: number | null; maxOdometerKm: number | null }> {
+  ): Promise<{
+    minOdometerKm: number | null;
+    maxOdometerKm: number | null;
+    totalMileageKm: number | null;
+  }> {
     const schema = config.dbSchema;
     const [whereClause, bindings] = this.buildBaseWhereClause(params);
 
     const sql = `
+      WITH per_vehicle_stats AS (
+        SELECT
+          eb.${FIELDS.CAR_ID},
+          MIN(eb.${FIELDS.ODOMETER}) AS min_odo,
+          MAX(eb.${FIELDS.ODOMETER}) AS max_odo
+        FROM ${schema}.${TABLES.EXPENSE_BASES} eb
+        ${whereClause}
+          AND eb.${FIELDS.ODOMETER} IS NOT NULL
+        GROUP BY eb.${FIELDS.CAR_ID}
+      )
       SELECT
-        MIN(eb.${FIELDS.ODOMETER}) AS min_odometer_km,
-        MAX(eb.${FIELDS.ODOMETER}) AS max_odometer_km
-      FROM ${schema}.${TABLES.EXPENSE_BASES} eb
-      ${whereClause}
-        AND eb.${FIELDS.ODOMETER} IS NOT NULL
+        MIN(min_odo) AS min_odometer_km,
+        MAX(max_odo) AS max_odometer_km,
+        SUM(max_odo - min_odo) AS total_mileage_km
+      FROM per_vehicle_stats
     `;
 
     const result = await this.getDb().runRawQuery(sql, bindings);
@@ -291,6 +308,7 @@ class ReportExpenseSummaryGw extends BaseGateway {
     return {
       minOdometerKm: row.min_odometer_km != null ? this.parseFloat(row.min_odometer_km) : null,
       maxOdometerKm: row.max_odometer_km != null ? this.parseFloat(row.max_odometer_km) : null,
+      totalMileageKm: row.total_mileage_km != null ? this.parseFloat(row.total_mileage_km) : null,
     };
   }
 
@@ -539,6 +557,94 @@ class ReportExpenseSummaryGw extends BaseGateway {
       recordsCount: this.parseInt(row.records_count),
     }));
   }
+
+  // ===========================================================================
+  // Consumption Data Methods
+  // ===========================================================================
+
+  /**
+   * Get data points needed for consumption calculation
+   * Includes all expense_bases records with odometer, plus refuel-specific data
+   */
+  async getConsumptionDataPoints(params: GetDataParams): Promise<ConsumptionDataPoint[]> {
+    const schema = config.dbSchema;
+    const [whereClause, bindings] = this.buildBaseWhereClause(params);
+
+    const sql = `
+      SELECT
+        eb.${FIELDS.ID} AS record_id,
+        eb.${FIELDS.CAR_ID} AS car_id,
+        eb.${FIELDS.ODOMETER} AS odometer_km,
+        eb.${FIELDS.WHEN_DONE} AS when_done,
+        eb.${FIELDS.EXPENSE_TYPE} AS expense_type,
+        eb.${FIELDS.FUEL_IN_TANK} AS fuel_in_tank,
+        r.${FIELDS.REFUEL_VOLUME} AS refuel_volume_liters,
+        r.${FIELDS.IS_FULL_TANK} AS is_full_tank,
+        r.${FIELDS.TANK_TYPE} AS tank_type
+      FROM ${schema}.${TABLES.EXPENSE_BASES} eb
+      LEFT JOIN ${schema}.${TABLES.REFUELS} r ON r.${FIELDS.ID} = eb.${FIELDS.ID}
+      ${whereClause}
+        AND eb.${FIELDS.ODOMETER} IS NOT NULL
+      ORDER BY eb.${FIELDS.CAR_ID}, eb.${FIELDS.ODOMETER} ASC, eb.${FIELDS.WHEN_DONE} ASC
+    `;
+
+    const result = await this.getDb().runRawQuery(sql, bindings);
+    const rows = result?.rows || [];
+
+    return rows.map((row: any) => ({
+      recordId: row.record_id,
+      carId: row.car_id,
+      odometerKm: this.parseFloat(row.odometer_km),
+      whenDone: new Date(row.when_done),
+      expenseType: this.parseInt(row.expense_type),
+      fuelInTank: row.fuel_in_tank != null ? this.parseFloat(row.fuel_in_tank) : null,
+      refuelVolumeLiters: row.refuel_volume_liters != null ? this.parseFloat(row.refuel_volume_liters) : null,
+      isFullTank: row.is_full_tank,
+      tankType: row.tank_type || null,
+    }));
+  }
+
+  /**
+   * Get car tank configurations for consumption calculation
+   */
+  async getCarTankConfigs(params: { accountId: string; carIds: string[] }): Promise<CarTankConfig[]> {
+    const { accountId, carIds } = params;
+    const schema = config.dbSchema;
+
+    if (carIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = carIds.map(() => '?').join(', ');
+
+    const sql = `
+      SELECT
+        c.${FIELDS.ID} AS car_id,
+        c.${FIELDS.MAIN_TANK_VOLUME} AS main_tank_volume_liters,
+        c.${FIELDS.MAIN_TANK_FUEL_TYPE} AS main_tank_fuel_type,
+        c.${FIELDS.ADDL_TANK_VOLUME} AS addl_tank_volume_liters,
+        c.${FIELDS.ADDL_TANK_FUEL_TYPE} AS addl_tank_fuel_type
+      FROM ${schema}.${TABLES.CARS} c
+      WHERE c.${FIELDS.ACCOUNT_ID} = ?
+        AND c.${FIELDS.ID} IN (${placeholders})
+        AND c.${FIELDS.REMOVED_AT} IS NULL
+    `;
+
+    const result = await this.getDb().runRawQuery(sql, [accountId, ...carIds]);
+    const rows = result?.rows || [];
+
+    return rows.map((row: any) => ({
+      carId: row.car_id,
+      mainTankVolumeLiters: row.main_tank_volume_liters != null ? this.parseFloat(row.main_tank_volume_liters) : null,
+      mainTankFuelType: row.main_tank_fuel_type,
+      addlTankVolumeLiters: row.addl_tank_volume_liters != null ? this.parseFloat(row.addl_tank_volume_liters) : null,
+      addlTankFuelType: row.addl_tank_fuel_type,
+    }));
+  }
+
+  // ===========================================================================
+  // Helper Methods
+  // ===========================================================================
 
   /**
    * Map foreign totals to base currency amount format

@@ -23,12 +23,18 @@ const typeDefs = `#graphql
     # Common fields (from expense_bases) - used by ALL expense types
     # ==========================================================================
     
-    "Odometer reading at time of record"
+    "Odometer reading at time of record in car's mileageIn units"
     odometer: Float
-    "Trip meter reading"
+    "Odometer in user's prefences units - distanceIn"
+    odometerDisplay: Float
+    "Trip meter reading in car's mileageIn units"
     tripMeter: Float
+    "Trip meter reading in user's prefrences distanceIn units"
+    tripMeterDisplay: Float
     "Calculated fuel consumption (derived)"
     consumption: Float
+    "Unit of the consumption value: l100km, mpg-us, kwh100km, kg100km, etc."
+    consumptionUnit: String
     "Date/time when the record occurred"
     whenDone: String
     "Location/address (legacy field - use structured address fields instead)"
@@ -163,8 +169,10 @@ const typeDefs = `#graphql
     # Refuel-specific fields (expenseType = 1)
     # ==========================================================================
     
-    "Volume of fuel added (expenseType=1 only)"
+    "Volume of fuel added in original entry unit - matches volumeEnteredIn (expenseType=1 only)"
     refuelVolume: Float
+    "Volume of fuel added in user's preferred unit - for consistent display (expenseType=1 only)"
+    refuelVolumeDisplay: Float
     "Unit for volume: 'l' (liters), 'gal-us', 'gal-uk' (expenseType=1 only)"
     volumeEnteredIn: String
     "Price per unit volume (expenseType=1 only)"
@@ -230,6 +238,7 @@ const typeDefs = `#graphql
     expenseType: Int
     
     # Common fields
+    "Odometer in car's mileageIn units"
     odometer: Float
     whenDone: String
     location: String

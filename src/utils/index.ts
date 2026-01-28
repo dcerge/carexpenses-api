@@ -12,3 +12,4 @@ export * from './personalizationHelpers';
 export * from './unitConversions';
 export * from './CarStatsUpdater';
 export * from './ServiceIntervalNextUpdater';
+export * from './consumptionCalculator'
