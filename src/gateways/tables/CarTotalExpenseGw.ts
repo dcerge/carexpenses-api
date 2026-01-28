@@ -66,7 +66,8 @@ class CarTotalExpenseGw extends BaseGateway {
     if (accountId) {
       query.innerJoin(TABLES.CARS, function (this: any) {
         this.on(`${TABLES.CARS}.${FIELDS.ID}`, '=', `${TABLES.CAR_TOTAL_EXPENSES}.${FIELDS.CAR_ID}`);
-        this.andOn(`${TABLES.CARS}.${FIELDS.ACCOUNT_ID}`, '=', self.getDb().raw('?', accountId));
+        this.andOn(`${TABLES.CARS}.${FIELDS.ACCOUNT_ID}`, '=', self.getDb().raw('?', accountId))
+        this.onNull(`${TABLES.CARS}.${FIELDS.REMOVED_AT}`);
       });
     }
   }

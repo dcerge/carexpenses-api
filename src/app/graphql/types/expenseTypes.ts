@@ -179,7 +179,7 @@ const typeDefs = `#graphql
     pricePerVolume: Float
     "Whether tank was filled completely (expenseType=1 only)"
     isFullTank: Boolean
-    "Estimated fuel remaining before refuel (expenseType=1 only)"
+    "Estimated fuel remaining before refuel (expenseType=1 only)."
     remainingInTankBefore: Float
     "Fuel grade/type: Regular, Premium, Diesel, etc. (expenseType=1 only)"
     fuelGrade: String
@@ -251,7 +251,9 @@ const typeDefs = `#graphql
     totalPriceInHc: Float
     homeCurrency: String
     comments: String
+    "Percentage (0 - 0%, 1 - 100%) of fuel in car's tank after refuel or at the moment of expense, checkpoint, waypoint or revenue"
     fuelInTank: Float
+    "Reference to a travel the record is associated with"
     travelId: ID
     
     # ==========================================================================

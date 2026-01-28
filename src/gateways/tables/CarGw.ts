@@ -174,6 +174,26 @@ class CarGw extends BaseGateway {
 
     return result?.rows?.[0]?.qty ? Number(result.rows[0].qty) : 0;
   }
+
+  async getActiveCarsIds(filterParams: any): Promise<any> {
+    const { accountId, id } = filterParams ?? {};
+
+    const query = this.getBuilder().select(FIELDS.ID);
+
+    query.whereNull(FIELDS.REMOVED_AT);
+
+    if (accountId) {
+      query.whereIn(FIELDS.ACCOUNT_ID, castArray(accountId));
+    }
+
+    if (id) {
+      query.whereIn(FIELDS.ID, castArray(id));
+    }
+
+    const records = await query;
+
+    return records.map(record => record.id);
+  }
 }
 
 export { CarGw };

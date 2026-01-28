@@ -33,7 +33,7 @@ class UserCarGw extends BaseGateway {
           order: SORT_ORDER.ASC,
         },
         {
-          name: FIELDS.CREATED_AT,
+          name: `${TABLES.USER_CARS}.${FIELDS.CREATED_AT}`,
           order: SORT_ORDER.DESC,
         },
       ],
@@ -60,6 +60,11 @@ class UserCarGw extends BaseGateway {
     if (roleId) {
       query.whereIn(FIELDS.ROLE_ID, castArray(roleId));
     }
+
+    query.innerJoin(TABLES.CARS, function (this: any) {
+      this.on(`${TABLES.CARS}.${FIELDS.ID}`, '=', `${TABLES.USER_CARS}.${FIELDS.CAR_ID}`);
+      this.onNull(`${TABLES.CARS}.${FIELDS.REMOVED_AT}`);
+    });
   }
 
   async onUpdateFilter(query: any, whereParams: any): Promise<number> {

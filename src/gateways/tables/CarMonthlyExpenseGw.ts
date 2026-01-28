@@ -64,7 +64,8 @@ class CarMonthlyExpenseGw extends BaseGateway {
       });
       query.innerJoin(TABLES.CARS, function (this: any) {
         this.on(`${TABLES.CARS}.${FIELDS.ID}`, '=', `${TABLES.CAR_MONTHLY_SUMMARIES}.${FIELDS.CAR_ID}`);
-        this.andOn(`${TABLES.CARS}.${FIELDS.ACCOUNT_ID}`, '=', self.getDb().raw('?', accountId));
+        this.andOn(`${TABLES.CARS}.${FIELDS.ACCOUNT_ID}`, '=', self.getDb().raw('?', accountId))
+        this.onNull(`${TABLES.CARS}.${FIELDS.REMOVED_AT}`);
       });
     }
   }

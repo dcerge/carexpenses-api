@@ -39,6 +39,11 @@ interface ExpenseUpdateData {
   oldExtension?: any; // Store old extension data (refuel or expense)
 }
 
+interface DerivedRefuelFields {
+  tripMeter: number | null;
+  fuelConsumedMetric: number | null; // Liters for liquid fuel, kWh for electric, kg for hydrogen
+}
+
 class ExpenseCore extends AppCore {
   private updateData: Map<string, ExpenseUpdateData> = new Map();
   private statsUpdater: CarStatsUpdater | null = null;
@@ -404,13 +409,19 @@ class ExpenseCore extends AppCore {
    * @param item - The expense item to process
    * @param userProfile - User's profile with distance/volume preferences
    * @param carMileageIn - The car's mileage unit ('km' or 'mi'), defaults to 'km'
+   * @param fuelConsumedMetric - Calculated fuel consumed in metric units (L, kWh, or kg)
    *
    * Conversion rules:
    * - Odometer: Uses car's mileageIn (matches what's shown on car's dashboard)
    * - TripMeter: Uses user's distanceIn preference (for distance calculations)
    * - Both are rounded to whole numbers (odometers don't show decimals)
    */
-  private processItemWithProfile(item: any, userProfile: UserProfile, carMileageIn: string = 'km'): any {
+  private processItemWithProfile(
+    item: any,
+    userProfile: UserProfile,
+    carMileageIn: string = 'km',
+    fuelConsumedMetric?: number | null
+  ): any {
     if (!item) return item;
 
     // First apply standard processing (date formatting)
@@ -451,15 +462,16 @@ class ExpenseCore extends AppCore {
         processed.pricePerVolume = null;
       }
 
-      // Calculate consumption only for full tank/charge refuels
-      if (processed.isFullTank && tripMeterMetric !== null && tripMeterMetric > 0) {
+      // Calculate consumption when we have fuel consumed and trip distance
+      const effectiveFuelConsumed = fuelConsumedMetric ?? null;
+      if (effectiveFuelConsumed !== null && effectiveFuelConsumed > 0 && tripMeterMetric !== null && tripMeterMetric > 0) {
         const effectiveConsumptionUnit = getConsumptionUnitForFuelType(
           userProfile.consumptionIn,
           volumeEnteredIn
         );
         processed.consumption = calculateConsumption(
           tripMeterMetric,
-          refuelVolumeMetric,
+          effectiveFuelConsumed,
           effectiveConsumptionUnit
         );
         processed.consumptionUnit = effectiveConsumptionUnit;
@@ -591,15 +603,22 @@ class ExpenseCore extends AppCore {
   }
 
   /**
-   * Batch calculate trip meters for a list of already-merged expense bases.
-   * Single pass through sorted array - O(n log n) sort + O(n) calculation.
-   * No database queries needed.
-   */
-  private batchCalculateTripMeters(expenseBases: any[]): Map<string, number | null> {
-    const tripMeterMap = new Map<string, number | null>();
+ * Batch calculate trip meters and fuel consumption for a list of already-merged expense bases.
+ * Single pass through sorted array - O(n log n) sort + O(n) calculation.
+ * No database queries needed.
+ *
+ * @param expenseBases - Already merged expense records
+ * @param carMap - Map of carId -> car data (for tank capacities)
+ * @returns Map of recordId -> { tripMeter, fuelConsumedMetric }
+ */
+  private batchCalculateTripMeters(
+    expenseBases: any[],
+    carMap: Map<string, any>
+  ): Map<string, DerivedRefuelFields> {
+    const derivedFieldsMap = new Map<string, DerivedRefuelFields>();
 
     if (!expenseBases || expenseBases.length === 0) {
-      return tripMeterMap;
+      return derivedFieldsMap;
     }
 
     // Sort once by whenDone ASC, then odometer ASC
@@ -622,18 +641,97 @@ class ExpenseCore extends AppCore {
 
       const previous = lastRecordByGroup.get(groupKey);
 
-      if (!previous || record.odometer === null || previous.odometer === null) {
-        tripMeterMap.set(record.id, null);
-      } else {
-        const tripMeter = record.odometer - previous.odometer;
-        tripMeterMap.set(record.id, tripMeter > 0 ? tripMeter : null);
+      // Calculate tripMeter (for all record types)
+      let tripMeter: number | null = null;
+      if (previous && record.odometer !== null && previous.odometer !== null) {
+        const diff = record.odometer - previous.odometer;
+        tripMeter = diff > 0 ? diff : null;
       }
+
+      // Calculate fuelConsumedMetric (for refuels only)
+      let fuelConsumedMetric: number | null = null;
+      if (record.expenseType === EXPENSE_TYPES.REFUEL && previous) {
+        fuelConsumedMetric = this.calculateFuelConsumed(
+          previous.fuelInTank,
+          record.fuelInTank,
+          record.refuelVolume,
+          record.carId,
+          record.tankType || 'main',
+          carMap
+        );
+      }
+
+      derivedFieldsMap.set(record.id, {
+        tripMeter,
+        fuelConsumedMetric,
+      });
 
       // Update last record for this group
       lastRecordByGroup.set(groupKey, record);
     }
 
-    return tripMeterMap;
+    return derivedFieldsMap;
+  }
+
+  /**
+   * Calculate fuel consumed between two refuels.
+   * Formula: (previousFuelInTank - currentFuelInTank) × tankCapacity + currentRefuelVolume
+   *
+   * @param previousFuelInTank - Fuel percentage (0-1) after previous refuel
+   * @param currentFuelInTank - Fuel percentage (0-1) after current refuel
+   * @param currentRefuelVolume - Volume added in current refuel (in metric: L, kWh, or kg)
+   * @param carId - Car ID for looking up tank capacity
+   * @param tankType - 'main' or 'addl'
+   * @param carMap - Map of carId -> car data
+   * @returns Fuel consumed in metric units (L, kWh, or kg), or null if calculation not possible
+   */
+  private calculateFuelConsumed(
+    previousFuelInTank: number | null | undefined,
+    currentFuelInTank: number | null | undefined,
+    currentRefuelVolume: number | null | undefined,
+    carId: string,
+    tankType: string,
+    carMap: Map<string, any>
+  ): number | null {
+    // Need all values for calculation
+    if (
+      previousFuelInTank === null ||
+      previousFuelInTank === undefined ||
+      currentFuelInTank === null ||
+      currentFuelInTank === undefined ||
+      currentRefuelVolume === null ||
+      currentRefuelVolume === undefined
+    ) {
+      return null;
+    }
+
+    // Get car's tank capacity
+    const car = carMap.get(carId);
+    if (!car) {
+      return null;
+    }
+
+    const tankCapacity = tankType === 'addl' ? car.addlTankVolume : car.mainTankVolume;
+    if (!tankCapacity || tankCapacity <= 0) {
+      return null;
+    }
+
+    // Convert to numbers (database may return strings)
+    const prevFuel = Number(previousFuelInTank);
+    const currFuel = Number(currentFuelInTank);
+    const refuelVol = Number(currentRefuelVolume);
+    const capacity = Number(tankCapacity);
+
+    // Validate conversions
+    if (isNaN(prevFuel) || isNaN(currFuel) || isNaN(refuelVol) || isNaN(capacity)) {
+      return null;
+    }
+
+    // Formula: fuel consumed = (previous% - current%) × capacity + refuelVolume
+    const fuelConsumed = (prevFuel - currFuel) * capacity + refuelVol;
+
+    // Sanity check: fuel consumed should be positive
+    return fuelConsumed > 0 ? fuelConsumed : null;
   }
 
   // ===========================================================================
@@ -722,12 +820,25 @@ class ExpenseCore extends AppCore {
       };
     }
 
+    // Use AppCore's filterAccessibleCarIds for DRIVER role restriction
+    let carIdFilter = await this.filterAccessibleCarIds(filter?.id);
+
+    console.log('===== 1. carIdFilter', carIdFilter);
+
+    carIdFilter = await this.getGateways().carGw.getActiveCarsIds({
+      accountId,
+      id: carIdFilter
+    });
+
+    console.log('===== 2. carIdFilter', carIdFilter);
+
     // Filter by accountId for security
     return {
       ...args,
       filter: {
         ...filter,
         accountId,
+        carId: carIdFilter
       },
     };
   }
@@ -742,25 +853,27 @@ class ExpenseCore extends AppCore {
     // Merge extension data
     const mergedItems = await this.batchMergeExpenseData(items);
 
-    // Batch calculate trip meters for efficiency
-    const tripMeterMap = this.batchCalculateTripMeters(mergedItems);
-
-    // Batch fetch cars to get mileageIn for each car
+    // Batch fetch cars to get mileageIn and tank capacities for each car
     const carIds = mergedItems.map((item) => item.carId);
     const carMap = await this.batchFetchCars(carIds);
 
-    // Apply trip meters and process items with correct unit conversions
+    // Batch calculate trip meters and fuel consumed for efficiency
+    const derivedFieldsMap = this.batchCalculateTripMeters(mergedItems, carMap);
+
+    // Apply derived fields and process items with correct unit conversions
     return mergedItems.map((item: any) => {
+      const derivedFields = derivedFieldsMap.get(item.id);
+
       // Apply calculated trip meter if we have one and DB doesn't have it
-      if (tripMeterMap.has(item.id) && (item.tripMeter === null || item.tripMeter === undefined)) {
-        item.tripMeter = tripMeterMap.get(item.id);
+      if (derivedFields?.tripMeter !== undefined && (item.tripMeter === null || item.tripMeter === undefined)) {
+        item.tripMeter = derivedFields.tripMeter;
       }
 
       // Get car's mileageIn, default to 'km' if car not found
       const car = carMap.get(item.carId);
       const carMileageIn = car?.mileageIn || 'km';
 
-      return this.processItemWithProfile(item, userProfile, carMileageIn);
+      return this.processItemWithProfile(item, userProfile, carMileageIn, derivedFields?.fuelConsumedMetric);
     });
   }
 
@@ -779,11 +892,13 @@ class ExpenseCore extends AppCore {
 
     const [merged] = await this.batchMergeExpenseData([item]);
 
-    // Fetch car to get mileageIn
+    // Fetch car to get mileageIn and tank capacity
     const car = await this.fetchCar(merged.carId);
     const carMileageIn = car?.mileageIn || 'km';
 
-    // Calculate trip meter if this is a refuel
+    let fuelConsumedMetric: number | null = null;
+
+    // Calculate trip meter and fuel consumed if this is a refuel
     if (merged.expenseType === EXPENSE_TYPES.REFUEL && merged.whenDone) {
       // Get tank type for this refuel (from merged data)
       const tankType = merged.tankType || 'main';
@@ -803,9 +918,24 @@ class ExpenseCore extends AppCore {
       } else {
         merged.tripMeter = null;
       }
+
+      // Calculate fuel consumed if we have previous refuel data
+      if (previousRefuel && car) {
+        const carMap = new Map<string, any>();
+        carMap.set(car.id, car);
+
+        fuelConsumedMetric = this.calculateFuelConsumed(
+          previousRefuel.fuelInTank,
+          merged.fuelInTank,
+          merged.refuelVolume,
+          merged.carId,
+          tankType,
+          carMap
+        );
+      }
     }
 
-    return this.processItemWithProfile(merged, userProfile, carMileageIn);
+    return this.processItemWithProfile(merged, userProfile, carMileageIn, fuelConsumedMetric);
   }
 
   public async afterGetMany(items: any, opt?: BaseCoreActionsInterface): Promise<any> {
@@ -829,24 +959,26 @@ class ExpenseCore extends AppCore {
 
     const mergedItems = await this.batchMergeExpenseData(filteredItems);
 
-    // Batch calculate trip meters for efficiency
-    const tripMeterMap = this.batchCalculateTripMeters(mergedItems);
-
-    // Batch fetch cars to get mileageIn for each car
+    // Batch fetch cars to get mileageIn and tank capacities for each car
     const carIds = mergedItems.map((item) => item.carId);
     const carMap = await this.batchFetchCars(carIds);
 
-    // Apply trip meters and process items with correct unit conversions
+    // Batch calculate trip meters and fuel consumed for efficiency
+    const derivedFieldsMap = this.batchCalculateTripMeters(mergedItems, carMap);
+
+    // Apply derived fields and process items with correct unit conversions
     return mergedItems.map((item: any) => {
-      if (tripMeterMap.has(item.id) && (item.tripMeter === null || item.tripMeter === undefined)) {
-        item.tripMeter = tripMeterMap.get(item.id);
+      const derivedFields = derivedFieldsMap.get(item.id);
+
+      if (derivedFields?.tripMeter !== undefined && (item.tripMeter === null || item.tripMeter === undefined)) {
+        item.tripMeter = derivedFields.tripMeter;
       }
 
       // Get car's mileageIn, default to 'km' if car not found
       const car = carMap.get(item.carId);
       const carMileageIn = car?.mileageIn || 'km';
 
-      return this.processItemWithProfile(item, userProfile, carMileageIn);
+      return this.processItemWithProfile(item, userProfile, carMileageIn, derivedFields?.fuelConsumedMetric);
     });
   }
 

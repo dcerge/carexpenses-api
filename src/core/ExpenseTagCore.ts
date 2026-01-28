@@ -63,8 +63,6 @@ class ExpenseTagCore extends AppCore {
     const { filter } = args || {};
     const { accountId } = this.getContext();
 
-    logger.log('======= accountId', accountId);
-
     // Filter by accountId for security
     return {
       ...args,
