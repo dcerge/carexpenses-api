@@ -9,3 +9,4 @@ export * from './constants';
 export * from './reportTypes';
 export * from './carStatuses';
 export * from './userCarRoles';
+export * from './travelReportTypes';

@@ -233,6 +233,11 @@ See your entire year at a glance:
 - **Monthly breakdown table**: Month-by-month detail including mileage, refuel/expense counts, fuel volume, costs, and totals
 - **Filtering**: By year, vehicle, or tags
 
+### Travel Report
+
+See all your registered trips and get insights into ...
+
+
 ### Upcoming Services
 
 - View all scheduled maintenance and their due dates
@@ -342,8 +347,17 @@ Share vehicle access with family members or team:
 - Revenue reports (profitability per vehicle, per trip, per distance)
 - PDF export for all reports
 - Checklists for pre/post-travel and maintenance
-- AWD/FWD/RWD drivetrain tracking
-- 2 tanks support for a vehicle
-- Electric vehicle support (kWh tracking, charging stations)
-- Additional fuel types
+- AWD/FWD/RWD drivetrain tracking + 
+- 2 tanks support for a vehicle + 
+- Electric vehicle support (kWh tracking, charging stations) +
+- Additional fuel types + 
 - Data import from Fuelio, Drivvo, and other apps
+- Add recurring expenses - schedule by day(s) of week, days of month, days of a year, the amount, the expense kind
+- Add recurring revenues - schedule by day(s) of week, days of month, days of a year, the amount, the revenue kind
+- Add travels report for selected period and calculate percentage of business/personal/communte/charity/etc trips, calculate percentage of all expenses related to each category. Support tags. show IRS/CRA info needed, total distance traveled (as per any type of record)
+- Add trip calculators - user enters some data and gets estimations for fuel, prices, etc
+- Add trip calculator in app - select start and stop locations, use google api to get directions and distnace, select car and see how much it can cost + fuels, how many stops to do for refuel and on average distance between them.
+- Add car loan calculator - enter downpayment, months, interest, their income and percentage of it so the tool shows how much money they can afford to spend on a car, payments calculations + support of adding this as recurring payment
+- based on existing stats say how much money on average a month user need for their car (gas+maintenance+repairs+insurances+etc)
+- add a page where user can see on a map all their records along with temperatures if any) - for car(s), date range.
+- add a page to see nearby gas stations with their costs

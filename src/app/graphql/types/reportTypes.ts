@@ -16,6 +16,19 @@ const typeDefs = `#graphql
     year: Int
   }
 
+  input TravelReportFilter {
+    "Filter by specific vehicles (empty = all vehicles)"
+    carId: [ID]
+    "Filter by specific tags (empty = all)"
+    tagId: [ID]
+    "Filter by travel types: business, personal, medical, charity, commute"
+    travelType: [String]
+    "Start date (UTC, ISO 8601) - required"
+    dateFrom: String!
+    "End date (UTC, ISO 8601) - required"
+    dateTo: String!
+  }
+
   # =============================================================================
   # Currency Amount (reusable for foreign currency breakdowns)
   # =============================================================================
@@ -359,12 +372,292 @@ const typeDefs = `#graphql
   }
 
   # =============================================================================
+  # Travel Report Types
+  # =============================================================================
+
+  type TripTag {
+    id: ID
+    tagName: String
+    tagColor: String
+  }
+
+  """
+  Individual trip detail for the report table
+  """
+  type TripDetail {
+    id: ID
+    carId: ID
+    "Trip start date/time (ISO 8601)"
+    date: String
+    "Trip end date/time (ISO 8601)"
+    endDate: String
+    "Purpose of the trip"
+    purpose: String
+    "Destination (from travels.destination or fallback from last record)"
+    destination: String
+    "Travel type: business, personal, medical, charity, commute"
+    travelType: String
+    "Distance in user's preferred unit"
+    distance: Float
+    "Whether this is a round trip"
+    isRoundTrip: Boolean
+
+    "Active driving/working time in minutes (for gig workers)"
+    activeMinutes: Int
+    "Total time including waiting in minutes"
+    totalMinutes: Int
+
+    "Total refuels cost linked to this trip (home currency)"
+    refuelsTotal: Float
+    "Total refuels volume linked to this trip (user's volume unit)"
+    refuelsVolume: Float
+    "Total expenses cost linked to this trip (home currency)"
+    expensesTotal: Float
+    "Total revenues linked to this trip (home currency)"
+    revenuesTotal: Float
+
+    "Reimbursement rate per distance unit"
+    reimbursementRate: Float
+    "Currency of the reimbursement rate"
+    reimbursementRateCurrency: String
+    "Calculated reimbursement amount (rate × distance)"
+    calculatedReimbursement: Float
+
+    "Tags attached to this trip"
+    tags: [TripTag]
+  }
+
+  """
+  Trips totals for table footer
+  """
+  type TripsTotals {
+    totalTrips: Int
+    totalDistance: Float
+    totalActiveMinutes: Int
+    totalTotalMinutes: Int
+    totalRefuelsCost: Float
+    totalRefuelsVolume: Float
+    totalExpensesCost: Float
+    totalRevenuesCost: Float
+    totalCalculatedReimbursement: Float
+  }
+
+  """
+  Breakdown by travel type
+  """
+  type TravelTypeBreakdown {
+    "Travel type: business, personal, medical, charity, commute"
+    travelType: String
+    "Number of trips of this type"
+    tripsCount: Int
+    "Total distance for this type (user's unit)"
+    totalDistance: Float
+    "Percentage of filtered trips distance"
+    percentageOfFiltered: Float
+  }
+
+  """
+  Tier breakdown for tiered rate calculations (e.g., CRA style)
+  """
+  type ReimbursementTierBreakdown {
+    tierIndex: Int
+    distanceInTier: Float
+    rate: Float
+    amount: Float
+  }
+
+  """
+  Deduction calculation for a specific travel type
+  """
+  type StandardMileageByType {
+    travelType: String
+    "Distance in the rate's native unit"
+    distance: Float
+    "Primary rate (first tier rate)"
+    rate: Float
+    rateCurrency: String
+    "Total deduction for this travel type"
+    deduction: Float
+    "Tier breakdown (only present for tiered rates like CRA)"
+    tierBreakdown: [ReimbursementTierBreakdown]
+  }
+
+  """
+  Standard Mileage Deduction (IRS Method)
+  Calculates deduction based on IRS/CRA mileage rates.
+  Supports both flat rates (IRS) and tiered rates (CRA).
+  """
+  type StandardMileageDeduction {
+    "Total eligible distance (business + medical + charity)"
+    eligibleDistance: Float
+    distanceUnit: String
+    "Breakdown by deductible travel type"
+    byType: [StandardMileageByType]
+    "Total deduction across all types"
+    totalDeduction: Float
+    "Currency of the deduction"
+    currency: String
+  }
+
+  """
+  Actual Expense Method (CRA/IRS Alternative)
+  Calculates deductible expenses based on business use percentage.
+  Total expenses × (business km / total km) = deductible amount
+  """
+  type ActualExpenseMethod {
+    "Total refuels cost in period (all records, home currency)"
+    totalRefuelsCostHc: Float
+    "Total refuels volume in period (user's volume unit)"
+    totalRefuelsVolume: Float
+    "Total maintenance expenses (where expense_kinds.is_it_maintenance = true)"
+    totalMaintenanceCostHc: Float
+    "Total other expenses (non-maintenance)"
+    totalOtherExpensesCostHc: Float
+    "Sum of all expenses (refuels + maintenance + other)"
+    totalAllExpensesCostHc: Float
+
+    "Deductible refuels (totalRefuelsCostHc × businessUsePercentage)"
+    deductibleRefuelsCostHc: Float
+    "Deductible maintenance"
+    deductibleMaintenanceCostHc: Float
+    "Deductible other expenses"
+    deductibleOtherExpensesCostHc: Float
+    "Total deductible amount"
+    totalDeductibleCostHc: Float
+
+    volumeUnit: String
+  }
+
+  """
+  Totals for expenses directly linked to the filtered trips via travel_id
+  """
+  type LinkedTotals {
+    refuelsCostHc: Float
+    refuelsVolume: Float
+    expensesCostHc: Float
+    revenuesCostHc: Float
+    refuelsCount: Int
+    expensesCount: Int
+    revenuesCount: Int
+  }
+
+  """
+  Travel Report for IRS/CRA Tax Compliance
+  
+  Provides two deduction calculation methods:
+  1. Standard Mileage Method (IRS): Multiply eligible miles by IRS rate
+  2. Actual Expense Method (CRA): Total expenses × business use percentage
+  
+  The report shows:
+  - All trips matching the filter criteria
+  - Business use percentage based on tracked vs total distance
+  - Deduction calculations for tax filing
+  - Expenses directly linked to each trip
+  """
+  type TravelReport {
+    # =========================================================================
+    # Period Info
+    # =========================================================================
+    dateFrom: String
+    dateTo: String
+    periodDays: Int
+
+    # =========================================================================
+    # Vehicles in Report
+    # =========================================================================
+    "IDs of vehicles included in this report"
+    carIds: [ID]
+    vehiclesCount: Int
+
+    # =========================================================================
+    # Distance Summary
+    # =========================================================================
+    """
+    Total distance traveled by all selected vehicles in the period.
+    Calculated from ALL expense_bases records (max odometer - min odometer per car).
+    """
+    totalDistanceInPeriod: Float
+
+    """
+    Sum of distances for filtered trips only.
+    """
+    filteredTripsDistance: Float
+
+    """
+    Business use percentage: (filteredTripsDistance / totalDistanceInPeriod) × 100
+    Used for actual expense method calculation.
+    """
+    businessUsePercentage: Float
+
+    distanceUnit: String
+
+    # =========================================================================
+    # Trip Counts by Type
+    # =========================================================================
+    "Breakdown of trips by travel type with counts and distances"
+    tripsByType: [TravelTypeBreakdown]
+
+    # =========================================================================
+    # IRS Standard Mileage Method
+    # =========================================================================
+    """
+    Standard mileage deduction calculation (IRS method).
+    Uses official IRS/CRA mileage rates for deductible travel types.
+    Null if no deductible trips exist.
+    """
+    standardMileageDeduction: StandardMileageDeduction
+
+    # =========================================================================
+    # CRA/IRS Actual Expense Method
+    # =========================================================================
+    """
+    Actual expense method calculation (CRA/IRS alternative).
+    Shows total expenses and deductible portion based on business use percentage.
+    """
+    actualExpenseMethod: ActualExpenseMethod
+
+    # =========================================================================
+    # Direct Trip-Linked Totals
+    # =========================================================================
+    """
+    Totals for expenses directly linked to the filtered trips.
+    Only includes expense_bases records where travel_id matches a filtered trip.
+    """
+    linkedTotals: LinkedTotals
+
+    # =========================================================================
+    # Trip Details Table
+    # =========================================================================
+    "Individual trip records matching the filter"
+    trips: [TripDetail]
+
+    # =========================================================================
+    # Totals Row (for table footer)
+    # =========================================================================
+    "Aggregated totals for the trips table footer"
+    tripsTotals: TripsTotals
+
+    # =========================================================================
+    # User Preferences
+    # =========================================================================
+    homeCurrency: String
+    volumeUnit: String
+  }
+
+  type TravelReportResult implements OpResult {
+    code: Int!
+    errors: [Error!]
+    data: [TravelReport]
+  }
+
+  # =============================================================================
   # Queries
   # =============================================================================
 
   type Query {
     reportExpenseSummary(filter: ExpenseSummaryReportFilter): ExpenseSummaryReportResult
     reportYearly(filter: YearlyReportFilter): YearlyReportResult
+    reportTravel(filter: TravelReportFilter!): TravelReportResult
   }
 `;
 

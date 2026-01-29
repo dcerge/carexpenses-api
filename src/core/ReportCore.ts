@@ -10,8 +10,6 @@ import {
   fromMetricDistanceRounded,
   fromMetricVolume,
   calculateConsumption,
-} from '../utils/unitConversions';
-import {
   calculateConsumptionFromData,
   FuelTypeConsumption,
   ConsumptionCalculationResult,
@@ -19,7 +17,9 @@ import {
   isHydrogenFuelType,
   getConsumptionUnitLabel,
   getFuelVolumeUnitLabel,
-} from '../utils/consumptionCalculator';
+} from '../utils';
+
+
 import {
   ExpenseSummaryRawData,
   CurrencyAmountRaw,
@@ -28,7 +28,36 @@ import {
   UserProfile,
   YearlyReportRawData,
   MonthlyBreakdownRaw,
+  TravelReportFilter,
+  TravelReportRawData,
+  TravelRaw,
+  TravelTagRaw,
+  LinkedExpenseTotalRaw,
+  DestinationFallbackRaw,
+  CarOdometerRangeRaw,
+  PeriodExpenseBreakdownRaw,
+  TravelTypeSummaryRaw,
+  TravelReport,
+  TripDetail,
+  TripsTotals,
+  TravelTypeBreakdown,
+  StandardMileageDeduction,
+  StandardMileageByType,
+  ActualExpenseMethod,
+  LinkedTotals,
+  TripTag,
 } from '../boundary';
+
+import {
+  getReimbursementRates,
+  getRateForTravelType,
+  calculateTieredReimbursement,
+  isDeductibleTravelType,
+  getDeductibleTravelTypes,
+  ReimbursementRateConfig,
+} from '../utils/reimbursementRates';
+
+import { EXPENSE_TYPES } from '../database';
 
 dayjs.extend(utc);
 
@@ -943,6 +972,698 @@ class ReportCore extends AppCore {
    */
   private roundToThreeDecimals(value: number): number {
     return Math.round(value * 1000) / 1000;
+  }
+
+  // ===========================================================================
+  // Travel Report
+  // ===========================================================================
+
+  /**
+   * Generate Travel Report for tax compliance (IRS/CRA)
+   */
+  public async travelReport(args: any) {
+    return this.runAction({
+      args,
+      doAuth: true,
+      validate: this.getValidators().travelReport,
+      action: async (args: any, opt: BaseCoreActionsInterface) => {
+        const { filter } = args || {};
+        const { carId, tagId, travelType, dateFrom, dateTo } = filter || {};
+        const { accountId } = this.getContext();
+
+        // 1. Get user preferences
+        const userProfile = await this.getCurrentUserProfile();
+
+        // 2. Resolve car IDs (all if not specified)
+        let carIds: string[] = [];
+        if (carId && carId.length > 0) {
+          carIds = carId;
+        } else {
+          const cars = await this.getGateways().carGw.list({ filter: { accountId } });
+          carIds = (cars || []).map((c: any) => c.id);
+        }
+
+        // 3. Handle case when user has no cars
+        if (carIds.length === 0) {
+          return this.success(this.buildEmptyTravelReport(dateFrom, dateTo, userProfile));
+        }
+
+        // 4. Fetch raw data from gateway
+        const rawData: TravelReportRawData = await this.getGateways().reportTravelGw.getData({
+          accountId,
+          carIds,
+          tagIds: tagId || [],
+          travelTypes: travelType || [],
+          dateFrom,
+          dateTo,
+        });
+
+        // 5. Build and return the report
+        const report = this.buildTravelReport(rawData, dateFrom, dateTo, userProfile);
+
+        return this.success(report);
+      },
+      hasTransaction: false,
+      doingWhat: 'generating travel report',
+    });
+  }
+
+  // ===========================================================================
+  // Travel Report Building Helpers
+  // ===========================================================================
+
+  /**
+   * Build the complete travel report
+   */
+  private buildTravelReport(
+    rawData: TravelReportRawData,
+    dateFrom: string,
+    dateTo: string,
+    userProfile: UserProfile,
+  ): TravelReport {
+    const { distanceIn, volumeIn, homeCurrency } = userProfile;
+
+    // Calculate period days
+    const periodDays = this.calculatePeriodDays(dateFrom, dateTo);
+
+    // Build lookup maps for efficient access
+    const tagsByTravelId = this.buildTagsLookup(rawData.travelTags);
+    const expensesByTravelId = this.buildExpensesLookup(rawData.linkedExpenseTotals);
+    const destinationFallbacks = this.buildDestinationFallbacksLookup(rawData.destinationFallbacks);
+
+    // Calculate total distance in period (from ALL expense_bases records)
+    const totalDistanceInPeriodKm = this.calculateTotalDistanceFromOdometers(rawData.carOdometerRanges);
+    const totalDistanceInPeriod = fromMetricDistanceRounded(totalDistanceInPeriodKm, distanceIn);
+
+    // Calculate filtered trips distance
+    const filteredTripsDistanceKm = rawData.travels.reduce(
+      (sum, t) => sum + (t.distanceKm || 0),
+      0,
+    );
+    const filteredTripsDistance = fromMetricDistanceRounded(filteredTripsDistanceKm, distanceIn);
+
+    // Calculate business use percentage
+    const businessUsePercentage = this.calculateBusinessUsePercentage(
+      filteredTripsDistanceKm,
+      totalDistanceInPeriodKm,
+    );
+
+    // Build trips by type breakdown
+    const tripsByType = this.buildTripsByType(rawData.travelTypeSummaries, filteredTripsDistanceKm, distanceIn);
+
+    // Build trip details
+    const trips = this.buildTripDetails(
+      rawData.travels,
+      tagsByTravelId,
+      expensesByTravelId,
+      destinationFallbacks,
+      userProfile,
+    );
+
+    // Build trips totals
+    const tripsTotals = this.buildTripsTotals(trips);
+
+    // Build linked totals
+    const linkedTotals = this.buildLinkedTotals(rawData.linkedExpenseTotals, volumeIn);
+
+    // Build standard mileage deduction (IRS method)
+    const standardMileageDeduction = this.buildStandardMileageDeduction(
+      rawData.travelTypeSummaries,
+      dateFrom,
+      distanceIn,
+      homeCurrency,
+    );
+
+    // Build actual expense method (CRA method)
+    const actualExpenseMethod = this.buildActualExpenseMethod(
+      rawData.periodExpenseBreakdown,
+      businessUsePercentage,
+      volumeIn,
+    );
+
+    return {
+      // Period info
+      dateFrom,
+      dateTo,
+      periodDays,
+
+      // Vehicles in report
+      carIds: rawData.carIds,
+      vehiclesCount: rawData.carIds.length,
+
+      // Distance summary
+      totalDistanceInPeriod,
+      filteredTripsDistance,
+      businessUsePercentage,
+      distanceUnit: distanceIn,
+
+      // Trip counts by type
+      tripsByType,
+
+      // IRS Standard Mileage Method
+      standardMileageDeduction,
+
+      // CRA/IRS Actual Expense Method
+      actualExpenseMethod,
+
+      // Direct trip-linked totals
+      linkedTotals,
+
+      // Trip details table
+      trips,
+
+      // Totals row
+      tripsTotals,
+
+      // User preferences
+      homeCurrency,
+      volumeUnit: volumeIn,
+    };
+  }
+
+  /**
+   * Build empty travel report when user has no cars or no data
+   */
+  private buildEmptyTravelReport(
+    dateFrom: string,
+    dateTo: string,
+    userProfile: UserProfile,
+  ): TravelReport {
+    const periodDays = this.calculatePeriodDays(dateFrom, dateTo);
+
+    return {
+      dateFrom,
+      dateTo,
+      periodDays,
+
+      carIds: [],
+      vehiclesCount: 0,
+
+      totalDistanceInPeriod: null,
+      filteredTripsDistance: null,
+      businessUsePercentage: null,
+      distanceUnit: userProfile.distanceIn,
+
+      tripsByType: [],
+
+      standardMileageDeduction: null,
+
+      actualExpenseMethod: {
+        totalRefuelsCostHc: 0,
+        totalRefuelsVolume: null,
+        totalMaintenanceCostHc: 0,
+        totalOtherExpensesCostHc: 0,
+        totalAllExpensesCostHc: 0,
+        deductibleRefuelsCostHc: 0,
+        deductibleMaintenanceCostHc: 0,
+        deductibleOtherExpensesCostHc: 0,
+        totalDeductibleCostHc: 0,
+        volumeUnit: userProfile.volumeIn,
+      },
+
+      linkedTotals: {
+        refuelsCostHc: 0,
+        refuelsVolume: null,
+        expensesCostHc: 0,
+        revenuesCostHc: 0,
+        refuelsCount: 0,
+        expensesCount: 0,
+        revenuesCount: 0,
+      },
+
+      trips: [],
+
+      tripsTotals: {
+        totalTrips: 0,
+        totalDistance: null,
+        totalActiveMinutes: null,
+        totalTotalMinutes: null,
+        totalRefuelsCost: 0,
+        totalRefuelsVolume: null,
+        totalExpensesCost: 0,
+        totalRevenuesCost: 0,
+        totalCalculatedReimbursement: 0,
+      },
+
+      homeCurrency: userProfile.homeCurrency,
+      volumeUnit: userProfile.volumeIn,
+    };
+  }
+
+  // ===========================================================================
+  // Travel Report Lookup Builders
+  // ===========================================================================
+
+  /**
+   * Build a lookup map of tags by travel ID
+   */
+  private buildTagsLookup(travelTags: TravelTagRaw[]): Map<string, TripTag[]> {
+    const lookup = new Map<string, TripTag[]>();
+
+    for (const tag of travelTags) {
+      if (!lookup.has(tag.travelId)) {
+        lookup.set(tag.travelId, []);
+      }
+      lookup.get(tag.travelId)!.push({
+        id: tag.tagId,
+        tagName: tag.tagName,
+        tagColor: tag.tagColor,
+      });
+    }
+
+    return lookup;
+  }
+
+  /**
+   * Build a lookup map of expense totals by travel ID
+   * Returns map of travelId -> { refuels, expenses, revenues }
+   */
+  private buildExpensesLookup(
+    linkedExpenseTotals: LinkedExpenseTotalRaw[],
+  ): Map<string, { refuelsHc: number; refuelsVolume: number; expensesHc: number; revenuesHc: number; refuelsCount: number; expensesCount: number; revenuesCount: number }> {
+    const lookup = new Map<string, { refuelsHc: number; refuelsVolume: number; expensesHc: number; revenuesHc: number; refuelsCount: number; expensesCount: number; revenuesCount: number }>();
+
+    for (const item of linkedExpenseTotals) {
+      if (!lookup.has(item.travelId)) {
+        lookup.set(item.travelId, {
+          refuelsHc: 0,
+          refuelsVolume: 0,
+          expensesHc: 0,
+          revenuesHc: 0,
+          refuelsCount: 0,
+          expensesCount: 0,
+          revenuesCount: 0,
+        });
+      }
+
+      const entry = lookup.get(item.travelId)!;
+
+      if (item.expenseType === EXPENSE_TYPES.REFUEL) {
+        entry.refuelsHc += item.totalPriceHc;
+        entry.refuelsVolume += item.totalVolumeLiters || 0;
+        entry.refuelsCount += item.recordsCount;
+      } else if (item.expenseType === EXPENSE_TYPES.EXPENSE) {
+        entry.expensesHc += item.totalPriceHc;
+        entry.expensesCount += item.recordsCount;
+      } else if (item.expenseType === EXPENSE_TYPES.REVENUE) {
+        entry.revenuesHc += item.totalPriceHc;
+        entry.revenuesCount += item.recordsCount;
+      }
+    }
+
+    return lookup;
+  }
+
+  /**
+   * Build a lookup map of destination fallbacks by travel ID
+   */
+  private buildDestinationFallbacksLookup(
+    fallbacks: DestinationFallbackRaw[],
+  ): Map<string, string> {
+    const lookup = new Map<string, string>();
+
+    for (const fb of fallbacks) {
+      // Prefer where_done, fall back to location
+      const destination = fb.whereDone || fb.location || '';
+      if (destination) {
+        lookup.set(fb.travelId, destination);
+      }
+    }
+
+    return lookup;
+  }
+
+  // ===========================================================================
+  // Travel Report Calculation Helpers
+  // ===========================================================================
+
+  /**
+   * Calculate total distance from odometer ranges (sum of max - min per car)
+   */
+  private calculateTotalDistanceFromOdometers(ranges: CarOdometerRangeRaw[]): number {
+    let totalKm = 0;
+
+    for (const range of ranges) {
+      if (range.minOdometerKm != null && range.maxOdometerKm != null) {
+        totalKm += range.maxOdometerKm - range.minOdometerKm;
+      }
+    }
+
+    return totalKm;
+  }
+
+  /**
+   * Calculate business use percentage
+   */
+  private calculateBusinessUsePercentage(
+    filteredDistanceKm: number,
+    totalDistanceKm: number | null,
+  ): number | null {
+    if (totalDistanceKm === null || totalDistanceKm <= 0) {
+      return null;
+    }
+
+    if (filteredDistanceKm <= 0) {
+      return 0;
+    }
+
+    const percentage = (filteredDistanceKm / totalDistanceKm) * 100;
+    return this.roundToTwoDecimals(Math.min(percentage, 100)); // Cap at 100%
+  }
+
+  // ===========================================================================
+  // Travel Report Section Builders
+  // ===========================================================================
+
+  /**
+   * Build trips by type breakdown
+   */
+  private buildTripsByType(
+    summaries: TravelTypeSummaryRaw[],
+    filteredTotalDistanceKm: number,
+    distanceIn: string,
+  ): TravelTypeBreakdown[] {
+    return summaries.map((summary) => ({
+      travelType: summary.travelType,
+      tripsCount: summary.tripsCount,
+      totalDistance: fromMetricDistanceRounded(summary.totalDistanceKm, distanceIn),
+      percentageOfFiltered: filteredTotalDistanceKm > 0
+        ? this.roundToTwoDecimals((summary.totalDistanceKm / filteredTotalDistanceKm) * 100)
+        : 0,
+    }));
+  }
+
+  /**
+   * Build trip details array
+   */
+  private buildTripDetails(
+    travels: TravelRaw[],
+    tagsByTravelId: Map<string, TripTag[]>,
+    expensesByTravelId: Map<string, { refuelsHc: number; refuelsVolume: number; expensesHc: number; revenuesHc: number; refuelsCount: number; expensesCount: number; revenuesCount: number }>,
+    destinationFallbacks: Map<string, string>,
+    userProfile: UserProfile,
+  ): TripDetail[] {
+    const { distanceIn, volumeIn } = userProfile;
+
+    return travels.map((travel) => {
+      // Get destination with fallback
+      let destination = travel.destination || '';
+      if (!destination && destinationFallbacks.has(travel.id)) {
+        destination = destinationFallbacks.get(travel.id) || '';
+      }
+
+      // Get linked expenses
+      const expenses = expensesByTravelId.get(travel.id) || {
+        refuelsHc: 0,
+        refuelsVolume: 0,
+        expensesHc: 0,
+        revenuesHc: 0,
+        refuelsCount: 0,
+        expensesCount: 0,
+        revenuesCount: 0,
+      };
+
+      // Get tags
+      const tags = tagsByTravelId.get(travel.id) || [];
+
+      // Convert distance
+      const distance = fromMetricDistanceRounded(travel.distanceKm, distanceIn);
+
+      // Convert refuels volume
+      const refuelsVolume = expenses.refuelsVolume > 0
+        ? fromMetricVolume(expenses.refuelsVolume, volumeIn)
+        : null;
+
+      return {
+        id: travel.id,
+        carId: travel.carId,
+        date: travel.firstDttm ? dayjs.utc(travel.firstDttm).toISOString() : '',
+        endDate: travel.lastDttm ? dayjs.utc(travel.lastDttm).toISOString() : null,
+        purpose: travel.purpose,
+        destination,
+        travelType: travel.travelType,
+        distance,
+        isRoundTrip: travel.isRoundTrip,
+
+        // Time tracking
+        activeMinutes: travel.activeMinutes,
+        totalMinutes: travel.totalMinutes,
+
+        // Linked expenses
+        refuelsTotal: this.roundToTwoDecimals(expenses.refuelsHc),
+        refuelsVolume: refuelsVolume != null ? this.roundToTwoDecimals(refuelsVolume) : null,
+        expensesTotal: this.roundToTwoDecimals(expenses.expensesHc),
+        revenuesTotal: this.roundToTwoDecimals(expenses.revenuesHc),
+
+        // Reimbursement
+        reimbursementRate: travel.reimbursementRate,
+        reimbursementRateCurrency: travel.reimbursementRateCurrency,
+        calculatedReimbursement: travel.calculatedReimbursement != null
+          ? this.roundToTwoDecimals(travel.calculatedReimbursement)
+          : null,
+
+        // Tags
+        tags,
+      };
+    });
+  }
+
+  /**
+   * Build trips totals for table footer
+   */
+  private buildTripsTotals(trips: TripDetail[]): TripsTotals {
+    let totalDistance = 0;
+    let hasDistance = false;
+    let totalActiveMinutes = 0;
+    let hasActiveMinutes = false;
+    let totalTotalMinutes = 0;
+    let hasTotalMinutes = false;
+    let totalRefuelsCost = 0;
+    let totalRefuelsVolume = 0;
+    let hasRefuelsVolume = false;
+    let totalExpensesCost = 0;
+    let totalRevenuesCost = 0;
+    let totalCalculatedReimbursement = 0;
+
+    for (const trip of trips) {
+      if (trip.distance != null) {
+        totalDistance += trip.distance;
+        hasDistance = true;
+      }
+
+      if (trip.activeMinutes != null) {
+        totalActiveMinutes += trip.activeMinutes;
+        hasActiveMinutes = true;
+      }
+
+      if (trip.totalMinutes != null) {
+        totalTotalMinutes += trip.totalMinutes;
+        hasTotalMinutes = true;
+      }
+
+      totalRefuelsCost += trip.refuelsTotal;
+
+      if (trip.refuelsVolume != null) {
+        totalRefuelsVolume += trip.refuelsVolume;
+        hasRefuelsVolume = true;
+      }
+
+      totalExpensesCost += trip.expensesTotal;
+      totalRevenuesCost += trip.revenuesTotal;
+
+      if (trip.calculatedReimbursement != null) {
+        totalCalculatedReimbursement += trip.calculatedReimbursement;
+      }
+    }
+
+    return {
+      totalTrips: trips.length,
+      totalDistance: hasDistance ? this.roundToTwoDecimals(totalDistance) : null,
+      totalActiveMinutes: hasActiveMinutes ? totalActiveMinutes : null,
+      totalTotalMinutes: hasTotalMinutes ? totalTotalMinutes : null,
+      totalRefuelsCost: this.roundToTwoDecimals(totalRefuelsCost),
+      totalRefuelsVolume: hasRefuelsVolume ? this.roundToTwoDecimals(totalRefuelsVolume) : null,
+      totalExpensesCost: this.roundToTwoDecimals(totalExpensesCost),
+      totalRevenuesCost: this.roundToTwoDecimals(totalRevenuesCost),
+      totalCalculatedReimbursement: this.roundToTwoDecimals(totalCalculatedReimbursement),
+    };
+  }
+
+  /**
+   * Build linked totals section
+   */
+  private buildLinkedTotals(
+    linkedExpenseTotals: LinkedExpenseTotalRaw[],
+    volumeIn: string,
+  ): LinkedTotals {
+    let refuelsCostHc = 0;
+    let refuelsVolumeLiters = 0;
+    let expensesCostHc = 0;
+    let revenuesCostHc = 0;
+    let refuelsCount = 0;
+    let expensesCount = 0;
+    let revenuesCount = 0;
+
+    for (const item of linkedExpenseTotals) {
+      if (item.expenseType === EXPENSE_TYPES.REFUEL) {
+        refuelsCostHc += item.totalPriceHc;
+        refuelsVolumeLiters += item.totalVolumeLiters || 0;
+        refuelsCount += item.recordsCount;
+      } else if (item.expenseType === EXPENSE_TYPES.EXPENSE) {
+        expensesCostHc += item.totalPriceHc;
+        expensesCount += item.recordsCount;
+      } else if (item.expenseType === EXPENSE_TYPES.REVENUE) {
+        revenuesCostHc += item.totalPriceHc;
+        revenuesCount += item.recordsCount;
+      }
+    }
+
+    const refuelsVolume = refuelsVolumeLiters > 0
+      ? fromMetricVolume(refuelsVolumeLiters, volumeIn)
+      : null;
+
+    return {
+      refuelsCostHc: this.roundToTwoDecimals(refuelsCostHc),
+      refuelsVolume: refuelsVolume != null ? this.roundToTwoDecimals(refuelsVolume) : null,
+      expensesCostHc: this.roundToTwoDecimals(expensesCostHc),
+      revenuesCostHc: this.roundToTwoDecimals(revenuesCostHc),
+      refuelsCount,
+      expensesCount,
+      revenuesCount,
+    };
+  }
+
+  /**
+   * Build standard mileage deduction section (IRS method)
+   * Uses tiered rates from reimbursementRates utility
+   */
+  private buildStandardMileageDeduction(
+    summaries: TravelTypeSummaryRaw[],
+    dateFrom: string,
+    distanceIn: string,
+    homeCurrency: string,
+  ): StandardMileageDeduction | null {
+    // Determine the year from dateFrom
+    const year = dayjs.utc(dateFrom).year();
+
+    // Determine country based on currency (simplified heuristic)
+    // TODO: Could be improved by using user's country setting
+    const country: 'US' | 'CA' = homeCurrency === 'CAD' ? 'CA' : 'US';
+
+    // Get deductible travel types
+    const deductibleTypes = getDeductibleTravelTypes(country);
+
+    // Filter summaries to only deductible types
+    const deductibleSummaries = summaries.filter((s) =>
+      deductibleTypes.includes(s.travelType),
+    );
+
+    if (deductibleSummaries.length === 0) {
+      return null;
+    }
+
+    // Calculate total eligible distance in km
+    const totalEligibleDistanceKm = deductibleSummaries.reduce(
+      (sum, s) => sum + s.totalDistanceKm,
+      0,
+    );
+
+    if (totalEligibleDistanceKm <= 0) {
+      return null;
+    }
+
+    // Get rates and calculate deductions for each travel type
+    const byType: StandardMileageByType[] = [];
+    let totalDeduction = 0;
+    let rateCurrency = homeCurrency;
+
+    for (const summary of deductibleSummaries) {
+      const rateConfig = getRateForTravelType(year, country, summary.travelType);
+
+      if (!rateConfig || summary.totalDistanceKm <= 0) {
+        continue;
+      }
+
+      // Convert distance to rate's unit for calculation
+      let distanceForCalculation = summary.totalDistanceKm;
+      if (rateConfig.distanceUnit === 'mi') {
+        distanceForCalculation = summary.totalDistanceKm / 1.60934; // km to miles
+      }
+
+      // Calculate using tiered rates
+      const calculation = calculateTieredReimbursement(distanceForCalculation, rateConfig);
+
+      // Convert distance to user's display unit
+      const displayDistance = fromMetricDistanceRounded(summary.totalDistanceKm, distanceIn);
+
+      byType.push({
+        travelType: summary.travelType,
+        distance: displayDistance || 0,
+        rate: rateConfig.tiers[0].rate, // Primary rate for display
+        rateCurrency: rateConfig.currency,
+        deduction: calculation.totalReimbursement,
+        tierBreakdown: calculation.breakdown.length > 1 ? calculation.breakdown : undefined,
+      });
+
+      totalDeduction += calculation.totalReimbursement;
+      rateCurrency = rateConfig.currency; // Use rate's currency
+    }
+
+    if (byType.length === 0) {
+      return null;
+    }
+
+    return {
+      eligibleDistance: fromMetricDistanceRounded(totalEligibleDistanceKm, distanceIn) || 0,
+      distanceUnit: distanceIn,
+      byType,
+      totalDeduction: this.roundToTwoDecimals(totalDeduction),
+      currency: rateCurrency,
+    };
+  }
+
+  /**
+   * Build actual expense method section (CRA method)
+   * Calculates deductible portion based on business use percentage
+   */
+  private buildActualExpenseMethod(
+    breakdown: PeriodExpenseBreakdownRaw,
+    businessUsePercentage: number | null,
+    volumeIn: string,
+  ): ActualExpenseMethod {
+    // Total expenses (ALL records in period)
+    const totalRefuelsCostHc = breakdown.refuelsTotalHc;
+    const totalMaintenanceCostHc = breakdown.maintenanceTotalHc;
+    const totalOtherExpensesCostHc = breakdown.otherExpensesTotalHc;
+    const totalAllExpensesCostHc = totalRefuelsCostHc + totalMaintenanceCostHc + totalOtherExpensesCostHc;
+
+    // Convert volume to user's unit
+    const totalRefuelsVolume = breakdown.refuelsVolumeLiters > 0
+      ? fromMetricVolume(breakdown.refuelsVolumeLiters, volumeIn)
+      : null;
+
+    // Calculate deductible portion
+    const percentage = businessUsePercentage != null ? businessUsePercentage / 100 : 0;
+
+    const deductibleRefuelsCostHc = totalRefuelsCostHc * percentage;
+    const deductibleMaintenanceCostHc = totalMaintenanceCostHc * percentage;
+    const deductibleOtherExpensesCostHc = totalOtherExpensesCostHc * percentage;
+    const totalDeductibleCostHc = deductibleRefuelsCostHc + deductibleMaintenanceCostHc + deductibleOtherExpensesCostHc;
+
+    return {
+      totalRefuelsCostHc: this.roundToTwoDecimals(totalRefuelsCostHc),
+      totalRefuelsVolume: totalRefuelsVolume != null ? this.roundToTwoDecimals(totalRefuelsVolume) : null,
+      totalMaintenanceCostHc: this.roundToTwoDecimals(totalMaintenanceCostHc),
+      totalOtherExpensesCostHc: this.roundToTwoDecimals(totalOtherExpensesCostHc),
+      totalAllExpensesCostHc: this.roundToTwoDecimals(totalAllExpensesCostHc),
+
+      deductibleRefuelsCostHc: this.roundToTwoDecimals(deductibleRefuelsCostHc),
+      deductibleMaintenanceCostHc: this.roundToTwoDecimals(deductibleMaintenanceCostHc),
+      deductibleOtherExpensesCostHc: this.roundToTwoDecimals(deductibleOtherExpensesCostHc),
+      totalDeductibleCostHc: this.roundToTwoDecimals(totalDeductibleCostHc),
+
+      volumeUnit: volumeIn,
+    };
   }
 }
 

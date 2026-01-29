@@ -8,6 +8,12 @@ import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 dayjs.extend(utc);
 
 // =============================================================================
+// Constants
+// =============================================================================
+
+const VALID_TRAVEL_TYPES = ['business', 'personal', 'medical', 'charity', 'commute'];
+
+// =============================================================================
 // Expense Summary Report Validators
 // =============================================================================
 
@@ -69,6 +75,51 @@ const rulesYearly = new Checkit({
   ],
 });
 
+// =============================================================================
+// Travel Report Validators
+// =============================================================================
+
+const rulesTravelReport = new Checkit({
+  dateFrom: [
+    {
+      rule: 'required',
+      message: 'Date from is required',
+    },
+    {
+      rule: 'string',
+      message: 'Date from should be a string',
+    },
+  ],
+  dateTo: [
+    {
+      rule: 'required',
+      message: 'Date to is required',
+    },
+    {
+      rule: 'string',
+      message: 'Date to should be a string',
+    },
+  ],
+  carId: [
+    {
+      rule: 'array',
+      message: 'Car IDs should be an array',
+    },
+  ],
+  tagId: [
+    {
+      rule: 'array',
+      message: 'Tag IDs should be an array',
+    },
+  ],
+  travelType: [
+    {
+      rule: 'array',
+      message: 'Travel types should be an array',
+    },
+  ],
+});
+
 /**
  * Validate year range
  */
@@ -116,6 +167,28 @@ const validateDateRange = (dateFrom: string, dateTo: string): OpResult | true =>
   if (to.diff(from, 'year') > maxRangeYears) {
     const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
     opResult.addError('dateTo', `Date range cannot exceed ${maxRangeYears} years`);
+    return opResult;
+  }
+
+  return true;
+};
+
+/**
+ * Validate travel types
+ */
+const validateTravelTypes = (travelTypes: string[]): OpResult | true => {
+  if (!travelTypes || travelTypes.length === 0) {
+    return true;
+  }
+
+  const invalidTypes = travelTypes.filter((type) => !VALID_TRAVEL_TYPES.includes(type));
+
+  if (invalidTypes.length > 0) {
+    const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
+    opResult.addError(
+      'travelType',
+      `Invalid travel type(s): ${invalidTypes.join(', ')}. Valid types are: ${VALID_TRAVEL_TYPES.join(', ')}`,
+    );
     return opResult;
   }
 
@@ -318,6 +391,77 @@ const validateYearly = async (args: any, opt: BaseCoreActionsInterface) => {
   return [true, dependencies];
 };
 
+/**
+ * Validate travel report filter
+ */
+const validateTravelReport = async (args: any, opt: BaseCoreActionsInterface) => {
+  const { filter } = args || {};
+
+  if (!filter || Object.keys(filter).length === 0) {
+    const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
+    opResult.addError('filter', 'Filter is required');
+    return [opResult, {}];
+  }
+
+  const { dateFrom, dateTo, carId, tagId, travelType } = filter;
+
+  // Run Checkit validation
+  const [result] = rulesTravelReport.validateSync(filter);
+
+  if (result) {
+    const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
+    Object.keys(result?.errors || {}).forEach((key) => {
+      const obj = result.errors[key];
+      if (Array.isArray(obj.errors)) {
+        obj.errors.forEach((item: any) => {
+          opResult.addError(key, item.message);
+        });
+      } else {
+        opResult.addError(key, obj.message);
+      }
+    });
+    return [opResult, {}];
+  }
+
+  // Validate date range
+  const dateRangeResult = validateDateRange(dateFrom, dateTo);
+  if (dateRangeResult !== true) {
+    return [dateRangeResult, {}];
+  }
+
+  // Validate travel types
+  const travelTypesResult = validateTravelTypes(travelType || []);
+  if (travelTypesResult !== true) {
+    return [travelTypesResult, {}];
+  }
+
+  // Get account ID from context
+  const { accountId } = opt.core.getContext();
+
+  // Verify car ownership
+  const carOwnershipResult = await verifyCarOwnership(carId || [], accountId, opt);
+  if (carOwnershipResult !== true) {
+    return [carOwnershipResult, {}];
+  }
+
+  // Verify tag ownership
+  const tagOwnershipResult = await verifyTagOwnership(tagId || [], accountId, opt);
+  if (tagOwnershipResult !== true) {
+    return [tagOwnershipResult, {}];
+  }
+
+  // Return validated and normalized data
+  const dependencies = {
+    dateFrom: dayjs.utc(dateFrom).toISOString(),
+    dateTo: dayjs.utc(dateTo).toISOString(),
+    carIds: carId || [],
+    tagIds: tagId || [],
+    travelTypes: travelType || [],
+  };
+
+  return [true, dependencies];
+};
+
 // =============================================================================
 // Export all validators
 // =============================================================================
@@ -325,6 +469,7 @@ const validateYearly = async (args: any, opt: BaseCoreActionsInterface) => {
 const validators = {
   expenseSummary: validateExpenseSummary,
   yearly: validateYearly,
+  travelReport: validateTravelReport,
   // Future reports:
   // monthlyTrend: validateMonthlyTrend,
   // fuelEfficiency: validateFuelEfficiency,

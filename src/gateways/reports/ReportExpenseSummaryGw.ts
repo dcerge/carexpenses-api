@@ -834,11 +834,4 @@ class ReportExpenseSummaryGw extends BaseGateway {
   }
 }
 
-export {
-  ReportExpenseSummaryGw,
-  ExpenseSummaryRawData,
-  CurrencyAmountRaw,
-  CategoryBreakdownRaw,
-  KindBreakdownRaw,
-  GetDataParams,
-};
+export { ReportExpenseSummaryGw };
