@@ -1416,11 +1416,12 @@ class ReportCore extends AppCore {
         revenuesTotal: this.roundToTwoDecimals(expenses.revenuesHc),
 
         // Reimbursement
-        reimbursementRate: travel.reimbursementRate,
-        reimbursementRateCurrency: travel.reimbursementRateCurrency,
-        calculatedReimbursement: travel.calculatedReimbursement != null
-          ? this.roundToTwoDecimals(travel.calculatedReimbursement)
-          : null,
+        ...this.calculateTripReimbursement(
+          travel.distanceKm,
+          travel.travelType,
+          travel.firstDttm,
+          userProfile.homeCurrency,
+        ),
 
         // Tags
         tags,
@@ -1530,6 +1531,71 @@ class ReportCore extends AppCore {
       refuelsCount,
       expensesCount,
       revenuesCount,
+    };
+  }
+
+  /**
+   * Calculate reimbursement for a single trip
+   * Uses IRS/CRA rates based on user's home currency
+   */
+  private calculateTripReimbursement(
+    distanceKm: number | null,
+    travelType: string,
+    tripDate: Date | null,
+    homeCurrency: string,
+  ): {
+    reimbursementRate: number | null;
+    reimbursementRateCurrency: string | null;
+    calculatedReimbursement: number | null;
+  } {
+    // No distance = no reimbursement
+    if (!distanceKm || distanceKm <= 0) {
+      return {
+        reimbursementRate: null,
+        reimbursementRateCurrency: null,
+        calculatedReimbursement: null,
+      };
+    }
+
+    // Determine country based on home currency
+    const country: 'US' | 'CA' = homeCurrency === 'CAD' ? 'CA' : 'US';
+
+    // Determine year from trip date (or current year as fallback)
+    const year = tripDate ? dayjs.utc(tripDate).year() : dayjs().year();
+
+    // Check if travel type is deductible
+    if (!isDeductibleTravelType(travelType, country)) {
+      return {
+        reimbursementRate: null,
+        reimbursementRateCurrency: null,
+        calculatedReimbursement: null,
+      };
+    }
+
+    // Get rate config for this travel type
+    const rateConfig = getRateForTravelType(year, country, travelType);
+
+    if (!rateConfig) {
+      return {
+        reimbursementRate: null,
+        reimbursementRateCurrency: null,
+        calculatedReimbursement: null,
+      };
+    }
+
+    // Convert distance to rate's unit for calculation
+    let distanceForCalculation = distanceKm;
+    if (rateConfig.distanceUnit === 'mi') {
+      distanceForCalculation = distanceKm / 1.60934; // km to miles
+    }
+
+    // Calculate using tiered rates
+    const calculation = calculateTieredReimbursement(distanceForCalculation, rateConfig);
+
+    return {
+      reimbursementRate: rateConfig.tiers[0].rate, // Primary rate for display
+      reimbursementRateCurrency: rateConfig.currency,
+      calculatedReimbursement: this.roundToTwoDecimals(calculation.totalReimbursement),
     };
   }
 
