@@ -5,11 +5,15 @@ import utc from 'dayjs/plugin/utc';
 import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInterface } from '@sdflc/backend-helpers';
 
+import { CarStatsUpdater } from '../utils';
+import { toMetricDistance } from '../utils/unitConversions';
+
 import { AppCore } from './AppCore';
 import { validators } from './validators/carValidators';
 import { trialCheckMiddleware } from '../middleware';
 import { FEATURE_CODES } from '../utils';
 import { ENTITY_TYPE_IDS, USER_CAR_ROLES, CAR_STATUSES } from '../boundary';
+import config from '../config';
 
 dayjs.extend(utc);
 
@@ -24,10 +28,12 @@ interface CarUserInput {
 interface CarUpdateData {
   uploadedFilesIds?: string[];
   carUsers?: CarUserInput[];
+  oldCar?: any; // Store old car for stats delta calculation
 }
 
 class CarCore extends AppCore {
   private updateData: Map<string, CarUpdateData> = new Map();
+  private statsUpdater: CarStatsUpdater | null = null;
 
   constructor(props: BaseCorePropsInterface) {
     super({
@@ -56,6 +62,34 @@ class CarCore extends AppCore {
       ...super.getValidators(),
       ...validators,
     };
+  }
+
+  // ===========================================================================
+  // Stats Updater Management
+  // ===========================================================================
+
+  /**
+   * Get or create the stats updater instance
+   */
+  private getStatsUpdater(): CarStatsUpdater {
+    if (!this.statsUpdater) {
+      const db = this.getDb();
+      this.statsUpdater = new CarStatsUpdater(db, config.dbSchema);
+    }
+    return this.statsUpdater;
+  }
+
+  /**
+   * Convert car's initial mileage to metric (km) for stats storage.
+   * 
+   * @param initialMileage - The initial mileage value as entered by user
+   * @param mileageIn - The unit the mileage was entered in ('km' or 'mi')
+   * @returns The mileage converted to kilometers
+   */
+  private convertInitialMileageToMetric(initialMileage: number | null | undefined, mileageIn: string | null | undefined): number {
+    const mileage = initialMileage ?? 0;
+    const unit = mileageIn || 'km';
+    return toMetricDistance(mileage, unit) ?? 0;
   }
 
   public async carsQty(): Promise<number> {
@@ -179,6 +213,26 @@ class CarCore extends AppCore {
         createdBy: userId,
         createdAt: this.now(),
       });
+
+      // Initialize car stats with initial mileage
+      try {
+        const initialMileageMetric = this.convertInitialMileageToMetric(
+          car.initialMileage,
+          car.mileageIn
+        );
+
+        // Only initialize stats if there's an initial mileage > 0
+        if (initialMileageMetric > 0) {
+          // Get user's home currency for stats
+          const userProfile = await this.getCurrentUserProfile();
+          const homeCurrency = userProfile.homeCurrency || 'USD';
+
+          await this.getStatsUpdater().onCarCreated(car.id, homeCurrency, initialMileageMetric);
+        }
+      } catch (error) {
+        // Log error but don't fail the create operation
+        console.error('Failed to initialize car stats:', error);
+      }
     }
 
     const requestId = this.getRequestId();
@@ -237,6 +291,7 @@ class CarCore extends AppCore {
     this.updateData.set(`update-${requestId}-${id}`, {
       uploadedFilesIds,
       carUsers,
+      oldCar: car, // Store old car for stats delta calculation
     });
 
     restParams.updatedBy = userId;
@@ -261,6 +316,32 @@ class CarCore extends AppCore {
 
       if (!updateInfo) {
         continue;
+      }
+
+      // Check if initial mileage or mileage unit changed and update stats
+      if (updateInfo.oldCar) {
+        const oldCar = updateInfo.oldCar;
+        const mileageChanged =
+          oldCar.initialMileage !== item.initialMileage ||
+          oldCar.mileageIn !== item.mileageIn;
+
+        if (mileageChanged) {
+          try {
+            const initialMileageMetric = this.convertInitialMileageToMetric(
+              item.initialMileage,
+              item.mileageIn
+            );
+
+            // Get user's home currency for stats
+            const userProfile = await this.getCurrentUserProfile();
+            const homeCurrency = userProfile.homeCurrency || 'USD';
+
+            await this.getStatsUpdater().onCarInitialMileageChanged(item.id, homeCurrency, initialMileageMetric);
+          } catch (error) {
+            // Log error but don't fail the update operation
+            console.error('Failed to update car stats on mileage change:', error);
+          }
+        }
       }
 
       // Handle uploaded files attachments

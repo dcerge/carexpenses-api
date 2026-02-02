@@ -69,6 +69,92 @@ class CarStatsUpdater {
   // Public Methods - Delta Operations
   // ===========================================================================
 
+  // ===========================================================================
+  // Add these methods to CarStatsUpdater class
+  // ===========================================================================
+
+  /**
+   * Initialize stats for a newly created car.
+   * Creates a total summary row with the initial mileage if no expenses exist yet.
+   * Uses UPSERT - if row exists, updates mileage only if new value is greater.
+   * 
+   * @param carId - The car ID  
+   * @param homeCurrency - The user's home currency
+   * @param initialMileageMetric - The car's initial mileage converted to km
+   */
+  async onCarCreated(carId: string, homeCurrency: string, initialMileageMetric: number): Promise<void> {
+    const sql = `
+    INSERT INTO ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES} (
+      ${FIELDS.CAR_ID},
+      ${FIELDS.HOME_CURRENCY},
+      ${FIELDS.LATEST_KNOWN_MILEAGE},
+      ${FIELDS.TOTAL_REFUELS_COUNT},
+      ${FIELDS.TOTAL_EXPENSES_COUNT},
+      ${FIELDS.TOTAL_REVENUES_COUNT},
+      ${FIELDS.TOTAL_CHECKPOINTS_COUNT},
+      ${FIELDS.TOTAL_TRAVELS_COUNT},
+      ${FIELDS.TOTAL_TRAVELS_DISTANCE},
+      ${FIELDS.TOTAL_REFUELS_VOLUME},
+      ${FIELDS.TOTAL_MAINTENANCE_COUNT},
+      ${FIELDS.CONSUMPTION_VOLUME},
+      ${FIELDS.CONSUMPTION_DISTANCE},
+      ${FIELDS.UPDATED_AT}
+    )
+    VALUES (?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, CURRENT_TIMESTAMP)
+    ON CONFLICT (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY})
+    DO UPDATE SET 
+      ${FIELDS.LATEST_KNOWN_MILEAGE} = GREATEST(
+        COALESCE(${TABLES.CAR_TOTAL_SUMMARIES}.${FIELDS.LATEST_KNOWN_MILEAGE}, 0), 
+        EXCLUDED.${FIELDS.LATEST_KNOWN_MILEAGE}
+      ),
+      ${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP
+  `;
+
+    await this.db.runRawQuery(sql, [carId, homeCurrency, initialMileageMetric]);
+  }
+
+  /**
+   * Update stats when a car's initial mileage or mileage unit changes.
+   * Uses UPSERT to atomically set latest_known_mileage to the greater of 
+   * the current value or the new initial mileage.
+   * 
+   * Single atomic operation - no separate queries needed.
+   * 
+   * @param carId - The car ID
+   * @param homeCurrency - The user's home currency
+   * @param initialMileageMetric - The car's initial mileage converted to km
+   */
+  async onCarInitialMileageChanged(carId: string, homeCurrency: string, initialMileageMetric: number): Promise<void> {
+    const sql = `
+    INSERT INTO ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES} (
+      ${FIELDS.CAR_ID},
+      ${FIELDS.HOME_CURRENCY},
+      ${FIELDS.LATEST_KNOWN_MILEAGE},
+      ${FIELDS.TOTAL_REFUELS_COUNT},
+      ${FIELDS.TOTAL_EXPENSES_COUNT},
+      ${FIELDS.TOTAL_REVENUES_COUNT},
+      ${FIELDS.TOTAL_CHECKPOINTS_COUNT},
+      ${FIELDS.TOTAL_TRAVELS_COUNT},
+      ${FIELDS.TOTAL_TRAVELS_DISTANCE},
+      ${FIELDS.TOTAL_REFUELS_VOLUME},
+      ${FIELDS.TOTAL_MAINTENANCE_COUNT},
+      ${FIELDS.CONSUMPTION_VOLUME},
+      ${FIELDS.CONSUMPTION_DISTANCE},
+      ${FIELDS.UPDATED_AT}
+    )
+    VALUES (?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, CURRENT_TIMESTAMP)
+    ON CONFLICT (${FIELDS.CAR_ID}, ${FIELDS.HOME_CURRENCY})
+    DO UPDATE SET 
+      ${FIELDS.LATEST_KNOWN_MILEAGE} = GREATEST(
+        COALESCE(${TABLES.CAR_TOTAL_SUMMARIES}.${FIELDS.LATEST_KNOWN_MILEAGE}, 0), 
+        EXCLUDED.${FIELDS.LATEST_KNOWN_MILEAGE}
+      ),
+      ${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP
+  `;
+
+    await this.db.runRawQuery(sql, [carId, homeCurrency, initialMileageMetric]);
+  }
+
   /**
    * Apply stats delta when a new record is created.
    * For CREATE: We can safely use GREATEST/LEAST for mileage/dates
