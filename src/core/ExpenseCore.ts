@@ -823,14 +823,10 @@ class ExpenseCore extends AppCore {
     // Use AppCore's filterAccessibleCarIds for DRIVER role restriction
     let carIdFilter = await this.filterAccessibleCarIds(filter?.id);
 
-    console.log('===== 1. carIdFilter', carIdFilter);
-
     carIdFilter = await this.getGateways().carGw.getActiveCarsIds({
       accountId,
       id: carIdFilter
     });
-
-    console.log('===== 2. carIdFilter', carIdFilter);
 
     // Filter by accountId for security
     return {

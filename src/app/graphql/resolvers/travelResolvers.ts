@@ -56,7 +56,7 @@ const resolvers = buildDefaultResolvers({
         if (!firstRecord && firstRecordId) {
           return context.gateways.expenseBaseGw
             .get(firstRecordId)
-            .then((item) => context.cores.expenseCore.processItemOnOut(item));
+            .then((item) => context.cores.expenseCore.processItemWithProfile(item));
         }
 
         return firstRecord ?? null;
@@ -67,7 +67,7 @@ const resolvers = buildDefaultResolvers({
         if (!lastRecord && lastRecordId) {
           return context.gateways.expenseBaseGw
             .get(lastRecordId)
-            .then((item) => context.cores.expenseCore.processItemOnOut(item));
+            .then((item) => context.cores.expenseCore.processItemWithProfile(item));
         }
 
         return lastRecord ?? null;
@@ -90,7 +90,7 @@ const resolvers = buildDefaultResolvers({
             },
           });
 
-          return records.map((record) => context.cores.expenseCore.processItemOnOut(record));
+          return records.map((record) => context.cores.expenseCore.processItemWithProfile(record));
         }
 
         return waypoints ?? [];

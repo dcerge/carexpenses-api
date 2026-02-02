@@ -1,10 +1,28 @@
 # CarExpenses
 
-**The most accurate fuel and car expense tracker — for people who actually care about numbers.**
+**The vehicle expense tracker built for families and teams.**
 
-CarExpenses is a mobile-friendly Progressive Web Application (PWA) built for drivers, families, and small businesses who want real precision in tracking vehicle costs. Unlike apps that give you rough averages, CarExpenses captures the data that matters: fuel tank percentages for accurate consumption calculations, detailed cost breakdowns for tax-ready records, and structured expense tracking that scales from a single car to a shared fleet.
+CarExpenses is a mobile-friendly Progressive Web Application (PWA) that helps drivers, families, and small businesses understand the true cost of vehicle ownership. Unlike single-user apps that leave families juggling separate accounts, CarExpenses is built for how people actually live — with shared vehicles, multiple drivers, and the need to stay tax-ready year-round.
+
+Track fuel consumption, maintenance costs, travel logs, and every vehicle-related expense in one place. See where your money actually goes, collaborate with family members or team drivers, and generate tax-compliant reports when you need them.
 
 An internet connection is required.
+
+---
+
+## Who CarExpenses Is For
+
+**Multi-Vehicle Families**
+Parents sharing cars with teen drivers. Partners tracking household vehicle costs. Families who want consolidated expense management without spreadsheet chaos.
+
+**Gig Economy Workers**
+Delivery drivers, rideshare operators, and contractors who need every deductible mile documented. Track business vs. personal use, link revenue to trips, and stay audit-ready for IRS/CRA.
+
+**Small Fleet Operators**
+Businesses with 5–40 vehicles who need affordable fleet management. Role-based access lets owners maintain oversight while drivers log their own expenses.
+
+**Car Enthusiasts & Meticulous Owners**
+Drivers who want a complete vehicle history — from purchase to eventual sale. Checkpoints, maintenance records, and documents that preserve (and prove) your vehicle's story.
 
 ---
 
@@ -18,7 +36,7 @@ Add and manage multiple vehicles (quantity depends on subscription plan):
 - **Purchase details**: Price, date, seller information
 - **Media**: Vehicle photo and attached documents (registration, title, etc.)
 - **Notes**: Free-form notes field
-- **Designated Drivers**: Assign users to vehicles as drivers or owners so only they can add records (_coming soon_)
+- **Designated Drivers**: Assign users to vehicles as drivers or owners so only they can add records
 
 ---
 
@@ -27,7 +45,7 @@ Add and manage multiple vehicles (quantity depends on subscription plan):
 Log every fill-up with comprehensive details:
 
 - **Reading**: Odometer and date/time
-- **Fuel**: Volume purchased, fuel tank level after refueling (0–100% for accurate consumption calculations)
+- **Fuel**: Volume purchased, fuel tank level after refueling (0–100% for consumption calculations)
 - **Pricing**: Price per unit and total cost
 - **Multi-currency**: Enter price in a foreign currency when traveling, with conversion to home currency
 - **Location**: Gas station name and address (with Google Places autocomplete)
@@ -119,6 +137,7 @@ Store important vehicle and driver documents digitally:
 - Insurance policies with expiration date tracking
 - Registration and title documents
 - Warranty information
+- Road assistance card (membership number, phone number, expiration date)
 - Driver license and ID documents
 - Any other vehicle or driver-related paperwork
 - Expiration reminders before documents lapse
@@ -202,7 +221,7 @@ Gain insights into vehicle costs and usage with detailed, filterable reports.
 
 ### Fuel Economy Report
 
-Understand exactly how your vehicles consume fuel:
+Understand how your vehicles consume fuel:
 
 - **Key metrics**: Average consumption (L/100km, MPG), total fuel volume, total distance, total cost, cost per km/mile, average fuel price with min/max range
 - **Trend analysis**: See if your efficiency is improving, stable, or degrading over time
@@ -231,12 +250,26 @@ See your entire year at a glance:
 - **Annual summary**: Total cost, refuels, other expenses, total mileage, total fuel volume
 - **Monthly expenses chart**: Visual bar chart showing spending by month with separate colors for refuels vs other expenses
 - **Monthly breakdown table**: Month-by-month detail including mileage, refuel/expense counts, fuel volume, costs, and totals
+- **Monthly budget estimator**: Based on historical data, shows average monthly cost for each vehicle (fuel + maintenance + insurance + other) to help plan future expenses (_coming soon_)
 - **Filtering**: By year, vehicle, or tags
 
 ### Travel Report
 
-See all your registered trips and get insights into ...
+Track your trips for tax compliance and mileage deductions (IRS/CRA):
 
+- **Summary metrics**: Total distance in period, tracked trips distance, business use percentage, trips count by type
+- **Business use calculation**: Automatically calculates what percentage of your total driving was for business, medical, charity, or other deductible purposes
+- **Two deduction methods**:
+  - **Standard Mileage Method (IRS)**: Calculates deductions using official IRS rates ($0.67/mile business, $0.21/mile medical, $0.14/mile charity for 2024) or CRA tiered rates ($0.70/km first 5,000 km, $0.64/km after)
+  - **Actual Expense Method (CRA/IRS)**: Shows total vehicle expenses (fuel, maintenance, other) and calculates deductible portion based on business use percentage
+- **Trip details table**: Date, purpose, destination, distance, travel type, linked expenses/refuels/revenues, calculated reimbursement, and tags for each trip
+- **Expense allocation**: See refuels, maintenance, and other expenses directly linked to each trip
+- **Revenue tracking**: Track earnings from gig work or delivery services alongside expenses
+- **Time tracking**: Active driving time and total time (including waiting) for gig economy workers (_coming soon_)
+- **Trip type breakdown**: Visual breakdown showing distance and percentage for each travel type (business, personal, medical, charity, commute)
+- **Multi-vehicle support**: Combine trips from multiple vehicles in a single report
+- **Filtering**: By date range, vehicle, travel type, or tags
+- **Tax-ready output**: All the information needed for IRS Schedule C or CRA T2125 vehicle expense claims
 
 ### Upcoming Services
 
@@ -247,7 +280,7 @@ See all your registered trips and get insights into ...
 ### Data Export
 
 - Export any report to CSV
-- PDF export (_coming soon_)
+- Print any report (to paper or PDF)
 - Your data is always yours — export anytime, no restrictions
 
 ---
@@ -264,16 +297,16 @@ Automatically capture weather conditions for any record where location coordinat
 
 ---
 
-## Multi-User & Roles (_coming soon_)
+## Multi-User & Roles
 
 Share vehicle access with family members or team:
 
-| Role       | Permissions                                   |
-| ---------- | --------------------------------------------- |
-| **Owner**  | Full access including subscription management |
-| **Admin**  | Full access except subscription settings      |
-| **Driver** | Manage only their assigned vehicles           |
-| **Viewer** | Read-only access to all data                  |
+| Role       | Permissions                                   | Status       |
+| ---------- | --------------------------------------------- | ------------ |
+| **Owner**  | Full access including subscription management | Available    |
+| **Admin**  | Full access except subscription settings      | Available    |
+| **Driver** | Manage only their assigned vehicles           | Available    |
+| **Viewer** | Read-only access to all data                  | Coming soon  |
 
 **Capabilities:**
 
@@ -300,7 +333,7 @@ Share vehicle access with family members or team:
 | **Free**     | 2        | 1     | 250 MB  | $0        |
 | **Family**   | 5        | 5     | 2 GB    | $5/month  |
 | **Pro**      | 10       | 10    | 3 GB    | $15/month |
-| **Business** | 40       | 40    | 5 GB    | $35/month |
+| **Business** | 40       | 40    | 5 GB    | $60/month |
 
 **Custom Plans**: Need more than 40 vehicles? We offer custom plans for larger fleets — whether you're managing 50, 100, or 500+ vehicles. Contact us to build a plan that fits your needs.
 
@@ -317,7 +350,7 @@ Share vehicle access with family members or team:
 
 | App               | Platforms         | Multi-User         | Pricing                                     | Notes                                                                                           |
 | ----------------- | ----------------- | ------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| **CarExpenses**   | Web (PWA)         | ✓ (up to 40 users) | Free – $35/mo                               | Tank % tracking, structured cost breakdowns, true multi-user collaboration, weather correlation |
+| **CarExpenses**   | Web (PWA)         | ✓ (up to 40 users) | Free – $35/mo                               | True multi-user collaboration with roles, structured cost breakdowns, weather correlation       |
 | **Drivvo**        | Android, iOS      | ✓ (Fleet plans)    | Free w/ ads; ~$25/year Pro                  | Popular, good reports; Fleet Management for business users                                      |
 | **Fuelio**        | Android, iOS      | ✗                  | Free; ~$10/year Premium                     | Strong fuel tracking, crowdsourced gas prices; no ads; by Sygic                                 |
 | **Simply Auto**   | Android, iOS, Web | ✓ (Platinum)       | Free; Gold ~$5 one-time; Platinum ~$24/year | GPS trip tracking, business mileage deductions                                                  |
@@ -329,35 +362,78 @@ Share vehicle access with family members or team:
 
 **CarExpenses stands out with:**
 
-- **Fuel tank % tracking** on refuels, expenses, and checkpoints — enables genuinely accurate consumption calculations, not just rough averages
-- **Weather correlation** — understand how temperature and conditions affect your fuel economy (premium feature)
-- **Revenue tracking** — track income alongside expenses for true profitability analysis
+- **True multi-user collaboration** with role-based access (Owner/Admin/Driver/Viewer) — most competitors either don't support multiple users or charge significantly more for it
+- **Built for families and teams** — shared vehicles with clear accountability for who entered what
 - **Enterprise-grade cost breakdowns** (parts, labor, fees, taxes) — tax-ready and export-friendly
-- **True multi-user collaboration** with role-based access — most competitors either don't support multiple users or charge significantly more for it
-- **Multi-currency with home currency conversion** — essential for travelers and cross-border users
+- **Revenue tracking** — track income alongside expenses for true profitability analysis (gig workers, delivery drivers)
 - **Checkpoints** as a first-class feature — anchor odometer/fuel state, record milestones and incidents, maintain complete vehicle history
 - **Travel with waypoints** — multiple stops per trip with map visualization
+- **Multi-currency with home currency conversion** — essential for travelers and cross-border users
+- **Weather correlation** — understand how conditions affect your costs (premium feature)
 - **Web-based PWA** — works on any device without app store dependencies
 - **Privacy-focused** — no background location tracking; you control what you share
 
 ---
 
+## Free Tools
+
+Standalone calculators available on the marketing website — no account required:
+
+### Car Affordability Calculator
+
+Discover your true car budget including fuel, maintenance, insurance, and loan payments — not just the sticker price.
+
+- Factor in all ownership costs beyond purchase price
+- Calculate monthly and annual total cost of ownership
+- Determine affordable price range based on income
+- Compare financing options and down payment scenarios
+
+[Try the Car Affordability Calculator →](/tools/car-affordability-calculator/)
+
+### Fuel Consumption Calculator
+
+Calculate trip fuel costs, measure your real MPG or L/100km, and estimate driving range with real-world condition adjustments.
+
+- Estimate fuel costs for any trip distance
+- Calculate actual fuel economy from fill-up data
+- Estimate driving range based on tank size and consumption
+- Adjust for real-world conditions (weather, terrain, driving style)
+
+[Try the Fuel Consumption Calculator →](/tools/fuel-consumption-calculator/)
+
+### Mileage Tax Deduction Calculator
+
+Calculate potential tax savings from business, charitable, and medical mileage. Supports US (IRS), Canada (CRA), and UK (HMRC) rates.
+
+- Calculate deductions using official government mileage rates
+- Support for business, medical, and charitable driving
+- Compare standard mileage vs. actual expense methods
+- Multi-country support: United States, Canada, United Kingdom
+
+[Try the Mileage Tax Deduction Calculator →](/tools/mileage-tax-deduction-calculator/)
+
+---
+
 ## Roadmap
 
-- Revenue reports (profitability per vehicle, per trip, per distance)
-- PDF export for all reports
-- Checklists for pre/post-travel and maintenance
-- AWD/FWD/RWD drivetrain tracking + 
-- 2 tanks support for a vehicle + 
-- Electric vehicle support (kWh tracking, charging stations) +
-- Additional fuel types + 
-- Data import from Fuelio, Drivvo, and other apps
-- Add recurring expenses - schedule by day(s) of week, days of month, days of a year, the amount, the expense kind
-- Add recurring revenues - schedule by day(s) of week, days of month, days of a year, the amount, the revenue kind
-- Add travels report for selected period and calculate percentage of business/personal/communte/charity/etc trips, calculate percentage of all expenses related to each category. Support tags. show IRS/CRA info needed, total distance traveled (as per any type of record)
-- Add trip calculators - user enters some data and gets estimations for fuel, prices, etc
-- Add trip calculator in app - select start and stop locations, use google api to get directions and distnace, select car and see how much it can cost + fuels, how many stops to do for refuel and on average distance between them.
-- Add car loan calculator - enter downpayment, months, interest, their income and percentage of it so the tool shows how much money they can afford to spend on a car, payments calculations + support of adding this as recurring payment
-- based on existing stats say how much money on average a month user need for their car (gas+maintenance+repairs+insurances+etc)
-- add a page where user can see on a map all their records along with temperatures if any) - for car(s), date range.
-- add a page to see nearby gas stations with their costs
+### Near-Term (In Progress)
+
+- **Revenue reports**: Profitability per vehicle, per trip, per distance; net profit calculations
+- **Viewer role**: Read-only access for family members or stakeholders who need visibility without edit permissions
+- **Monthly budget estimator**: Historical-based cost projections in Yearly Report
+
+### Mid-Term (Planned)
+
+- **Checklists**: Pre/post-travel and maintenance checklists with photo attachments
+- **Data import**: Import from Fuelio, Drivvo, Simply Auto, and other apps
+- **Recurring expenses**: Schedule automatic expense entries by day(s) of week, month, or year
+- **Recurring revenues**: Schedule automatic revenue entries for regular income
+- **Time tracking for travel**: Active driving time and total time (including waiting) for gig workers
+- **Additional expense kinds**: Lodging, food, and other travel-related categories
+
+### Future Considerations
+
+- **Map visualization page**: View all records on a map with temperature data for selected vehicles and date range
+- **Nearby gas stations**: Find nearby stations with current fuel prices
+- **Real-time travel tracking**: Background location tracking to automatically record routes, with near real-time driver position for fleet owners (requires native app wrapper)
+- **OBD-II integration**: Connect to vehicle diagnostics via Bluetooth for automatic mileage and fuel data (requires native app)

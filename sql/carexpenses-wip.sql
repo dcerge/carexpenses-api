@@ -86,12 +86,32 @@ select * from carexpenses.expense_bases eb where eb.travel_id in (
 '0cdd7745-49f4-41df-b3ac-8b651ebe8364'
 )
 
-select when_done, odometer, where_done, total_price, fuel_in_tank, refuel_volume, r.is_full_tank, fuel_grade
+select eb.id, when_done, odometer, trip_meter, where_done, total_price, eb.fuel_in_tank, fuel_in_tank, refuel_volume, r.volume_entered_in, r.is_full_tank, fuel_grade
   from carexpenses.expense_bases eb 
   join carexpenses.refuels r on (eb.id = r.id)
-  where car_id = '172e8894-dbbe-49a7-81d0-d9e1494d7d24'
+  where car_id = '9df5c235-fddb-48af-809d-213b6e9b044f'
     and eb.expense_type = 1
     order by eb.when_done desc
+    
+select * from carexpenses.refuels r  
+  where id in (
+    'b20571a1-d541-4f44-a449-3c067a73f433',
+    '8e9010c4-0ff5-461d-8d33-dc2c9d96cf53',
+    'cdc89b1c-461c-4ae1-af02-be5c8a656db0',
+    'd39929ef-9998-4682-a7a4-244792cf0a58',
+    'fb139ce0-120f-4164-8a4e-0df3e1ad2bb1',
+    '6f1c264a-d9e9-499b-a683-7ec983b407d8'
+)
+
+SELECT 
+  eb.odometer,
+  eb.trip_meter,
+  r.refuel_volume,
+  r.volume_entered_in
+FROM carexpenses.expense_bases eb
+JOIN carexpenses.refuels r ON r.id = eb.id
+WHERE eb.car_id = '9df5c235-fddb-48af-809d-213b6e9b044f'
+ORDER BY eb.odometer;
 
 update carexpenses.travels set status = 200, is_active = false where status = 100
 

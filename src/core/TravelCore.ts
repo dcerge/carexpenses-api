@@ -10,6 +10,7 @@ import { EXPENSE_TYPES, STATUS } from '../database';
 import { CarStatsUpdater, TravelStatsParams } from '../utils/CarStatsUpdater';
 import { weatherGateway } from '../weatherClient';
 import { mapWeatherToDbFields } from '../gateways/apis/weather';
+import { toMetricDistance } from '../utils';
 
 dayjs.extend(utc);
 
@@ -230,7 +231,15 @@ class TravelCore extends AppCore {
   /**
    * Build TravelStatsParams from a travel record for stats updates
    */
-  private buildTravelStatsParams(travel: any): TravelStatsParams {
+  private buildTravelStatsParams(travel: any, odometerIn?: string): TravelStatsParams {
+    // Get the highest odometer in car's unit
+    const lastOdometerInCarUnit = travel.lastOdometer ?? travel.firstOdometer ?? null;
+
+    // Convert to metric for stats (car_total_summaries stores in metric)
+    const lastRecordOdometerMetric = lastOdometerInCarUnit != null && odometerIn
+      ? toMetricDistance(lastOdometerInCarUnit, odometerIn)
+      : null;
+
     return {
       travelId: travel.id,
       carId: travel.carId,
@@ -240,6 +249,7 @@ class TravelCore extends AppCore {
       firstOdometer: travel.firstOdometer,
       lastOdometer: travel.lastOdometer,
       status: travel.status ?? STATUS.ACTIVE,
+      lastRecordOdometer: lastRecordOdometerMetric,
     };
   }
 
@@ -396,12 +406,13 @@ class TravelCore extends AppCore {
     const { accountId, userId } = this.getContext();
 
     // Extract nested inputs and tagIds
-    const { firstRecord, lastRecord, tagIds, distance, distanceIn, ...travelParams } = params;
+    // the input value for "distance" is always in the car's units - car.mileageIn
+    const { firstRecord, lastRecord, tagIds, distance, ...travelParams } = params;
 
     // Get user's preferred distance unit
-    const userDistanceUnit = await this.getUserDistanceUnit();
-    const odometerIn = userDistanceUnit;
-    const effectiveDistanceIn = distanceIn || odometerIn;
+    const { homeCurrency } = await this.getCurrentUserProfile();
+    const car = await this.getGateways().carGw.get(params.carId);
+    const odometerIn = car?.mileageIn || 'km';
 
     // Build travel record
     const newTravel: any = {
@@ -409,16 +420,29 @@ class TravelCore extends AppCore {
       accountId,
       userId,
       odometerIn,
-      distanceIn: effectiveDistanceIn,
+      distanceIn: odometerIn,
       createdBy: userId,
       createdAt: this.now(),
     };
 
+    let firstOdometerInCarUnit: number | null = null;
+    let lastOdometerInCarUnit: number | null = null;
+
     // Extract odometer and datetime from firstRecord if provided
     if (firstRecord) {
+      firstRecord.homeCurrency = homeCurrency;
+
       if (firstRecord.odometer != null) {
-        newTravel.firstOdometer = firstRecord.odometer;
+        // Save original value in car's unit
+        firstOdometerInCarUnit = firstRecord.odometer;
+
+        // Travel table stores in car's unit
+        newTravel.firstOdometer = firstOdometerInCarUnit;
+
+        // Convert to metric for expense_base storage
+        firstRecord.odometer = toMetricDistance(firstRecord.odometer, odometerIn);
       }
+
       if (firstRecord.whenDone) {
         newTravel.firstDttm = firstRecord.whenDone;
       }
@@ -426,36 +450,52 @@ class TravelCore extends AppCore {
 
     // Extract odometer and datetime from lastRecord if provided
     if (lastRecord) {
+      lastRecord.homeCurrency = homeCurrency;
+
       if (lastRecord.odometer != null) {
-        newTravel.lastOdometer = lastRecord.odometer;
+        // Save original value in car's unit
+        lastOdometerInCarUnit = lastRecord.odometer;
+
+        // Travel table stores in car's unit
+        newTravel.lastOdometer = lastOdometerInCarUnit;
+
+        // Convert to metric for expense_base storage
+        lastRecord.odometer = toMetricDistance(lastRecord.odometer, odometerIn);
       }
+
       if (lastRecord.whenDone) {
         newTravel.lastDttm = lastRecord.whenDone;
       }
     }
 
     // Calculate distance
-    let calculatedDistance: number | null = null;
+    let calculatedDistanceInCarUnit: number | null = null;
+    let calculatedDistanceKm: number | null = null;
 
-    if (newTravel.firstOdometer != null && newTravel.lastOdometer != null) {
-      // Calculate from odometers
-      calculatedDistance = this.calculateDistanceFromOdometers(newTravel.firstOdometer, newTravel.lastOdometer);
+    if (firstOdometerInCarUnit != null && lastOdometerInCarUnit != null) {
+      // Distance in car's unit
+      calculatedDistanceInCarUnit = this.calculateDistanceFromOdometers(firstOdometerInCarUnit, lastOdometerInCarUnit);
+
+      // Convert to km
+      if (calculatedDistanceInCarUnit != null) {
+        calculatedDistanceKm = toMetricDistance(calculatedDistanceInCarUnit, odometerIn);
+      }
     }
 
-    // Use manual distance if odometer-based calculation is not available
-    if (calculatedDistance == null && distance != null) {
-      calculatedDistance = distance;
-    }
-
-    if (calculatedDistance != null) {
-      newTravel.distance = calculatedDistance;
-      newTravel.distanceKm = this.convertToKm(calculatedDistance, effectiveDistanceIn);
+    // if odometer was provided then use it for distance calculations
+    // otherwise use distance provided by user in car's units
+    if (calculatedDistanceInCarUnit != null) {
+      newTravel.distance = calculatedDistanceInCarUnit;
+      newTravel.distanceKm = calculatedDistanceKm;
+    } else if (distance != null) {
+      newTravel.distance = distance;
+      newTravel.distanceKm = toMetricDistance(distance, odometerIn);
     }
 
     // Calculate reimbursement if we have distance and rate
-    if (calculatedDistance != null && travelParams.reimbursementRate != null) {
+    if (newTravel.distanceKm != null && travelParams.reimbursementRate != null) {
       newTravel.calculatedReimbursement = this.calculateReimbursement(
-        calculatedDistance,
+        newTravel.distanceKm,
         travelParams.reimbursementRate,
       );
     }
@@ -515,7 +555,9 @@ class TravelCore extends AppCore {
     // Update car stats for travels with a car assigned
     if (travel.carId) {
       try {
-        const statsParams = this.buildTravelStatsParams(travel);
+        const car = await this.getGateways().carGw.get(travel.carId);
+        const odometerIn = car?.mileageIn || 'km';
+        const statsParams = this.buildTravelStatsParams(travel, odometerIn);
         await this.getStatsUpdater().onTravelCreated(statsParams);
       } catch (error) {
         // Log error but don't fail the create operation
@@ -538,13 +580,19 @@ class TravelCore extends AppCore {
 
     // Check if user owns the travel
     const travel = await this.getGateways().travelGw.get(id);
+    const { homeCurrency } = await this.getCurrentUserProfile();
 
     if (!travel || travel.accountId !== accountId) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Travel not found');
     }
 
+    // Get car for mileage unit
+    const car = await this.getGateways().carGw.get(travel.carId);
+    const odometerIn = car?.mileageIn || 'km';
+
     // Extract nested inputs and tagIds
-    const { firstRecord, lastRecord, tagIds, distance, distanceIn, ...travelParams } = params;
+    // the input value for "distance" is always in the car's units - car.mileageIn
+    const { firstRecord, lastRecord, tagIds, distance, ...travelParams } = params;
 
     // Don't allow changing accountId or userId
     const { accountId: _, userId: __, id: ___, ...restParams } = travelParams;
@@ -552,26 +600,27 @@ class TravelCore extends AppCore {
     restParams.updatedBy = userId;
     restParams.updatedAt = this.now();
 
-    // Get effective units (use existing if not provided)
-    const odometerIn = travel.odometerIn || 'km';
-    const effectiveDistanceIn = distanceIn || travel.distanceIn || odometerIn;
-
-    if (distanceIn) {
-      restParams.distanceIn = distanceIn;
-    }
-
-    // Track odometer values - start with existing
-    let firstOdometer = travel.firstOdometer;
-    let lastOdometer = travel.lastOdometer;
+    // Track odometer values in car's unit - start with existing
+    let firstOdometerInCarUnit: number | null = travel.firstOdometer;
+    let lastOdometerInCarUnit: number | null = travel.lastOdometer;
     let firstDttm = travel.firstDttm;
     let lastDttm = travel.lastDttm;
 
     // Update from firstRecord if provided
     if (firstRecord) {
+      firstRecord.homeCurrency = homeCurrency;
+
       if (firstRecord.odometer != null) {
-        firstOdometer = firstRecord.odometer;
-        restParams.firstOdometer = firstOdometer;
+        // Save original value in car's unit
+        firstOdometerInCarUnit = firstRecord.odometer;
+
+        // Travel table stores in car's unit
+        restParams.firstOdometer = firstOdometerInCarUnit;
+
+        // Convert to metric for expense_base storage
+        firstRecord.odometer = toMetricDistance(firstRecord.odometer, odometerIn);
       }
+
       if (firstRecord.whenDone) {
         firstDttm = firstRecord.whenDone;
         restParams.firstDttm = firstDttm;
@@ -580,41 +629,56 @@ class TravelCore extends AppCore {
 
     // Update from lastRecord if provided
     if (lastRecord) {
+      lastRecord.homeCurrency = homeCurrency;
+
       if (lastRecord.odometer != null) {
-        lastOdometer = lastRecord.odometer;
-        restParams.lastOdometer = lastOdometer;
+        // Save original value in car's unit
+        lastOdometerInCarUnit = lastRecord.odometer;
+
+        // Travel table stores in car's unit
+        restParams.lastOdometer = lastOdometerInCarUnit;
+
+        // Convert to metric for expense_base storage
+        lastRecord.odometer = toMetricDistance(lastRecord.odometer, odometerIn);
       }
+
       if (lastRecord.whenDone) {
         lastDttm = lastRecord.whenDone;
         restParams.lastDttm = lastDttm;
       }
     }
 
-    // Recalculate distance
-    let calculatedDistance: number | null = null;
+    // Calculate distance
+    let calculatedDistanceInCarUnit: number | null = null;
+    let calculatedDistanceKm: number | null = null;
 
-    if (firstOdometer != null && lastOdometer != null) {
-      calculatedDistance = this.calculateDistanceFromOdometers(firstOdometer, lastOdometer);
+    if (firstOdometerInCarUnit != null && lastOdometerInCarUnit != null) {
+      // Distance in car's unit
+      calculatedDistanceInCarUnit = this.calculateDistanceFromOdometers(firstOdometerInCarUnit, lastOdometerInCarUnit);
+
+      // Convert to km
+      if (calculatedDistanceInCarUnit != null) {
+        calculatedDistanceKm = toMetricDistance(calculatedDistanceInCarUnit, odometerIn);
+      }
     }
 
-    // Use manual distance if provided and odometer calculation not available
-    if (calculatedDistance == null && distance != null) {
-      calculatedDistance = distance;
-    }
-
-    // Update distance fields
-    if (calculatedDistance != null) {
-      restParams.distance = calculatedDistance;
-      restParams.distanceKm = this.convertToKm(calculatedDistance, effectiveDistanceIn);
+    // if odometer was provided then use it for distance calculations
+    // otherwise use distance provided by user in car's units
+    if (calculatedDistanceInCarUnit != null) {
+      restParams.distance = calculatedDistanceInCarUnit;
+      restParams.distanceKm = calculatedDistanceKm;
+    } else if (distance != null) {
+      restParams.distance = distance;
+      restParams.distanceKm = toMetricDistance(distance, odometerIn);
     }
 
     // Calculate reimbursement
     const reimbursementRate = restParams.reimbursementRate ?? travel.reimbursementRate;
-    const finalDistance = calculatedDistance ?? travel.distance;
+    const finalDistanceKm = restParams.distanceKm ?? travel.distanceKm;
 
-    if (finalDistance != null && reimbursementRate != null) {
+    if (finalDistanceKm != null && reimbursementRate != null) {
       restParams.calculatedReimbursement = this.calculateReimbursement(
-        finalDistance,
+        finalDistanceKm,
         reimbursementRate,
       );
     }
@@ -696,8 +760,11 @@ class TravelCore extends AppCore {
           const updatedTravel = await this.getGateways().travelGw.get(travel.id);
 
           if (updatedTravel) {
-            const oldStatsParams = this.buildTravelStatsParams(existingTravel);
-            const newStatsParams = this.buildTravelStatsParams(updatedTravel);
+            const car = await this.getGateways().carGw.get(updatedTravel.carId);
+            const odometerIn = car?.mileageIn || 'km';
+
+            const oldStatsParams = this.buildTravelStatsParams(existingTravel, odometerIn);
+            const newStatsParams = this.buildTravelStatsParams(updatedTravel, odometerIn);
 
             await this.getStatsUpdater().onTravelUpdated(oldStatsParams, newStatsParams);
           }
@@ -771,7 +838,9 @@ class TravelCore extends AppCore {
         // Update car stats
         if (existingTravel.carId) {
           try {
-            const statsParams = this.buildTravelStatsParams(existingTravel);
+            const car = await this.getGateways().carGw.get(existingTravel.carId);
+            const odometerIn = car?.mileageIn || 'km';
+            const statsParams = this.buildTravelStatsParams(existingTravel, odometerIn);
             await this.getStatsUpdater().onTravelRemoved(statsParams);
           } catch (error) {
             // Log error but don't fail the remove operation
@@ -847,7 +916,9 @@ class TravelCore extends AppCore {
         // Update car stats
         if (existingTravel.carId) {
           try {
-            const statsParams = this.buildTravelStatsParams(existingTravel);
+            const car = await this.getGateways().carGw.get(existingTravel.carId);
+            const odometerIn = car?.mileageIn || 'km';
+            const statsParams = this.buildTravelStatsParams(existingTravel, odometerIn);
             await this.getStatsUpdater().onTravelRemoved(statsParams);
           } catch (error) {
             // Log error but don't fail the remove operation

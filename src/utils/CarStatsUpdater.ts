@@ -33,12 +33,13 @@ interface StatsOperationParams {
 interface TravelStatsParams {
   travelId: string;
   carId: string;
-  firstDttm: Date | string | null;  // For month bucket determination (falls back to createdAt)
-  createdAt: Date | string;         // Fallback if firstDttm is null
-  distanceKm: number | null;        // Pre-normalized distance (preferred)
-  firstOdometer?: number | null;    // Fallback for distance calc
-  lastOdometer?: number | null;     // Fallback for distance calc
-  status: number;                   // Only count if status >= TRAVEL_STATUS.COMPLETED (200)
+  firstDttm: Date | string | null;     // For month bucket determination (falls back to createdAt)
+  createdAt: Date | string;            // Fallback if firstDttm is null
+  distanceKm: number | null;           // Pre-normalized distance (preferred)
+  firstOdometer?: number | null;       // Fallback for distance calc
+  lastOdometer?: number | null;        // Fallback for distance calc
+  status: number;                      // Only count if status >= TRAVEL_STATUS.COMPLETED (200)
+  lastRecordOdometer?: number | null;  // The highest odometer from travel points (for latest_known_mileage)
 }
 
 /**
@@ -193,17 +194,24 @@ class CarStatsUpdater {
    * Travels are currency-independent, so updates ALL currency rows for the car.
    */
   async onTravelCreated(params: TravelStatsParams): Promise<void> {
-    // Only count completed travels
-    if (!this.isTravelCountable(params.status)) {
+    const { carId, lastRecordOdometer } = params;
+    const isCountable = this.isTravelCountable(params.status);
+
+    // Always update mileage if we have an odometer reading (even for in-progress travels)
+    if (lastRecordOdometer != null) {
+      await this.updateTotalSummaryMileageOnly(carId, lastRecordOdometer);
+    }
+
+    // Only count completed travels for travel stats
+    if (!isCountable) {
       return;
     }
 
-    const { carId } = params;
     const effectiveDistance = this.getEffectiveDistance(params);
     const { year, month } = this.parseYearMonth(this.getTravelYearMonth(params));
 
-    // Update total summary for all currency rows
-    await this.updateTotalSummaryTravelDelta(carId, 1, effectiveDistance);
+    // Update total summary for all currency rows (travel count + distance, no mileage since already updated)
+    await this.updateTotalSummaryTravelDelta(carId, 1, effectiveDistance, null);
 
     // Recalculate latest_travel_id
     await this.recalculateTotalSummaryLatestTravel(carId);
@@ -218,17 +226,23 @@ class CarStatsUpdater {
    * Travels are currency-independent, so updates ALL currency rows for the car.
    */
   async onTravelRemoved(params: TravelStatsParams): Promise<void> {
-    // Only decrement if travel was previously counted
+    const { carId } = params;
+
+    // Always recalculate mileage when a travel is removed (it might have had the max odometer)
+    if (params.lastRecordOdometer != null) {
+      await this.recalculateTotalSummaryLatestMileage(carId);
+    }
+
+    // Only update travel stats if it was previously counted
     if (!this.isTravelCountable(params.status)) {
       return;
     }
 
-    const { carId } = params;
     const effectiveDistance = this.getEffectiveDistance(params);
     const { year, month } = this.parseYearMonth(this.getTravelYearMonth(params));
 
-    // Update total summary for all currency rows
-    await this.updateTotalSummaryTravelDelta(carId, -1, -effectiveDistance);
+    // Update total summary for all currency rows (no mileage - already handled above)
+    await this.updateTotalSummaryTravelDelta(carId, -1, -effectiveDistance, null);
 
     // Recalculate latest_travel_id
     await this.recalculateTotalSummaryLatestTravel(carId);
@@ -241,6 +255,10 @@ class CarStatsUpdater {
    * Apply stats delta when a travel is updated.
    * Handles car changes, month changes, status changes, and distance changes.
    */
+  /**
+ * Apply stats delta when a travel is updated.
+ * Handles car changes, month changes, status changes, and distance changes.
+ */
   async onTravelUpdated(oldParams: TravelStatsParams, newParams: TravelStatsParams): Promise<void> {
     const carChanged = oldParams.carId !== newParams.carId;
     const monthChanged = this.getTravelYearMonth(oldParams) !== this.getTravelYearMonth(newParams);
@@ -249,15 +267,38 @@ class CarStatsUpdater {
     const wasCountable = this.isTravelCountable(oldParams.status);
     const isCountable = this.isTravelCountable(newParams.status);
 
-    // If structural change (car, month, or countability status), do remove + add
-    if (carChanged || monthChanged || (statusChanged && (wasCountable || isCountable))) {
-      // Remove from old stats if it was counted
-      if (wasCountable) {
-        await this.onTravelRemoved(oldParams);
+    // Handle mileage updates first (independent of travel status)
+    const odometerChanged = oldParams.lastRecordOdometer !== newParams.lastRecordOdometer;
+
+    if (carChanged) {
+      // Car changed - update new car's mileage, recalculate old car's
+      if (newParams.lastRecordOdometer != null) {
+        await this.updateTotalSummaryMileageOnly(newParams.carId, newParams.lastRecordOdometer);
       }
-      // Add to new stats if it should be counted
+      if (oldParams.lastRecordOdometer != null) {
+        await this.recalculateTotalSummaryLatestMileage(oldParams.carId);
+      }
+    } else if (odometerChanged) {
+      // Same car, odometer changed
+      if (newParams.lastRecordOdometer != null &&
+        (oldParams.lastRecordOdometer == null ||
+          newParams.lastRecordOdometer > oldParams.lastRecordOdometer)) {
+        // New is higher - use GREATEST
+        await this.updateTotalSummaryMileageOnly(newParams.carId, newParams.lastRecordOdometer);
+      } else {
+        // Old might have been the max, or new is null - recalculate
+        await this.recalculateTotalSummaryLatestMileage(newParams.carId);
+      }
+    }
+
+    // Handle travel stats (count, distance) - only for countable travels
+    if (carChanged || monthChanged || (statusChanged && (wasCountable || isCountable))) {
+      // Structural change - remove old stats, add new stats
+      if (wasCountable) {
+        await this.onTravelRemovedStatsOnly(oldParams);
+      }
       if (isCountable) {
-        await this.onTravelCreated(newParams);
+        await this.onTravelCreatedStatsOnly(newParams);
       }
       return;
     }
@@ -272,10 +313,7 @@ class CarStatsUpdater {
         const { carId } = newParams;
         const { year, month } = this.parseYearMonth(this.getTravelYearMonth(newParams));
 
-        // Update total summary
-        await this.updateTotalSummaryTravelDelta(carId, 0, distanceDelta);
-
-        // Update monthly summary
+        await this.updateTotalSummaryTravelDelta(carId, 0, distanceDelta, null);
         await this.updateMonthlySummaryTravelDelta(carId, year, month, 0, distanceDelta);
       }
 
@@ -2198,10 +2236,99 @@ class CarStatsUpdater {
     }
   }
 
+  private async recalculateTotalSummaryLatestMileage(carId: string): Promise<void> {
+    const sql = `
+    UPDATE ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES} cts
+    SET 
+      ${FIELDS.LATEST_KNOWN_MILEAGE} = COALESCE((
+        SELECT MAX(odometer_value) FROM (
+          -- From expense_bases (refuels, expenses, checkpoints, travel points)
+          SELECT MAX(eb.${FIELDS.ODOMETER}) as odometer_value
+          FROM ${this.schema}.${TABLES.EXPENSE_BASES} eb
+          WHERE eb.${FIELDS.CAR_ID} = ?
+            AND eb.${FIELDS.STATUS} = 100
+            AND eb.${FIELDS.REMOVED_AT} IS NULL
+            AND eb.${FIELDS.ODOMETER} IS NOT NULL
+          UNION ALL
+          -- From travels (first and last odometer)
+          SELECT GREATEST(
+            COALESCE(MAX(t.${FIELDS.FIRST_ODOMETER}), 0),
+            COALESCE(MAX(t.${FIELDS.LAST_ODOMETER}), 0)
+          ) as odometer_value
+          FROM ${this.schema}.${TABLES.TRAVELS} t
+          WHERE t.${FIELDS.CAR_ID} = ?
+            AND t.${FIELDS.STATUS} >= 200
+            AND t.${FIELDS.REMOVED_AT} IS NULL
+        ) combined
+      ), 0),
+      ${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP
+    WHERE cts.${FIELDS.CAR_ID} = ?
+  `;
+
+    await this.db.runRawQuery(sql, [carId, carId, carId]);
+  }
+
   /**
- * Update total revenue (by kind) with delta.
- * Uses UPSERT for create scenarios, UPDATE-only for modify/remove scenarios.
+ * Update only the latest_known_mileage field for a car.
+ * Used when we have an odometer reading but don't want to update travel counts.
  */
+  private async updateTotalSummaryMileageOnly(
+    carId: string,
+    odometer: number,
+  ): Promise<void> {
+    const sql = `
+    UPDATE ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES}
+    SET 
+      ${FIELDS.LATEST_KNOWN_MILEAGE} = GREATEST(COALESCE(${FIELDS.LATEST_KNOWN_MILEAGE}, 0), ?),
+      ${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP
+    WHERE ${FIELDS.CAR_ID} = ?
+  `;
+
+    await this.db.runRawQuery(sql, [odometer, carId]);
+  }
+
+  /**
+ * Update travel stats only (count, distance) without touching mileage.
+ * Used internally by onTravelUpdated() to avoid duplicate mileage updates.
+ */
+  private async onTravelCreatedStatsOnly(params: TravelStatsParams): Promise<void> {
+    const { carId } = params;
+    const effectiveDistance = this.getEffectiveDistance(params);
+    const { year, month } = this.parseYearMonth(this.getTravelYearMonth(params));
+
+    // Update total summary (no mileage - pass null)
+    await this.updateTotalSummaryTravelDelta(carId, 1, effectiveDistance, null);
+
+    // Recalculate latest_travel_id
+    await this.recalculateTotalSummaryLatestTravel(carId);
+
+    // Update monthly summary
+    await this.updateMonthlySummaryTravelDelta(carId, year, month, 1, effectiveDistance);
+  }
+
+  /**
+   * Remove travel stats only (count, distance) without touching mileage.
+   * Used internally by onTravelUpdated() to avoid duplicate mileage updates.
+   */
+  private async onTravelRemovedStatsOnly(params: TravelStatsParams): Promise<void> {
+    const { carId } = params;
+    const effectiveDistance = this.getEffectiveDistance(params);
+    const { year, month } = this.parseYearMonth(this.getTravelYearMonth(params));
+
+    // Update total summary (no mileage - pass null)
+    await this.updateTotalSummaryTravelDelta(carId, -1, -effectiveDistance, null);
+
+    // Recalculate latest_travel_id
+    await this.recalculateTotalSummaryLatestTravel(carId);
+
+    // Update monthly summary
+    await this.updateMonthlySummaryTravelDelta(carId, year, month, -1, -effectiveDistance);
+  }
+
+  /**
+   * Update total revenue (by kind) with delta.
+   * Uses UPSERT for create scenarios, UPDATE-only for modify/remove scenarios.
+   */
   private async updateTotalRevenueDelta(
     carId: string,
     homeCurrency: string,
@@ -2410,9 +2537,10 @@ class CarStatsUpdater {
     carId: string,
     countDelta: number,
     distanceDelta: number,
+    lastRecordOdometer?: number | null,  // NEW parameter
   ): Promise<void> {
     // Skip if no changes
-    if (countDelta === 0 && distanceDelta === 0) return;
+    if (countDelta === 0 && distanceDelta === 0 && lastRecordOdometer == null) return;
 
     const updates: string[] = [];
     const bindings: any[] = [];
@@ -2427,13 +2555,19 @@ class CarStatsUpdater {
       bindings.push(distanceDelta);
     }
 
+    // NEW: Update latest_known_mileage if odometer provided
+    if (lastRecordOdometer != null) {
+      updates.push(`${FIELDS.LATEST_KNOWN_MILEAGE} = GREATEST(COALESCE(${FIELDS.LATEST_KNOWN_MILEAGE}, 0), ?)`);
+      bindings.push(lastRecordOdometer);
+    }
+
     updates.push(`${FIELDS.UPDATED_AT} = CURRENT_TIMESTAMP`);
 
     const sql = `
-      UPDATE ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES}
-      SET ${updates.join(', ')}
-      WHERE ${FIELDS.CAR_ID} = ?
-    `;
+    UPDATE ${this.schema}.${TABLES.CAR_TOTAL_SUMMARIES}
+    SET ${updates.join(', ')}
+    WHERE ${FIELDS.CAR_ID} = ?
+  `;
 
     await this.db.runRawQuery(sql, [...bindings, carId]);
   }

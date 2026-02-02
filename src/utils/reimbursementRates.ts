@@ -69,6 +69,33 @@ export interface ReimbursementCalculationResult {
 const US_RATES: CountryYearRates[] = [
   {
     country: 'US',
+    year: 2023,
+    source: 'https://www.irs.gov/tax-professionals/standard-mileage-rates',
+    rates: [
+      {
+        travelType: 'business',
+        currency: 'USD',
+        distanceUnit: 'mi',
+        tiers: [{ tierUpToDistance: null, rate: 0.655 }],  // $0.655 per mile
+      },
+      {
+        travelType: 'medical',
+        currency: 'USD',
+        distanceUnit: 'mi',
+        tiers: [{ tierUpToDistance: null, rate: 0.22 }],  // $0.22 per mile
+      },
+      {
+        travelType: 'charity',
+        currency: 'USD',
+        distanceUnit: 'mi',
+        tiers: [{ tierUpToDistance: null, rate: 0.14 }],  // $0.14 per mile (set by statute)
+        notes: 'Charity rate is set by statute and rarely changes',
+      },
+      // Personal and commute are NOT deductible under IRS
+    ],
+  },
+  {
+    country: 'US',
     year: 2024,
     source: 'https://www.irs.gov/tax-professionals/standard-mileage-rates',
     rates: [
