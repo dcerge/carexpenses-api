@@ -1010,6 +1010,11 @@ class ExpenseCore extends AppCore {
       createdAt: this.now(),
     };
 
+    if (newExpenseBase.expenseType === EXPENSE_TYPES.CHECKPOINT || !newExpenseBase.paidInCurrency) {
+      const userProfile = await this.getCurrentUserProfile();
+      newExpenseBase.paidInCurrency = userProfile.homeCurrency;
+    }
+
     return newExpenseBase;
   }
 

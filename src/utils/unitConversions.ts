@@ -121,7 +121,7 @@ export function toMetricVolume(value: number | null | undefined, unit: string): 
       break;
   }
 
-  return Number(result.toFixed(3));
+  return Number(Number(result).toFixed(3));
 }
 
 /**
@@ -158,7 +158,7 @@ export function fromMetricVolume(value: number | null | undefined, unit: string)
       break;
   }
 
-  return Number(result.toFixed(3));
+  return Number(Number(result).toFixed(3));
 }
 
 // =============================================================================

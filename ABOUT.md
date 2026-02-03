@@ -320,7 +320,7 @@ Share vehicle access with family members or team:
 ## Localization
 
 - **Languages**: English, Russian, French, Spanish
-- **Units**: Metric (km, liters) or Imperial (miles, gallons)
+- **Units**: Metric (km, liters) or Imperial (miles, gallons US, gallons UK)
 - **Currency**: Multi-currency support with user-defined home currency
 - **Unit conversion**: All data stored in metric; converted to user preference at display time
 
@@ -350,7 +350,7 @@ Share vehicle access with family members or team:
 
 | App               | Platforms         | Multi-User         | Pricing                                     | Notes                                                                                           |
 | ----------------- | ----------------- | ------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| **CarExpenses**   | Web (PWA)         | ✓ (up to 40 users) | Free – $35/mo                               | True multi-user collaboration with roles, structured cost breakdowns, weather correlation       |
+| **CarExpenses**   | Web (PWA)         | ✓ (up to 40 users) | Free – $60/mo                               | True multi-user collaboration with roles, structured cost breakdowns, weather correlation       |
 | **Drivvo**        | Android, iOS      | ✓ (Fleet plans)    | Free w/ ads; ~$25/year Pro                  | Popular, good reports; Fleet Management for business users                                      |
 | **Fuelio**        | Android, iOS      | ✗                  | Free; ~$10/year Premium                     | Strong fuel tracking, crowdsourced gas prices; no ads; by Sygic                                 |
 | **Simply Auto**   | Android, iOS, Web | ✓ (Platinum)       | Free; Gold ~$5 one-time; Platinum ~$24/year | GPS trip tracking, business mileage deductions                                                  |
@@ -418,6 +418,8 @@ Calculate potential tax savings from business, charitable, and medical mileage. 
 
 ### Near-Term (In Progress)
 
+- **Recurring expenses**: Schedule automatic expense entries by day(s) of week, month, or year
+- **Recurring revenues**: Schedule automatic revenue entries for regular income
 - **Revenue reports**: Profitability per vehicle, per trip, per distance; net profit calculations
 - **Viewer role**: Read-only access for family members or stakeholders who need visibility without edit permissions
 - **Monthly budget estimator**: Historical-based cost projections in Yearly Report
@@ -426,8 +428,6 @@ Calculate potential tax savings from business, charitable, and medical mileage. 
 
 - **Checklists**: Pre/post-travel and maintenance checklists with photo attachments
 - **Data import**: Import from Fuelio, Drivvo, Simply Auto, and other apps
-- **Recurring expenses**: Schedule automatic expense entries by day(s) of week, month, or year
-- **Recurring revenues**: Schedule automatic revenue entries for regular income
 - **Time tracking for travel**: Active driving time and total time (including waiting) for gig workers
 - **Additional expense kinds**: Lodging, food, and other travel-related categories
 
