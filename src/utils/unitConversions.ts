@@ -102,18 +102,26 @@ export function toMetricVolume(value: number | null | undefined, unit: string): 
     return null;
   }
 
+  let result = value;
+
   switch (unit) {
     case 'gal-us':
-      return value * US_GALLONS_TO_LITERS;
+      result = value * US_GALLONS_TO_LITERS;
+      break;
     case 'gal-uk':
-      return value * UK_GALLONS_TO_LITERS;
+      result = value * UK_GALLONS_TO_LITERS;
+      break;
     case 'kwh':
     case 'kg':
-      return value; // Already in base unit
+      result = value; // Already in base unit
+      break;
     case 'l':
     default:
-      return value; // Already in liters
+      result = value; // Already in liters
+      break;
   }
+
+  return Number(result.toFixed(3));
 }
 
 /**
@@ -131,18 +139,26 @@ export function fromMetricVolume(value: number | null | undefined, unit: string)
     return null;
   }
 
+  let result = value;
+
   switch (unit) {
     case 'gal-us':
-      return value / US_GALLONS_TO_LITERS;
+      result = value / US_GALLONS_TO_LITERS;
+      break;
     case 'gal-uk':
-      return value / UK_GALLONS_TO_LITERS;
+      result = value / UK_GALLONS_TO_LITERS;
+      break;
     case 'kwh':
     case 'kg':
-      return value; // Already in base unit
+      result = value; // Already in base unit
+      break;
     case 'l':
     default:
-      return value; // Already in liters
+      result = value; // Already in liters
+      break;
   }
+
+  return Number(result.toFixed(3));
 }
 
 // =============================================================================
