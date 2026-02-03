@@ -321,7 +321,7 @@ const validateUpdate = async (args: any, opt: BaseCoreActionsInterface) => {
   // Validate where clause
   if (!where || Object.keys(where).length === 0) {
     const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
-    opResult.addError('where', 'Where clause is required');
+    opResult.addError('', 'Where clause is required');
     return [opResult, {}];
   }
 
@@ -345,7 +345,7 @@ const validateUpdate = async (args: any, opt: BaseCoreActionsInterface) => {
   // Validate params
   if (!params || Object.keys(params).length === 0) {
     const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
-    opResult.addError('params', 'Update parameters are required');
+    opResult.addError('', 'Update parameters are required');
     return [opResult, {}];
   }
 
@@ -353,7 +353,7 @@ const validateUpdate = async (args: any, opt: BaseCoreActionsInterface) => {
   const { nextWhenDo, nextOdometer } = params;
   if (nextWhenDo === undefined && nextOdometer === undefined) {
     const opResult = new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED });
-    opResult.addError('params', 'At least one of nextWhenDo or nextOdometer is required');
+    opResult.addError('', 'At least one of nextWhenDo or nextOdometer is required');
     return [opResult, {}];
   }
 
