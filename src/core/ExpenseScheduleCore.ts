@@ -12,7 +12,8 @@ import { SCHEDULE_TYPES, EXPENSE_SCHEDULE_STATUS, EXPENSE_TYPES, TABLES } from '
 import { camelKeys, STATUSES } from '@sdflc/utils';
 import config from '../config';
 import { logger } from '../logger';
-import { SCHEDULE_CONSTANTS } from 'boundary';
+import { SCHEDULE_CONSTANTS } from '../boundary';
+import { CarStatsUpdater, ServiceIntervalNextUpdater } from '../utils';
 
 dayjs.extend(utc);
 
@@ -875,6 +876,8 @@ class ExpenseScheduleCore extends AppCore {
    * - Does NOT create expenses for past missed dates
    * - Useful when user wants to "start fresh" without backfilling
    * 
+   * After processing, immediately recalculates car stats and service intervals.
+   * 
    * @returns OpResult with { addedQty, updatedQty, removedQty }
    */
   public async runNow(args: {
@@ -1015,6 +1018,9 @@ class ExpenseScheduleCore extends AppCore {
         let lastCreatedExpenseId: string | null = schedule.lastCreatedExpenseId;
         let lastAddedAt: Date | null = schedule.lastAddedAt ? new Date(schedule.lastAddedAt) : null;
 
+        // Track if any changes were made (for stats update)
+        let hasChanges = false;
+
         // 1. Create missing expenses
         for (const scheduledDate of scheduledDates) {
           const dateKey = dayjs(scheduledDate).utc().format('YYYY-MM-DD');
@@ -1034,6 +1040,7 @@ class ExpenseScheduleCore extends AppCore {
             if (expenseId) {
               addedQty++;
               lastCreatedExpenseId = expenseId;
+              hasChanges = true;
 
               // Track the latest added date
               if (!lastAddedAt || dayjs(scheduledDate).isAfter(dayjs(lastAddedAt))) {
@@ -1054,6 +1061,7 @@ class ExpenseScheduleCore extends AppCore {
               if (needsUpdate) {
                 await this.updateExpenseFromSchedule(expense, schedule, userId, now);
                 updatedQty++;
+                hasChanges = true;
               }
             }
           }
@@ -1064,6 +1072,7 @@ class ExpenseScheduleCore extends AppCore {
               // This expense is outside the valid range, soft delete it
               await this.softDeleteExpense(expense, userId, now);
               removedQty++;
+              hasChanges = true;
             }
           }
         }
@@ -1117,6 +1126,56 @@ class ExpenseScheduleCore extends AppCore {
             updatedAt: now,
           }
         );
+
+        const db = this.getDb();
+
+        // ===========================================================================
+        // Immediate Stats Update (user is waiting)
+        // ===========================================================================
+        if (hasChanges) {
+          try {
+            logger.debug(
+              `[ExpenseScheduleCore] Updating stats for car ${schedule.carId} (currency: ${homeCurrency})`
+            );
+
+            const statsUpdater = new CarStatsUpdater(db, config.dbSchema);
+            await statsUpdater.recalculateCarStats(schedule.carId, homeCurrency);
+
+            logger.debug(
+              `[ExpenseScheduleCore] Stats update complete for car ${schedule.carId}`
+            );
+          } catch (error: any) {
+            // Log error but don't fail the operation - expenses were created successfully
+            logger.error(
+              `[ExpenseScheduleCore] Failed to update stats for car ${schedule.carId}:`,
+              error
+            );
+          }
+
+          // ===========================================================================
+          // Immediate Service Interval Update
+          // ===========================================================================
+          if (schedule.kindId) {
+            try {
+              logger.debug(
+                `[ExpenseScheduleCore] Updating service interval for car ${schedule.carId}, kind ${schedule.kindId}`
+              );
+
+              const serviceIntervalUpdater = new ServiceIntervalNextUpdater(db, config.dbSchema);
+              await serviceIntervalUpdater.recalculateForCarAndKind(schedule.carId, schedule.kindId);
+
+              logger.debug(
+                `[ExpenseScheduleCore] Service interval update complete for car ${schedule.carId}, kind ${schedule.kindId}`
+              );
+            } catch (error: any) {
+              // Log error but don't fail the operation
+              logger.error(
+                `[ExpenseScheduleCore] Failed to update service interval for car ${schedule.carId}, kind ${schedule.kindId}:`,
+                error
+              );
+            }
+          }
+        }
 
         // Fetch updated schedule
         const updatedSchedule = await this.getGateways().expenseScheduleGw.get(id);
@@ -1390,6 +1449,9 @@ class ExpenseScheduleCore extends AppCore {
    * When a schedule is resumed via resume(), last_added_at is set to yesterday,
    * so this processor will only create expenses going forward.
    * 
+   * After processing all schedules, bulk recalculates car stats and service intervals
+   * for all affected cars.
+   * 
    * @param args.batchSize - Number of schedules to process per batch (default: 100)
    * @param args.maxSchedules - Maximum total schedules to process in one run (default: 10000)
    * @returns Summary of processed schedules and created expenses
@@ -1418,6 +1480,14 @@ class ExpenseScheduleCore extends AppCore {
         let completedSchedules = 0;
         let errorCount = 0;
         const errors: Array<{ scheduleId: string; accountId: string; error: string }> = [];
+
+        // Track affected cars for bulk stats update
+        // Map: carId -> Set<homeCurrency>
+        const affectedCars = new Map<string, Set<string>>();
+
+        // Track affected service intervals
+        // Array of { carId, kindId } for service interval updates
+        const affectedServiceIntervals: Array<{ carId: string; kindId: number }> = [];
 
         let lastProcessedId: string | null = null;
         let hasMore = true;
@@ -1482,7 +1552,27 @@ class ExpenseScheduleCore extends AppCore {
                 logger.log(`[ExpenseScheduleCore] Schedule ${schedule.id} marked as COMPLETED`);
               }
 
+              // Track affected cars for stats update (only if expenses were created)
               if (result.createdCount > 0) {
+                if (!affectedCars.has(result.carId)) {
+                  affectedCars.set(result.carId, new Set());
+                }
+                affectedCars.get(result.carId)!.add(result.homeCurrency);
+
+                // Track for service interval updates
+                if (result.kindId) {
+                  // Check if this car+kindId combo is already tracked
+                  const alreadyTracked = affectedServiceIntervals.some(
+                    (item) => item.carId === result.carId && item.kindId === result.kindId
+                  );
+                  if (!alreadyTracked) {
+                    affectedServiceIntervals.push({
+                      carId: result.carId,
+                      kindId: result.kindId,
+                    });
+                  }
+                }
+
                 logger.log(
                   `[ExpenseScheduleCore] Schedule ${schedule.id}: created ${result.createdCount} expenses, ` +
                   `skipped ${result.skippedCount} (already existed)`
@@ -1512,6 +1602,72 @@ class ExpenseScheduleCore extends AppCore {
           }
         }
 
+        const db = this.getDb();
+
+        // ===========================================================================
+        // Bulk Stats Update for All Affected Cars
+        // ===========================================================================
+        let statsUpdatedCars = 0;
+        let statsErrors = 0;
+
+        if (affectedCars.size > 0) {
+          logger.log(
+            `[ExpenseScheduleCore] Starting bulk stats update for ${affectedCars.size} affected cars`
+          );
+
+          const statsUpdater = new CarStatsUpdater(db, config.dbSchema);
+
+          for (const [carId, currencies] of affectedCars) {
+            for (const homeCurrency of currencies) {
+              try {
+                await statsUpdater.recalculateCarStats(carId, homeCurrency);
+                statsUpdatedCars++;
+              } catch (error: any) {
+                statsErrors++;
+                logger.error(
+                  `[ExpenseScheduleCore] Failed to update stats for car ${carId} (currency: ${homeCurrency}):`,
+                  error
+                );
+              }
+            }
+          }
+
+          logger.log(
+            `[ExpenseScheduleCore] Stats update complete: ${statsUpdatedCars} car/currency combinations updated, ${statsErrors} errors`
+          );
+        }
+
+        // ===========================================================================
+        // Bulk Service Interval Update
+        // ===========================================================================
+        let serviceIntervalsUpdated = 0;
+        let serviceIntervalErrors = 0;
+
+        if (affectedServiceIntervals.length > 0) {
+          logger.log(
+            `[ExpenseScheduleCore] Starting service interval update for ${affectedServiceIntervals.length} car/kind combinations`
+          );
+
+          const serviceIntervalUpdater = new ServiceIntervalNextUpdater(db, config.dbSchema);
+
+          for (const { carId, kindId } of affectedServiceIntervals) {
+            try {
+              await serviceIntervalUpdater.recalculateForCarAndKind(carId, kindId);
+              serviceIntervalsUpdated++;
+            } catch (error: any) {
+              serviceIntervalErrors++;
+              logger.error(
+                `[ExpenseScheduleCore] Failed to update service interval for car ${carId}, kind ${kindId}:`,
+                error
+              );
+            }
+          }
+
+          logger.log(
+            `[ExpenseScheduleCore] Service interval update complete: ${serviceIntervalsUpdated} updated, ${serviceIntervalErrors} errors`
+          );
+        }
+
         const summary = {
           processedAt: now.toISOString(),
           processedSchedules,
@@ -1522,6 +1678,11 @@ class ExpenseScheduleCore extends AppCore {
           errorCount,
           errors: errors.slice(0, SCHEDULE_CONSTANTS.MAX_ERRORS_IN_RESPONSE),
           hasMoreToProcess: processedSchedules >= maxSchedules,
+          // Stats update summary
+          statsUpdatedCars,
+          statsErrors,
+          serviceIntervalsUpdated,
+          serviceIntervalErrors,
         };
 
         logger.log(`[ExpenseScheduleCore] Processing complete:`, {
@@ -1530,6 +1691,8 @@ class ExpenseScheduleCore extends AppCore {
           skippedExpenses,
           completedSchedules,
           errorCount,
+          statsUpdatedCars,
+          statsErrors,
         });
 
         return OpResult.ok([summary]);
@@ -1601,12 +1764,12 @@ class ExpenseScheduleCore extends AppCore {
   }
 
   /**
-   * Process a single schedule - create all due expenses.
-   * Uses explicit transaction handling for isolation.
-   * 
-   * Uses last_added_at as the reference point to avoid backfilling paused periods.
-   * Only creates expenses for dates AFTER last_added_at up to today.
-   */
+ * Process a single schedule - create all due expenses.
+ * Uses explicit transaction handling for isolation.
+ * 
+ * Uses last_added_at as the reference point to avoid backfilling paused periods.
+ * Only creates expenses for dates AFTER last_added_at up to today.
+ */
   private async processSingleSchedule(
     schedule: any,
     now: Date
@@ -1615,12 +1778,23 @@ class ExpenseScheduleCore extends AppCore {
     skippedCount: number;
     updated: boolean;
     completed: boolean;
+    // Stats tracking data
+    carId: string;
+    homeCurrency: string;
+    kindId: number | null;
   }> {
     const db = this.getDb();
 
     // Create an isolated transaction - don't use db.startTransaction()
     // which overwrites the instance-level trx
     const trx = await db.createTransaction(null) as any;
+
+    // Prepare stats tracking data (always return these, even on error path)
+    const statsData = {
+      carId: schedule.carId,
+      homeCurrency: schedule.paidInCurrency || 'USD',
+      kindId: schedule.kindId || null,
+    };
 
     try {
       let createdCount = 0;
@@ -1692,7 +1866,7 @@ class ExpenseScheduleCore extends AppCore {
         }
 
         await trx.commit();
-        return { createdCount: 0, skippedCount: 0, updated: needsUpdate, completed };
+        return { createdCount: 0, skippedCount: 0, updated: needsUpdate, completed, ...statsData };
       }
 
       // Get existing expenses for this schedule to check for duplicates
@@ -1716,6 +1890,9 @@ class ExpenseScheduleCore extends AppCore {
         paidInCurrency = userProfile?.homeCurrency || 'USD';
         homeCurrency = paidInCurrency;
       }
+
+      // Update statsData with resolved currency
+      statsData.homeCurrency = homeCurrency;
 
       let lastCreatedExpenseId = schedule.lastCreatedExpenseId;
       let latestAddedAt = schedule.lastAddedAt ? new Date(schedule.lastAddedAt) : null;
@@ -1778,7 +1955,7 @@ class ExpenseScheduleCore extends AppCore {
       );
 
       await trx.commit();
-      return { createdCount, skippedCount, updated: true, completed };
+      return { createdCount, skippedCount, updated: true, completed, ...statsData };
 
     } catch (error) {
       try {

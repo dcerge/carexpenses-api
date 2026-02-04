@@ -223,7 +223,7 @@ class ServiceIntervalNextUpdater {
    * Recalculate service interval for a specific car and kind.
    * Creates, updates, or deletes record as appropriate.
    */
-  private async recalculateForCarAndKind(carId: string, kindId: number): Promise<void> {
+  public async recalculateForCarAndKind(carId: string, kindId: number): Promise<void> {
     // Get interval settings
     const settings = await this.getIntervalSettings(carId, kindId);
 
