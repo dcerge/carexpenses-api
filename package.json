@@ -1,6 +1,6 @@
 {
   "name": "carexpenses-api",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "A multi-tenant SaaS platform for tracking car expenses and trips",
   "main": "build/index.js",
   "scripts": {

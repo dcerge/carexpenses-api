@@ -161,6 +161,8 @@ select apf.id, ap.plan_name, af.feature_code, af.feature_name, apf.feature_value
   order by af.order_no asc 
 
 ---- DATA MIGRATION:
+  
+
 
 -- Populate user account table
 DELETE FROM ms_auth.user_account 

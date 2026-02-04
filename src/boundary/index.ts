@@ -10,3 +10,4 @@ export * from './reportTypes';
 export * from './carStatuses';
 export * from './userCarRoles';
 export * from './travelReportTypes';
+export * from './expenseSchedule';

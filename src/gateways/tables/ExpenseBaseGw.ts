@@ -47,7 +47,7 @@ class ExpenseBaseGw extends BaseGateway {
       whenDoneTo,
       searchKeyword,
       withOdometer,
-      // New filter
+      expenseScheduleId,
       pointType,
     } = filterParams || {};
 
@@ -71,6 +71,10 @@ class ExpenseBaseGw extends BaseGateway {
 
     if (travelId) {
       query.whereIn(FIELDS.TRAVEL_ID, castArray(travelId));
+    }
+
+    if (expenseScheduleId) {
+      query.whereIn(FIELDS.EXPENSE_SCHEDULE_ID, castArray(expenseScheduleId));
     }
 
     if (whenDoneFrom) {

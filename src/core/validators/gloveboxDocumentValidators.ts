@@ -62,6 +62,12 @@ const rulesList = new Checkit({
       message: 'Expires within days should be an integer',
     },
   ],
+  expiredOrExpiring: [
+    {
+      rule: 'boolean',
+      message: 'Expired or expiring should be a boolean',
+    },
+  ],
   status: [
     {
       rule: 'array',

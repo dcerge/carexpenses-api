@@ -102,6 +102,8 @@ export const TABLES = {
   GLOVEBOX_DOC_TYPE_L10N: 'glovebox_doc_type_l_10_n',
   GLOVEBOX_DOCUMENTS: 'glovebox_documents',
   GLOVEBOX_DOCUMENT_FILES: 'glovebox_document_files',
+
+  EXPENSE_SCHEDULES: 'expense_schedules',
 };
 
 // =============================================================================
@@ -256,7 +258,7 @@ export const FIELDS = {
   TOTAL_PRICE_IN_HC: 'total_price_in_hc',
   EXPENSE_PICTURE_ID: 'expense_picture_id',
   FUEL_IN_TANK: 'fuel_in_tank',
-  SUBTOTAL: 'subtototal',
+  SUBTOTAL: 'subtotal',
   TAX: 'tax',
   FEES: 'fees',
   REFUELS_TAXES: 'refuel_taxes',
@@ -528,6 +530,16 @@ export const FIELDS = {
   ADDL_TANK_VOLUME: 'addl_tank_volume',
   ADDL_TANK_VOLUME_ENTERED_IN: 'addl_tank_volume_entered_in',
   ADDL_TANK_DEFAULT_GRADE: 'addl_tank_default_grade',
+
+  // Expense Schedule Fields
+  SCHEDULE_TYPE: 'schedule_type',
+  SCHEDULE_DAYS: 'schedule_days',
+  START_AT: 'start_at',
+  END_AT: 'end_at',
+  NEXT_SCHEDULED_AT: 'next_scheduled_at',
+  LAST_ADDED_AT: 'last_added_at',
+  LAST_CREATED_EXPENSE_ID: 'last_created_expense_id',
+  EXPENSE_SCHEDULE_ID: 'expense_schedule_id',
 };
 
 // =============================================================================
@@ -693,4 +705,25 @@ export const ENTITY_TYPES = {
 export const TANK_TYPES = {
   MAIN: 'main',
   ADDITIONAL: 'addl',
+};
+
+// =============================================================================
+// SCHEDULE TYPES (expense_schedules.schedule_type)
+// =============================================================================
+
+export const SCHEDULE_TYPES = {
+  WEEKLY: 'weekly',
+  MONTHLY: 'monthly',
+  YEARLY: 'yearly',
+  ONE_TIME: 'one-time',
+};
+
+// =============================================================================
+// EXPENSE SCHEDULE STATUS VALUES
+// =============================================================================
+
+export const EXPENSE_SCHEDULE_STATUS = {
+  PAUSED: 50,
+  ACTIVE: 100,
+  COMPLETED: 200,  // For one-time schedules after execution
 };

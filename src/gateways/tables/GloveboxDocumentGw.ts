@@ -52,6 +52,8 @@ class GloveboxDocumentGw extends BaseGateway {
       expiresAtTo,
       isExpired,
       expiresWithinDays,
+      expiredOrExpiring,
+      notifyInDays,
       searchKeyword,
     } = filterParams || {};
 
@@ -93,8 +95,16 @@ class GloveboxDocumentGw extends BaseGateway {
       query.where(FIELDS.EXPIRES_AT, '<=', expiresAtTo);
     }
 
-    // Filter for documents expiring within N days
-    if (expiresWithinDays != null) {
+    // Handle expiredOrExpiring filter - takes precedence over isExpired and expiresWithinDays
+    if (expiredOrExpiring === true) {
+      // Get documents that are expired OR expiring within notifyInDays
+      // notifyInDays is passed from Core after fetching user profile
+      const days = notifyInDays ?? 14; // Default fallback
+
+      query.whereNotNull(FIELDS.EXPIRES_AT);
+      query.where(FIELDS.EXPIRES_AT, '<=', this.getDb().raw(`CURRENT_DATE + ?::integer`, [days]));
+    } else if (expiresWithinDays != null) {
+      // Filter for documents expiring within N days (not yet expired)
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + expiresWithinDays);
       query.whereNotNull(FIELDS.EXPIRES_AT);

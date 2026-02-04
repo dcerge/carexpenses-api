@@ -45,6 +45,22 @@ const recalculateStats = async () => {
   }
 };
 
+const runExpenseSchedules = async () => {
+  const context = await getContext();
+
+  try {
+    logger.log('Running expense schedules...');
+    await context.cores.expenseScheduleCore.processScheduledExpenses({
+      batchSize: 100,
+      maxSchedules: 10000,
+    });
+
+    logger.log('Recalculation complete.');
+  } finally {
+    process.exit(0);
+  }
+};
+
 const transferFiles = async () => {
   const context = await getContext();
 
@@ -95,6 +111,14 @@ yargs(process.argv.splice(2))
       return yargs;
     },
     recalculateStats,
+  )
+  .command(
+    'runschedules',
+    'Runs expense schedules',
+    (yargs) => {
+      return yargs;
+    },
+    runExpenseSchedules,
   )
   .command(
     'transfer-files',

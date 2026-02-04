@@ -45,3 +45,5 @@ export * from './RevenueCategoryL10NGw';
 export * from './RevenueKindGw';
 export * from './RevenueKindL10NGw';
 export * from './RevenueGw';
+
+export * from './ExpenseScheduleGw';

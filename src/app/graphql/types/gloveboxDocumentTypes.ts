@@ -114,6 +114,8 @@ const typeDefs = `#graphql
     expiresAtTo: String
     isExpired: Boolean
     expiresWithinDays: Int
+    "Return expired records or those that are expiring within N days as per user preferences"
+    expiredOrExpiring: Boolean
     status: [Int]
     searchKeyword: String
   }

@@ -67,15 +67,15 @@ class GloveboxDocumentCore extends AppCore {
 
     // Format date fields (not timestamps, just dates)
     if (item.issuedAt !== null && item.issuedAt !== undefined) {
-      item.issuedAt = dayjs(item.issuedAt).format('YYYY-MM-DD');
+      item.issuedAt = dayjs(item.issuedAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
     }
 
     if (item.effectiveAt !== null && item.effectiveAt !== undefined) {
-      item.effectiveAt = dayjs(item.effectiveAt).format('YYYY-MM-DD');
+      item.effectiveAt = dayjs(item.effectiveAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
     }
 
     if (item.expiresAt !== null && item.expiresAt !== undefined) {
-      item.expiresAt = dayjs(item.expiresAt).format('YYYY-MM-DD');
+      item.expiresAt = dayjs(item.expiresAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
     }
 
     return item;
@@ -99,13 +99,22 @@ class GloveboxDocumentCore extends AppCore {
       };
     }
 
-    // Filter by accountId for security
+    // Handle expiredOrExpiring filter - fetch notifyInDays from user profile
+    let updatedFilter = { ...filter, accountId };
+
+    if (filter?.expiredOrExpiring === true) {
+      const userProfile = await this.getCurrentUserProfile();
+      const notifyInDays = userProfile.notifyInDays ?? 14; // Default to 14 days if not set
+
+      updatedFilter = {
+        ...updatedFilter,
+        notifyInDays,
+      };
+    }
+
     return {
       ...args,
-      filter: {
-        ...filter,
-        accountId,
-      },
+      filter: updatedFilter,
     };
   }
 
