@@ -46,7 +46,6 @@ class CarGw extends BaseGateway {
       accountId,
       userId,
       label,
-      make,
       model,
       bodyTypeId,
       transmissionTypeId,
@@ -81,10 +80,6 @@ class CarGw extends BaseGateway {
 
     if (label) {
       query.whereIn(FIELDS.LABEL, castArray(label));
-    }
-
-    if (make) {
-      query.whereIn(FIELDS.MAKE, castArray(make));
     }
 
     if (model) {
@@ -193,6 +188,52 @@ class CarGw extends BaseGateway {
     const records = await query;
 
     return records.map(record => record.id);
+  }
+
+  async getDistinctMakeModelYear(): Promise<{ makeName: string; model: string; modelYear: number }[]> {
+    const result = await this.getDb().runRawQuery(
+      `SELECT DISTINCT
+       UPPER(TRIM(vm.make_name)) AS make_name,
+       UPPER(TRIM(c.model))     AS model,
+       c.manufactured_in        AS model_year
+     FROM ${config.dbSchema}.${TABLES.CARS} c
+     INNER JOIN ${config.dbSchema}.${TABLES.VEHICLE_MAKES} vm ON vm.id = c.make_id
+     WHERE c.${FIELDS.REMOVED_AT} IS NULL
+       AND c.${FIELDS.MAKE_ID} IS NOT NULL
+       AND c.${FIELDS.MODEL} IS NOT NULL AND TRIM(c.${FIELDS.MODEL}) != ''
+       AND c.manufactured_in IS NOT NULL
+     ORDER BY make_name, model, model_year`,
+      [],
+    );
+
+    return (result?.rows || []).map((row: any) => ({
+      makeName: row.make_name,
+      model: row.model,
+      modelYear: row.model_year,
+    }));
+  }
+
+  async findCarsByMakeModelYear(
+    makeName: string,
+    model: string,
+    modelYear: number
+  ): Promise<{ id: string; accountId: string }[]> {
+    const result = await this.getDb().runRawQuery(
+      `SELECT c.${FIELDS.ID}, c.${FIELDS.ACCOUNT_ID}
+     FROM ${config.dbSchema}.${TABLES.CARS} c
+     JOIN ${config.dbSchema}.${TABLES.VEHICLE_MAKES} vm
+       ON vm.${FIELDS.ID} = c.${FIELDS.MAKE_ID}
+     WHERE UPPER(TRIM(vm.${FIELDS.MAKE_NAME})) = ?
+       AND UPPER(TRIM(c.${FIELDS.MODEL})) = ?
+       AND c.${FIELDS.MANUFACTURED_IN} = ?
+       AND c.${FIELDS.REMOVED_AT} IS NULL`,
+      [makeName.toUpperCase().trim(), model.toUpperCase().trim(), modelYear]
+    );
+
+    return (result?.rows || []).map((row: any) => ({
+      id: row.id,
+      accountId: row.account_id,
+    }));
   }
 }
 

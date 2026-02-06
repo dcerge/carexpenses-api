@@ -1,4 +1,4 @@
-// ./src/gateways/tables/CarBodyTypeL10NGw.ts
+// ./src/gateways/tables/VehicleMakeGw.ts
 import { BaseGateway, BaseGatewayPropsInterface } from '@sdflc/backend-helpers';
 import { SORT_ORDER, STATUSES } from '@sdflc/utils';
 

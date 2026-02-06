@@ -1,3 +1,4 @@
+// ./src/app/cli/index.ts
 import yargs, { exit } from 'yargs';
 import { createContext } from '../../context';
 
@@ -95,6 +96,28 @@ const transferCarImages = async () => {
   }
 };
 
+const fetchVehicleRecalls = async () => {
+  const context = await getContext();
+
+  try {
+    if (redisClient) {
+      await redisClient.connect();
+    }
+
+    logger.log('Ensuring recall lookups exist for all vehicles...');
+    const ensureResult = await context.cores.vehicleRecallCore.ensureLookups({});
+    logger.log('Ensure lookups result:', ensureResult?.data);
+
+    logger.log('Fetching stale vehicle recalls from external APIs...');
+    const fetchResult = await context.cores.vehicleRecallCore.fetchStaleRecalls({});
+    logger.log('Fetch recalls result:', fetchResult?.data);
+
+    logger.log('Vehicle recalls fetch complete.');
+  } finally {
+    process.exit(0);
+  }
+};
+
 yargs(process.argv.splice(2))
   .command(
     'reset',
@@ -135,6 +158,14 @@ yargs(process.argv.splice(2))
       return yargs;
     },
     transferCarImages,
+  )
+  .command(
+    'fetch-recalls',
+    'Fetches vehicle safety recalls from NHTSA and Transport Canada for all vehicles',
+    (yargs) => {
+      return yargs;
+    },
+    fetchVehicleRecalls,
   )
   .strict()
   .help('h')

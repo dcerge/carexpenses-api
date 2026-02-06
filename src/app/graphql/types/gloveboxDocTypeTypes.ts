@@ -14,6 +14,7 @@ const typeDefs = `#graphql
     hasIssuingAuthority: Boolean
     hasCost: Boolean
     hasCoverageAmount: Boolean
+    hasInspectionDate: Boolean
     
     # Label customization
     documentNumberLabelKey: String

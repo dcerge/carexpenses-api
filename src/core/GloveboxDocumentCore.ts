@@ -78,6 +78,10 @@ class GloveboxDocumentCore extends AppCore {
       item.expiresAt = dayjs(item.expiresAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
     }
 
+    if (item.inspectedAt !== null && item.inspectedAt !== undefined) {
+      item.inspectedAt = dayjs(item.inspectedAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
+    }
+
     return item;
   }
 

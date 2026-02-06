@@ -12,10 +12,7 @@ export const up = (knex: Knex) =>
     table
       .integer(FIELDS.KIND_ID)
       .notNullable()
-      .references(FIELDS.ID)
-      .inTable(`${dbSchema}.${TABLES.REVENUE_KINDS}`)
-      .onDelete('RESTRICT')
-      .comment('Reference to revenue_kinds');
+      .comment('Reference to seedable revenue_kinds');
 
     table.string(FIELDS.SHORT_NOTE, 128).nullable().comment('Brief note about the revenue');
 

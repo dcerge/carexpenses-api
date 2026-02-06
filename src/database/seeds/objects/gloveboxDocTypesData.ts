@@ -1,6 +1,7 @@
 export const GLOVEBOX_DOC_CATEGORIES = {
   VEHICLE: 'vehicle',
   DRIVER: 'driver',
+  EQUIPMENT: 'equipment',
   OTHER: 'other',
 } as const;
 
@@ -14,16 +15,16 @@ export interface GloveboxDocTypeLang {
 
 export interface GloveboxDocTypeData {
   id: number;
-  orderNo: number;
   code: string;
   category: GloveboxDocCategory;
-  hasDocumentNumber: boolean;
-  hasIssueDate: boolean;
-  hasEffectiveDate: boolean;
-  hasExpiration: boolean;
-  hasIssuingAuthority: boolean;
-  hasCost: boolean;
-  hasCoverageAmount: boolean;
+  hasDocumentNumber?: boolean;
+  hasIssueDate?: boolean;
+  hasEffectiveDate?: boolean;
+  hasExpiration?: boolean;
+  hasIssuingAuthority?: boolean;
+  hasCost?: boolean;
+  hasCoverageAmount?: boolean;
+  hasInspectionDate?: boolean;
   documentNumberLabelKey?: string;
   langs: {
     en: GloveboxDocTypeLang;
@@ -39,7 +40,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   // ===========================================================================
   {
     id: 1,
-    orderNo: 10,
     code: 'REGISTRATION',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
@@ -48,7 +48,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'registrationNumber',
     langs: {
       en: {
@@ -75,11 +74,9 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 2,
-    orderNo: 20,
     code: 'INSURANCE_POLICY',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
-    hasIssueDate: false,
     hasEffectiveDate: true,
     hasExpiration: true,
     hasIssuingAuthority: true,
@@ -111,16 +108,12 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 3,
-    orderNo: 30,
     code: 'INSURANCE_CARD',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
-    hasIssueDate: false,
     hasEffectiveDate: true,
     hasExpiration: true,
     hasIssuingAuthority: true,
-    hasCost: false,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'policyNumber',
     langs: {
       en: {
@@ -147,16 +140,11 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 4,
-    orderNo: 40,
     code: 'TITLE',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
-    hasExpiration: false,
     hasIssuingAuthority: true,
-    hasCost: false,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'titleNumber',
     langs: {
       en: {
@@ -183,16 +171,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 5,
-    orderNo: 50,
     code: 'SAFETY_INSPECTION',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'inspectionNumber',
     langs: {
       en: {
@@ -219,16 +204,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 6,
-    orderNo: 60,
     code: 'EMISSIONS_TEST',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'testNumber',
     langs: {
       en: {
@@ -255,7 +237,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 7,
-    orderNo: 70,
     code: 'WARRANTY',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
@@ -263,7 +244,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasEffectiveDate: true,
     hasExpiration: true,
     hasIssuingAuthority: true,
-    hasCost: false,
     hasCoverageAmount: true,
     documentNumberLabelKey: 'warrantyNumber',
     langs: {
@@ -291,7 +271,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 8,
-    orderNo: 80,
     code: 'EXTENDED_WARRANTY',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
@@ -327,16 +306,11 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 9,
-    orderNo: 90,
     code: 'PURCHASE_AGREEMENT',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
-    hasExpiration: false,
-    hasIssuingAuthority: false,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'contractNumber',
     langs: {
       en: {
@@ -363,16 +337,11 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 10,
-    orderNo: 100,
     code: 'BILL_OF_SALE',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
-    hasExpiration: false,
-    hasIssuingAuthority: false,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'documentNumber',
     langs: {
       en: {
@@ -399,7 +368,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 11,
-    orderNo: 110,
     code: 'LOAN_AGREEMENT',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
@@ -408,7 +376,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'loanNumber',
     langs: {
       en: {
@@ -435,7 +402,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 12,
-    orderNo: 120,
     code: 'LEASE_AGREEMENT',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
@@ -444,7 +410,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'leaseNumber',
     langs: {
       en: {
@@ -471,16 +436,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 13,
-    orderNo: 130,
     code: 'ROADSIDE_ASSISTANCE',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
-    hasIssueDate: false,
     hasEffectiveDate: true,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'membershipNumber',
     langs: {
       en: {
@@ -507,7 +469,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 14,
-    orderNo: 140,
     code: 'PARKING_PERMIT',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
@@ -516,7 +477,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'permitNumber',
     langs: {
       en: {
@@ -543,16 +503,11 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 15,
-    orderNo: 150,
     code: 'TOLL_TRANSPONDER',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
-    hasExpiration: false,
     hasIssuingAuthority: true,
-    hasCost: false,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'transponderNumber',
     langs: {
       en: {
@@ -579,16 +534,12 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 16,
-    orderNo: 160,
     code: 'IMPORT_DOCUMENT',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
-    hasExpiration: false,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'declarationNumber',
     langs: {
       en: {
@@ -615,16 +566,11 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 17,
-    orderNo: 170,
     code: 'RECALL_NOTICE',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
-    hasExpiration: false,
     hasIssuingAuthority: true,
-    hasCost: false,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'recallNumber',
     langs: {
       en: {
@@ -651,7 +597,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 18,
-    orderNo: 180,
     code: 'VIGNETTE',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
@@ -660,7 +605,6 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'vignetteNumber',
     langs: {
       en: {
@@ -687,16 +631,12 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 19,
-    orderNo: 190,
     code: 'ENVIRONMENTAL_STICKER',
     category: GLOVEBOX_DOC_CATEGORIES.VEHICLE,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
-    hasExpiration: false,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'stickerNumber',
     langs: {
       en: {
@@ -727,16 +667,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   // ===========================================================================
   {
     id: 100,
-    orderNo: 1000,
     code: 'DRIVERS_LICENSE',
     category: GLOVEBOX_DOC_CATEGORIES.DRIVER,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'licenseNumber',
     langs: {
       en: {
@@ -763,16 +700,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 101,
-    orderNo: 1010,
     code: 'INTERNATIONAL_PERMIT',
     category: GLOVEBOX_DOC_CATEGORIES.DRIVER,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'permitNumber',
     langs: {
       en: {
@@ -799,16 +733,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 102,
-    orderNo: 1020,
     code: 'COMMERCIAL_LICENSE',
     category: GLOVEBOX_DOC_CATEGORIES.DRIVER,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'licenseNumber',
     langs: {
       en: {
@@ -835,16 +766,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 103,
-    orderNo: 1030,
     code: 'MOTORCYCLE_ENDORSEMENT',
     category: GLOVEBOX_DOC_CATEGORIES.DRIVER,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'endorsementNumber',
     langs: {
       en: {
@@ -871,16 +799,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 104,
-    orderNo: 1040,
     code: 'MEDICAL_CERTIFICATE',
     category: GLOVEBOX_DOC_CATEGORIES.DRIVER,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'certificateNumber',
     langs: {
       en: {
@@ -907,16 +832,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 105,
-    orderNo: 1050,
     code: 'DEFENSIVE_DRIVING_CERT',
     category: GLOVEBOX_DOC_CATEGORIES.DRIVER,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'certificateNumber',
     langs: {
       en: {
@@ -943,16 +865,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 106,
-    orderNo: 1060,
     code: 'HAZMAT_ENDORSEMENT',
     category: GLOVEBOX_DOC_CATEGORIES.DRIVER,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'endorsementNumber',
     langs: {
       en: {
@@ -979,16 +898,13 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
   {
     id: 107,
-    orderNo: 1070,
     code: 'TAXI_LICENSE',
     category: GLOVEBOX_DOC_CATEGORIES.DRIVER,
     hasDocumentNumber: true,
     hasIssueDate: true,
-    hasEffectiveDate: false,
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
-    hasCoverageAmount: false,
     documentNumberLabelKey: 'licenseNumber',
     langs: {
       en: {
@@ -1015,11 +931,390 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
   },
 
   // ===========================================================================
+  // EQUIPMENT (200-299)
+  // ===========================================================================
+  {
+    id: 200,
+    code: 'FIRST_AID_KIT',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasExpiration: true,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'First Aid Kit',
+        description: 'Vehicle first aid kit with medical supplies',
+      },
+      ru: {
+        name: 'Аптечка',
+        description: 'Автомобильная аптечка первой помощи',
+      },
+      fr: {
+        name: 'Trousse de secours',
+        description: 'Trousse de premiers secours pour véhicule',
+      },
+      es: {
+        name: 'Botiquín de primeros auxilios',
+        description: 'Botiquín de primeros auxilios para vehículo',
+      },
+    },
+  },
+  {
+    id: 201,
+    code: 'FIRE_EXTINGUISHER',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasDocumentNumber: true,
+    hasExpiration: true,
+    hasInspectionDate: true,
+    hasCost: true,
+    documentNumberLabelKey: 'serialNumber',
+    langs: {
+      en: {
+        name: 'Fire Extinguisher',
+        description: 'Vehicle fire extinguisher (annual inspection required in many jurisdictions)',
+        documentNumberLabel: 'Serial Number',
+      },
+      ru: {
+        name: 'Огнетушитель',
+        description: 'Автомобильный огнетушитель (требуется ежегодная проверка)',
+        documentNumberLabel: 'Серийный номер',
+      },
+      fr: {
+        name: 'Extincteur',
+        description: 'Extincteur de véhicule (contrôle annuel requis dans de nombreux pays)',
+        documentNumberLabel: 'Numéro de série',
+      },
+      es: {
+        name: 'Extintor',
+        description: 'Extintor de vehículo (inspección anual requerida en muchas jurisdicciones)',
+        documentNumberLabel: 'Número de serie',
+      },
+    },
+  },
+  {
+    id: 202,
+    code: 'WARNING_TRIANGLE',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Warning Triangle',
+        description: 'Reflective warning triangle for roadside emergencies',
+      },
+      ru: {
+        name: 'Знак аварийной остановки',
+        description: 'Светоотражающий треугольник для аварийной остановки',
+      },
+      fr: {
+        name: 'Triangle de signalisation',
+        description: 'Triangle de présignalisation réfléchissant',
+      },
+      es: {
+        name: 'Triángulo de emergencia',
+        description: 'Triángulo reflectante de señalización de emergencia',
+      },
+    },
+  },
+  {
+    id: 203,
+    code: 'REFLECTIVE_VEST',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Reflective Vest',
+        description: 'High-visibility safety vest for roadside use',
+      },
+      ru: {
+        name: 'Светоотражающий жилет',
+        description: 'Жилет повышенной видимости для использования на дороге',
+      },
+      fr: {
+        name: 'Gilet réfléchissant',
+        description: 'Gilet haute visibilité obligatoire en cas d\'arrêt sur la route',
+      },
+      es: {
+        name: 'Chaleco reflectante',
+        description: 'Chaleco de alta visibilidad para uso en carretera',
+      },
+    },
+  },
+  {
+    id: 204,
+    code: 'BREATHALYZER',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasExpiration: true,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Breathalyzer',
+        description: 'Single-use or electronic breathalyzer (recommended in France)',
+      },
+      ru: {
+        name: 'Алкотестер',
+        description: 'Одноразовый или электронный алкотестер',
+      },
+      fr: {
+        name: 'Éthylotest',
+        description: 'Éthylotest jetable ou électronique (recommandé en France)',
+      },
+      es: {
+        name: 'Alcoholímetro',
+        description: 'Alcoholímetro desechable o electrónico',
+      },
+    },
+  },
+  {
+    id: 205,
+    code: 'TOW_ROPE',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Tow Rope',
+        description: 'Tow rope or tow strap for vehicle recovery',
+      },
+      ru: {
+        name: 'Буксировочный трос',
+        description: 'Трос или стропа для буксировки автомобиля',
+      },
+      fr: {
+        name: 'Câble de remorquage',
+        description: 'Câble ou sangle de remorquage pour dépannage',
+      },
+      es: {
+        name: 'Cable de remolque',
+        description: 'Cable o correa de remolque para recuperación de vehículos',
+      },
+    },
+  },
+  {
+    id: 206,
+    code: 'SPARE_TIRE',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Spare Tire / Repair Kit',
+        description: 'Full-size spare, compact spare, or tire repair kit',
+      },
+      ru: {
+        name: 'Запасное колесо / Ремкомплект',
+        description: 'Полноразмерная запаска, докатка или набор для ремонта шин',
+      },
+      fr: {
+        name: 'Roue de secours / Kit de réparation',
+        description: 'Roue de secours complète, galette ou kit anti-crevaison',
+      },
+      es: {
+        name: 'Rueda de repuesto / Kit de reparación',
+        description: 'Rueda de repuesto completa, de emergencia o kit de reparación de neumáticos',
+      },
+    },
+  },
+  {
+    id: 207,
+    code: 'JUMPER_CABLES',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Jumper Cables',
+        description: 'Battery jumper cables or portable jump starter',
+      },
+      ru: {
+        name: 'Провода для прикуривания',
+        description: 'Пусковые провода или портативное пуско-зарядное устройство',
+      },
+      fr: {
+        name: 'Câbles de démarrage',
+        description: 'Câbles de démarrage ou booster portable',
+      },
+      es: {
+        name: 'Cables de arranque',
+        description: 'Cables de arranque o arrancador portátil',
+      },
+    },
+  },
+  {
+    id: 208,
+    code: 'ICE_SCRAPER',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Ice Scraper',
+        description: 'Windshield ice scraper and snow brush',
+      },
+      ru: {
+        name: 'Скребок для льда',
+        description: 'Скребок для очистки стёкол ото льда и щётка для снега',
+      },
+      fr: {
+        name: 'Grattoir à glace',
+        description: 'Grattoir à givre et balai à neige pour pare-brise',
+      },
+      es: {
+        name: 'Rascador de hielo',
+        description: 'Rascador de hielo y cepillo de nieve para parabrisas',
+      },
+    },
+  },
+  {
+    id: 209,
+    code: 'TIRE_CHAINS',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Tire Chains',
+        description: 'Snow chains for winter driving in mountainous areas',
+      },
+      ru: {
+        name: 'Цепи противоскольжения',
+        description: 'Цепи для зимнего вождения в горной местности',
+      },
+      fr: {
+        name: 'Chaînes à neige',
+        description: 'Chaînes à neige pour conduite hivernale en montagne',
+      },
+      es: {
+        name: 'Cadenas para nieve',
+        description: 'Cadenas de nieve para conducción invernal en zonas montañosas',
+      },
+    },
+  },
+  {
+    id: 210,
+    code: 'DASH_CAM',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasDocumentNumber: true,
+    hasCost: true,
+    documentNumberLabelKey: 'serialNumber',
+    langs: {
+      en: {
+        name: 'Dash Cam',
+        description: 'Dashboard camera for recording driving footage',
+        documentNumberLabel: 'Serial Number',
+      },
+      ru: {
+        name: 'Видеорегистратор',
+        description: 'Автомобильный видеорегистратор для записи поездок',
+        documentNumberLabel: 'Серийный номер',
+      },
+      fr: {
+        name: 'Caméra embarquée',
+        description: 'Dashcam pour enregistrement vidéo de conduite',
+        documentNumberLabel: 'Numéro de série',
+      },
+      es: {
+        name: 'Cámara de tablero',
+        description: 'Cámara de salpicadero para grabación de conducción',
+        documentNumberLabel: 'Número de serie',
+      },
+    },
+  },
+  {
+    id: 211,
+    code: 'CAR_JACK',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Car Jack & Lug Wrench',
+        description: 'Scissor jack or hydraulic jack with lug wrench for tire changes',
+      },
+      ru: {
+        name: 'Домкрат и баллонный ключ',
+        description: 'Ромбический или гидравлический домкрат с баллонным ключом',
+      },
+      fr: {
+        name: 'Cric et clé à roue',
+        description: 'Cric ciseau ou hydraulique avec clé à écrous pour changement de roue',
+      },
+      es: {
+        name: 'Gato y llave de ruedas',
+        description: 'Gato tijera o hidráulico con llave de tuercas para cambio de neumáticos',
+      },
+    },
+  },
+  {
+    id: 212,
+    code: 'FLASHLIGHT',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Flashlight / Emergency Light',
+        description: 'Flashlight or emergency LED light for roadside use',
+      },
+      ru: {
+        name: 'Фонарик / Аварийный свет',
+        description: 'Фонарик или аварийный светодиодный фонарь',
+      },
+      fr: {
+        name: 'Lampe torche / Lumière d\'urgence',
+        description: 'Lampe torche ou lumière LED d\'urgence pour bord de route',
+      },
+      es: {
+        name: 'Linterna / Luz de emergencia',
+        description: 'Linterna o luz LED de emergencia para uso en carretera',
+      },
+    },
+  },
+  {
+    id: 213,
+    code: 'EMERGENCY_BLANKET',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Emergency Blanket',
+        description: 'Thermal or survival blanket for winter emergencies',
+      },
+      ru: {
+        name: 'Аварийное одеяло',
+        description: 'Термоодеяло или спасательное покрывало на случай зимних аварий',
+      },
+      fr: {
+        name: 'Couverture de survie',
+        description: 'Couverture thermique ou de survie pour urgences hivernales',
+      },
+      es: {
+        name: 'Manta de emergencia',
+        description: 'Manta térmica o de supervivencia para emergencias invernales',
+      },
+    },
+  },
+  {
+    id: 214,
+    code: 'PORTABLE_AIR_COMPRESSOR',
+    category: GLOVEBOX_DOC_CATEGORIES.EQUIPMENT,
+    hasCost: true,
+    langs: {
+      en: {
+        name: 'Portable Air Compressor',
+        description: 'Portable tire inflator or air compressor',
+      },
+      ru: {
+        name: 'Портативный компрессор',
+        description: 'Портативный насос или компрессор для подкачки шин',
+      },
+      fr: {
+        name: 'Compresseur portable',
+        description: 'Gonfleur de pneu ou compresseur d\'air portable',
+      },
+      es: {
+        name: 'Compresor portátil',
+        description: 'Inflador de neumáticos o compresor de aire portátil',
+      },
+    },
+  },
+
+  // ===========================================================================
   // OTHER DOCUMENTS (1000+)
   // ===========================================================================
   {
     id: 1000,
-    orderNo: 10000,
     code: 'CUSTOM',
     category: GLOVEBOX_DOC_CATEGORIES.OTHER,
     hasDocumentNumber: true,
@@ -1029,6 +1324,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasIssuingAuthority: true,
     hasCost: true,
     hasCoverageAmount: true,
+    hasInspectionDate: true,
     documentNumberLabelKey: 'documentNumber',
     langs: {
       en: {

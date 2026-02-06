@@ -33,3 +33,4 @@ export * from './GloveboxDocumentCore';
 export * from './RevenueCategoryCore';
 export * from './RevenueKindCore';
 export * from './ExpenseScheduleCore';
+export * from './VehicleRecallCore';

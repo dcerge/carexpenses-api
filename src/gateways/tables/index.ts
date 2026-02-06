@@ -47,3 +47,6 @@ export * from './RevenueKindL10NGw';
 export * from './RevenueGw';
 
 export * from './ExpenseScheduleGw';
+export * from './VehicleRecallLookupGw';
+export * from './VehicleRecallGw';
+export * from './VehicleRecallStatusGw';

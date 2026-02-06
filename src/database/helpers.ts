@@ -104,6 +104,13 @@ export const TABLES = {
   GLOVEBOX_DOCUMENT_FILES: 'glovebox_document_files',
 
   EXPENSE_SCHEDULES: 'expense_schedules',
+
+  // ---------------------------------------------------------------------------
+  // Vehicle Recalls
+  // ---------------------------------------------------------------------------
+  VEHICLE_RECALL_LOOKUPS: 'vehicle_recall_lookups',
+  VEHICLE_RECALLS: 'vehicle_recalls',
+  VEHICLE_RECALL_STATUSES: 'vehicle_recall_statuses',
 };
 
 // =============================================================================
@@ -406,6 +413,7 @@ export const FIELDS = {
   HAS_DOCUMENT_NUMBER: 'has_document_number',
   HAS_ISSUE_DATE: 'has_issue_date',
   HAS_EFFECTIVE_DATE: 'has_effective_date',
+  HAS_INSPECTION_DATE: 'has_inspection_date',
   HAS_EXPIRATION: 'has_expiration',
   HAS_ISSUING_AUTHORITY: 'has_issuing_authority',
   HAS_COST: 'has_cost',
@@ -416,6 +424,7 @@ export const FIELDS = {
   ISSUED_AT: 'issued_at',
   EFFECTIVE_AT: 'effective_at',
   EXPIRES_AT: 'expires_at',
+  INSPECTED_AT: 'inspected_at',
   ISSUING_AUTHORITY: 'issuing_authority',
   COST: 'cost',
   COST_CURRENCY: 'cost_currency',
@@ -540,6 +549,32 @@ export const FIELDS = {
   LAST_ADDED_AT: 'last_added_at',
   LAST_CREATED_EXPENSE_ID: 'last_created_expense_id',
   EXPENSE_SCHEDULE_ID: 'expense_schedule_id',
+
+  // ---------------------------------------------------------------------------
+  // Vehicle Recall Fields
+  // ---------------------------------------------------------------------------
+  MODEL_YEAR: 'model_year',
+  SOURCE: 'source',
+  COUNTRY_CODE: 'country_code',
+  FETCHED_AT: 'fetched_at',
+  NEXT_FETCH_AFTER: 'next_fetch_after',
+  FETCH_ERROR: 'fetch_error',
+  RESULTS_COUNT: 'results_count',
+  LOOKUP_ID: 'lookup_id',
+  CAMPAIGN_NUMBER: 'campaign_number',
+  MANUFACTURER: 'manufacturer',
+  COMPONENT: 'component',
+  SYSTEM_TYPE: 'system_type',
+  SUMMARY: 'summary',
+  CONSEQUENCE: 'consequence',
+  REMEDY: 'remedy',
+  REPORT_RECEIVED_DATE: 'report_received_date',
+  PARK_IT: 'park_it',
+  PARK_OUTSIDE: 'park_outside',
+  OTA_UPDATE: 'ota_update',
+  VEHICLE_RECALL_ID: 'vehicle_recall_id',
+  DISMISSED_AT: 'dismissed_at',
+  RESOLVED_AT: 'resolved_at',
 };
 
 // =============================================================================
@@ -727,3 +762,25 @@ export const EXPENSE_SCHEDULE_STATUS = {
   ACTIVE: 100,
   COMPLETED: 200,  // For one-time schedules after execution
 };
+
+export const RECALL_SOURCES = {
+  NHTSA: 'NHTSA',      // National Highway Traffic Safety Administration (US)
+  TC: 'TC',             // Transport Canada
+};
+
+export const VEHICLE_RECALL_LOOKUPS_STATUSES = {
+  PENDING: 300, // queued / not yet fetched
+  ACTIVE: 100, // successfully fetched
+  BLOCKED: 1000 // fetch error
+} as const;
+
+export const VEHICLE_RECALLS_STATUSES = {
+  ACTIVE: 100, // valid recall record
+  REMOVED: 10000 // removed/stale
+} as const;
+
+export const VEHICLE_RECALL_STATUSES_STATUSES = {
+  ACTIVE: 100, // open recall, needs user attention
+  DISABLED: 5000, // dismissed by user (acknowledged, not acting)
+  REMOVED: 10000, // resolved/repaired by user
+} as const;
