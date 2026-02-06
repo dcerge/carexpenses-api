@@ -12,7 +12,7 @@ import { AppCore } from './AppCore';
 import { validators } from './validators/carValidators';
 import { trialCheckMiddleware } from '../middleware';
 import { FEATURE_CODES } from '../utils';
-import { ENTITY_TYPE_IDS, USER_CAR_ROLES, CAR_STATUSES } from '../boundary';
+import { ENTITY_TYPE_IDS, USER_CAR_ROLES, CAR_STATUSES, USER_ROLES, OPERATION_RIGHTS } from '../boundary';
 import config from '../config';
 
 dayjs.extend(utc);
@@ -125,6 +125,8 @@ class CarCore extends AppCore {
     // Use AppCore's filterAccessibleCarIds for DRIVER role restriction
     const carIdFilter = await this.filterAccessibleCarIds(filter?.id);
 
+    console.log('===== carIdFilter', carIdFilter)
+
     // Filter by accountId for security
     return {
       ...args,
@@ -166,7 +168,11 @@ class CarCore extends AppCore {
   }
 
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to create vehicles');
+    }
 
     const trialCheck = await trialCheckMiddleware({
       core: this,
@@ -269,18 +275,23 @@ class CarCore extends AppCore {
     const { args } = opt || {};
     const { where } = args || {};
     const { id } = where || {};
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
 
-    if (!id) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Car ID is required');
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to update vehicles');
     }
 
     // Check if user has access to the car
     const car = await this.getGateways().carGw.get(id);
+
+    if (!car) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Vehicle not found');
+    }
+
     const hasAccess = await this.validateCarAccess(car);
 
     if (!hasAccess) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Car not found');
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to update the vehicle');
     }
 
     // Don't allow changing accountId or userId
@@ -479,7 +490,7 @@ class CarCore extends AppCore {
     const { accountId } = this.getContext();
 
     // DRIVER role cannot remove any vehicles
-    if (this.isDriverRole()) {
+    if (this.isDriverOrViewerRole()) {
       return OpResult.fail(
         OP_RESULT_CODES.FORBIDDEN,
         {},
@@ -487,16 +498,11 @@ class CarCore extends AppCore {
       );
     }
 
-    if (!id) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Car ID is required');
-    }
-
     // Check if user has access to the car
     const car = await this.getGateways().carGw.get(id);
-    const hasAccess = await this.validateCarAccess(car);
 
-    if (!hasAccess) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Car not found');
+    if (!car) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Vehicle not found');
     }
 
     // Add accountId to where clause for SQL-level security
@@ -527,7 +533,7 @@ class CarCore extends AppCore {
 
   public async beforeRemoveMany(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
     // DRIVER role cannot remove any vehicles
-    if (this.isDriverRole()) {
+    if (this.isDriverOrViewerRole()) {
       return OpResult.fail(
         OP_RESULT_CODES.FORBIDDEN,
         {},

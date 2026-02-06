@@ -320,7 +320,7 @@ class VehicleRecallCore extends AppCore {
         }
 
         // DRIVER role access control
-        if (this.isDriverRole()) {
+        if (this.isDriverOrViewerRole()) {
           const hasAccess = await this.hasAccessToCar(car.id);
           if (!hasAccess) {
             this.logger.log(`The user ${userId} has no access to the car ID ${carId} in the account ${accountId}`);
@@ -478,7 +478,7 @@ class VehicleRecallCore extends AppCore {
         let carIds: string[] = [];
 
         if (carId) {
-          if (this.isDriverRole()) {
+          if (this.isDriverOrViewerRole()) {
             const hasAccess = await this.hasAccessToCar(carId);
             if (!hasAccess) {
               return this.success({ active: 0, dismissed: 0, resolved: 0 });
@@ -651,7 +651,7 @@ class VehicleRecallCore extends AppCore {
           return this.failure(OP_RESULT_CODES.FAILED, 'Vehicle not found');
         }
 
-        if (this.isDriverRole()) {
+        if (this.isDriverOrViewerRole()) {
           const hasAccess = await this.hasAccessToCar(carId);
           if (!hasAccess) {
             this.logger.log(`User ${userId} has no access to the vehicle with ID ${carId} and the account ${accountId}`);
@@ -808,7 +808,7 @@ class VehicleRecallCore extends AppCore {
           return this.failure(OP_RESULT_CODES.FAILED, 'Vehicle not found');
         }
 
-        if (this.isDriverRole()) {
+        if (this.isDriverOrViewerRole()) {
           const hasAccess = await this.hasAccessToCar(carId);
           if (!hasAccess) {
             this.logger.log(`Failed to request vehicle recalls for car ID ${carId} and account ${accountId}: User has not access rights to the car`);

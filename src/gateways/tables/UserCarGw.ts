@@ -50,7 +50,7 @@ class UserCarGw extends BaseGateway {
     }
 
     if (userId) {
-      query.whereIn(FIELDS.USER_ID, castArray(userId));
+      query.whereIn(`${TABLES.USER_CARS}.${FIELDS.USER_ID}`, castArray(userId));
     }
 
     if (carId) {

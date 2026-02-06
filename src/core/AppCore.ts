@@ -73,9 +73,12 @@ class AppCore extends BaseCore {
    * Checks if the current user has DRIVER role (limited access)
    * DRIVER role users can only access cars they are explicitly assigned to
    */
-  protected isDriverRole(): boolean {
+  protected isDriverOrViewerRole(): boolean {
     const { roleId } = this.getContext();
-    return roleId === USER_ROLES.DRIVER;
+
+    return roleId
+      ? [USER_ROLES.DRIVER, USER_ROLES.VIEWER].includes(roleId)
+      : true;
   }
 
   /**
@@ -130,7 +133,7 @@ class AppCore extends BaseCore {
    * @returns Filtered array of accessible car IDs, or null if no restriction needed
    */
   protected async filterAccessibleCarIds(carIds?: string[] | string | null): Promise<string[] | null> {
-    if (!this.isDriverRole()) {
+    if (!this.isDriverOrViewerRole()) {
       // Non-driver users have full access to all account cars
       return carIds ? (Array.isArray(carIds) ? carIds : [carIds]) : null;
     }
@@ -179,8 +182,8 @@ class AppCore extends BaseCore {
       return false;
     }
 
-    // Second check: for DRIVER role, must be assigned to the car
-    if (this.isDriverRole()) {
+    // Second check: for DRIVER or VIEWER role, must be assigned to the car
+    if (this.isDriverOrViewerRole()) {
       return this.hasAccessToCar(car.id);
     }
 
@@ -201,7 +204,7 @@ class AppCore extends BaseCore {
     // Filter by account first
     const accountCars = cars.filter((car) => car && car.accountId === accountId);
 
-    if (!this.isDriverRole()) {
+    if (!this.isDriverOrViewerRole()) {
       // Non-driver users have access to all account cars
       for (const car of accountCars) {
         accessibleIds.add(car.id);

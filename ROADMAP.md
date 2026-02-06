@@ -22,85 +22,21 @@ Effort estimates assume our current pace (one feature end-to-end in ~2 days). Pr
 
 ---
 
-## Feature Details
+## 1. Country-Specific Equipment Prompts (Digital Glovebox Extension)
 
----
-
-## 1. Viewer Role
-
-**Priority: P1 — High** | **Effort: ~1–2 days**
+**Priority: P1 — High** | **Effort: ~1 day**
 
 ### What it does
 
-A read-only access role for family members, accountants, business partners, or stakeholders who need to see vehicle data without being able to edit or add records.
+Adds country-specific equipment suggestions to the Digital Glovebox. When a user sets their location, the app offers a one-time prompt: "Based on your location, you may need: [list]. Add these to your Glovebox?" This helps users stay compliant with local roadside inspection requirements without having to research the rules themselves.
+
+> **Note:** The Digital Glovebox already supports tracking physical safety equipment and accessories (first aid kits, fire extinguishers, warning triangles, reflective vests, breathalyzers, tow ropes, spare tires, jumper cables, ice scrapers, tire chains) with expiration date reminders and photo attachments. This feature adds the regional intelligence layer on top.
 
 ### How to build it
-
-The role-based access system already exists (Owner, Admin, Driver). Adding Viewer is primarily a permissions check.
-
-**Implementation:**
-
-1. Add `'viewer'` to the role enum in the database and permission constants
-2. Define Viewer permissions: can read all records (vehicles, expenses, refuels, travels, reports, documents), cannot create/update/delete any records, cannot manage users or account settings
-3. Update GraphQL resolvers with permission checks — wrap mutation resolvers with a role guard that blocks Viewer
-4. Frontend: hide or disable "Add", "Edit", "Delete" buttons and FABs when the current user's role is Viewer. Show a subtle indicator ("View only") in the header
-5. Update the invitation flow to include Viewer as a role option
-
-### Considerations
-
-- Viewers should still be able to use filters, export reports, and download documents — these are read operations
-- Consider whether Viewers can see financial data (costs, revenues) or just operational data (trips, mileage). Default to full visibility; a future enhancement could add "financial visibility" as a separate toggle
-- The invitation UI should clearly explain what each role can do
-
-### Why P1
-
-Minimal effort since the role system is already built. Unlocks important use cases: a spouse who wants to see the family car expenses, a business partner monitoring fleet costs, or an accountant reviewing records for tax prep. Every competitor with multi-user support offers a read-only role — this is expected functionality. Completes the multi-user collaboration story that differentiates CarExpenses.
-
----
-
-## 2. Vehicle Equipment Tracking (Digital Glovebox Extension)
-
-**Priority: P1 — High** | **Effort: ~1–2 days**
-
-### What it does
-
-Extends the Digital Glovebox to track physical safety equipment and accessories with expiration dates: first aid kits, fire extinguishers, warning triangles, reflective vests, tire repair kits, jumper cables, and other items required by law or kept for emergencies. Users get reminders before equipment expires, helping them avoid fines during roadside inspections.
-
-### How to build it
-
-**Database changes:**
-
-Add new entries to the existing `glovebox_item_types` (or equivalent lookup table):
-
-| Type Key          | Name (EN)               | Name (RU)                | Name (FR)                 | Name (ES)               | Has Expiry |
-| ----------------- | ----------------------- | ------------------------ | ------------------------- | ----------------------- | ---------- |
-| first_aid_kit     | First Aid Kit           | Аптечка                  | Trousse de secours        | Botiquín                | Yes        |
-| fire_extinguisher | Fire Extinguisher       | Огнетушитель             | Extincteur                | Extintor                | Yes        |
-| warning_triangle  | Warning Triangle        | Знак аварийной остановки | Triangle de signalisation | Triángulo de emergencia | No         |
-| reflective_vest   | Reflective Vest         | Светоотражающий жилет    | Gilet réfléchissant       | Chaleco reflectante     | No         |
-| breathalyzer      | Breathalyzer            | Алкотестер               | Éthylotest                | Alcoholímetro           | Yes        |
-| tow_rope          | Tow Rope                | Буксировочный трос       | Câble de remorquage       | Cable de remolque       | No         |
-| spare_tire        | Spare Tire / Repair Kit | Запасное колесо          | Roue de secours           | Rueda de repuesto       | No         |
-| jumper_cables     | Jumper Cables           | Провода для прикуривания | Câbles de démarrage       | Cables de arranque      | No         |
-| ice_scraper       | Ice Scraper             | Скребок для льда         | Grattoir à glace          | Rascador de hielo       | No         |
-| tire_chains       | Tire Chains             | Цепи противоскольжения   | Chaînes à neige           | Cadenas para nieve      | No         |
-
-**Glovebox item model extension** (if not already flexible enough):
-
-- Ensure the existing glovebox item model supports: `name` (custom label), `item_type`, `expiry_date` (nullable), `notes`, `photo_attachment_id`
-- The `item_type` determines whether an expiry date is expected
-
-**Implementation:**
-
-1. Add the new item types to the seed data with translations
-2. Update the Glovebox "Add Item" form to show a category picker that includes both document types and equipment types
-3. For equipment types with `has_expiry = true`, show the expiry date field prominently
-4. Equipment items without expiry still appear in the Glovebox list but without the expiry indicator
-5. Reminder system (already exists for documents) applies identically to equipment
 
 **Country-specific equipment templates:**
 
-Create a "Required Equipment" prompt based on user location (ties into Feature #11):
+Create a lookup table or configuration mapping countries to their required/recommended equipment:
 
 | Country | Required Equipment                                            |
 | ------- | ------------------------------------------------------------- |
@@ -112,22 +48,29 @@ Create a "Required Equipment" prompt based on user location (ties into Feature #
 | Canada  | Varies by province — no federal requirement                   |
 | USA     | Varies by state — no federal requirement                      |
 
-When a user sets their location, offer a one-time prompt: "Based on your location, you may need: [list]. Add these to your Glovebox?"
+**Implementation:**
+
+1. Add a `country_equipment_requirements` seed table (or JSON config) mapping country codes to lists of glovebox item type keys
+2. When a user sets or updates their location (ties into Feature #11 if available, or based on account/profile country setting), check if they've already been prompted
+3. Show a one-time prompt with the relevant equipment list and a quick-add action that creates the Glovebox items in bulk
+4. Track whether the prompt has been shown (per user or per account) to avoid repeated prompts
+5. Seed translations for prompt text across all four languages (EN, RU, FR, ES)
 
 ### Considerations
 
-- Keep the UI simple: equipment items look like document items but with an icon indicating they're physical objects rather than papers
-- Photo attachment is useful for equipment (photo of the first aid kit label showing expiry date) — existing attachment system handles this
-- First aid kit contents often have individual expiry dates (medications, sterile bandages). For MVP, track the kit's overall expiry; detailed contents tracking could be a future enhancement
-- Fire extinguisher expiry is typically based on inspection date (annual inspection required in many jurisdictions) rather than a fixed expiry date — the notes field handles this, or add an optional "last_inspection_date" field
+- For countries with state/province-level variation (USA, Canada), either skip the prompt or show a generic "Check your local requirements" message with a link to the relevant authority
+- The prompt should be dismissible and not block the user — a one-time banner or modal, not a forced flow
+- Users who add equipment before seeing the prompt shouldn't get duplicate suggestions — check existing Glovebox items before building the suggestion list
+- Start with the countries listed above; expand based on user demand
+- Keep the data maintainable — regulations change, so a simple seed file or admin-editable config is better than hardcoded logic
 
 ### Why P1
 
-Minimal implementation effort since it extends an existing system. Solves a real compliance pain point for users in countries with equipment requirements (Russia, Germany, France, Austria — key target markets). The country-specific templates add perceived value with little additional work. Equipment tracking is something no competitor does well — most focus purely on documents. Universal relevance: every car owner has some equipment in their vehicle.
+Minimal effort since the equipment tracking system is already built — this is purely a prompt and seed data layer. Adds perceived intelligence to the app ("it knows what I need for my country"). Solves a real compliance pain point for users in countries with equipment requirements (Russia, Germany, France, Austria — key target markets). Equipment compliance prompts are something no competitor offers.
 
 ---
 
-## 3. Vehicle Tasks (To-Do List)
+## 2. Vehicle Tasks (To-Do List)
 
 **Priority: P1 — High** | **Effort: ~2–3 days**
 
@@ -198,39 +141,7 @@ Simple feature that increases daily engagement — users return to the app to ch
 
 ---
 
-## 4. Additional Expense Categories (Lodging, Food, Travel-Related)
-
-**Priority: P1 — High** | **Effort: ~1–2 days**
-
-### What it does
-
-Extends the expense system with categories specifically for travel-related costs: lodging/hotels, meals, tolls, visa/border fees, and other trip expenses. These are tied to specific travel records for accurate per-trip cost calculations.
-
-### How to build it
-
-**Implementation:**
-
-1. Add new entries to the `expense_categories` lookup table: Lodging, Meals/Food, Tolls, Ferry, Border/Visa Fees, Equipment Rental (e.g., chains, cargo racks), and a generic "Travel Expense" catch-all
-2. Add an optional `travel_id` foreign key to the expenses table — linking an expense to a specific travel record
-3. Seed translations for all four languages (EN, RU, FR, ES)
-4. Update the expense creation form: when the user has an active travel or selects a travel from a dropdown, the new travel-related categories appear in the category picker
-5. Update travel detail view: show all linked expenses with subtotals by category
-6. Update reports: include travel-linked expenses in per-trip profitability calculations
-
-### Considerations
-
-- Keep backward compatibility — existing expense categories remain unchanged
-- The travel_id link should be optional: a user can log a meal expense without attaching it to a travel
-- For tax purposes, some jurisdictions treat travel meals differently (e.g., 50% deductible in the US/Canada) — note this in reports without doing the tax calculation
-- Consider whether lodging/food should be their own expense "kind" or remain under the generic "expense" kind with a sub-category. Sub-category (within the existing expense kind) is simpler and more consistent
-
-### Why P1
-
-Minimal implementation effort (mostly seed data and a foreign key). Enables accurate per-trip cost accounting that road-trippers and long-haul drivers need. Without these categories, users either skip logging these expenses or lump them under "Other" — making reports less useful. Road trips are a common use case for the largest audience segment (regular car owners and families).
-
----
-
-## 5. Tire Tracking
+## 3. Tire Tracking
 
 **Priority: P1 — High** | **Effort: ~2–3 days**
 
@@ -326,7 +237,7 @@ Tires represent a significant recurring expense that users currently can't track
 
 ---
 
-## 6. Loan/Lease Tracking with Dashboard Countdown
+## 4. Loan/Lease Tracking with Dashboard Countdown
 
 **Priority: P1 — High** | **Effort: ~3–4 days**
 
@@ -380,7 +291,7 @@ Loan and lease payments are often the single largest vehicle expense — yet mos
 
 ---
 
-## 7. Recurring Revenues
+## 5. Recurring Revenues
 
 **Priority: P2 — Medium-High** | **Effort: ~1–2 days**
 
@@ -411,7 +322,7 @@ Near-zero incremental effort since it reuses the scheduled expenses infrastructu
 
 ---
 
-## 8. Revenue Reports
+## 6. Revenue Reports
 
 **Priority: P2 — Medium-High** | **Effort: ~2–3 days**
 
@@ -449,7 +360,7 @@ Revenue tracking without profitability reports is only half the story. Gig worke
 
 ---
 
-## 9. Data Import from Competitor Apps
+## 7. Data Import from Competitor Apps
 
 **Priority: P2 — Medium-High** | **Effort: ~3–5 days**
 
@@ -489,7 +400,7 @@ The #1 barrier to switching from a competitor is losing years of historical data
 
 ---
 
-## 10. Monthly Budget Estimator
+## 8. Monthly Budget Estimator
 
 **Priority: P2 — Medium-High** | **Effort: ~2–3 days**
 
@@ -531,7 +442,7 @@ Turns historical data into forward-looking value — users stop asking "How much
 
 ---
 
-## 11. User Location for Regional Service Links
+## 9. User Location for Regional Service Links
 
 **Priority: P2 — Medium-High** | **Effort: ~2–3 days**
 
@@ -574,7 +485,7 @@ Low implementation effort with high perceived value. It transforms CarExpenses f
 
 ---
 
-## 12. Service Providers Directory
+## 10. Service Providers Directory
 
 **Priority: P2 — Medium-High** | **Effort: ~2–3 days**
 
@@ -647,7 +558,7 @@ Useful practical feature that users frequently request. The service history aspe
 
 ---
 
-## 13. Checklists (Pre/Post-Travel & Maintenance)
+## 11. Checklists (Pre/Post-Travel & Maintenance)
 
 **Priority: P2 — Medium-High** | **Effort: ~3–4 days**
 
@@ -684,7 +595,7 @@ Strong differentiator for fleet operators and road-trip planners. Creates struct
 
 ---
 
-## 14. Voice Input for Expenses, Refuels, Checkpoints & Travels
+## 12. Voice Input for Expenses, Refuels, Checkpoints & Travels
 
 **Priority: P2 — Medium-High** | **Effort: ~3–4 days**
 
@@ -748,7 +659,7 @@ The `MediaRecorder` approach eliminates the cross-browser limitation that made t
 
 ---
 
-## 15. Receipt Scanning for Refuels and Expenses
+## 13. Receipt Scanning for Refuels and Expenses
 
 **Priority: P2 — Medium-High** | **Effort: ~3–5 days**
 
@@ -792,7 +703,7 @@ Directly reduces the biggest friction point (manual data entry for refuels). Gas
 
 ---
 
-## 16. Native App Wrapper (Capacitor)
+## 14. Native App Wrapper (Capacitor)
 
 **Priority: P3 — Medium** | **Effort: ~3–5 days initial, ongoing**
 
@@ -842,7 +753,7 @@ The PWA works well today and should remain the primary experience. The native wr
 
 ---
 
-## 17. Real-Time Travel Tracking with Time Tracking
+## 15. Real-Time Travel Tracking with Time Tracking
 
 **Priority: P3 — Medium** | **Effort: ~5–7 days**
 
@@ -903,7 +814,7 @@ Genuine value for fleet operators and gig workers. Time tracking and real-time l
 
 ---
 
-## 18. Map Visualization Page
+## 16. Map Visualization Page
 
 **Priority: P3 — Medium** | **Effort: ~3–5 days**
 
@@ -937,7 +848,7 @@ Visually impressive and useful for power users, but not essential for core expen
 
 ---
 
-## 19. Nearby Gas Stations with Fuel Prices
+## 17. Nearby Gas Stations with Fuel Prices
 
 **Priority: P3 — Medium** | **Effort: ~3–5 days**
 
@@ -977,7 +888,7 @@ The station finder (without prices) is useful and straightforward via Google Pla
 
 ---
 
-## 20. AI Chatbot for Vehicle Troubleshooting
+## 18. AI Chatbot for Vehicle Troubleshooting
 
 **Priority: P4 — Low** | **Effort: ~5–7 days (MVP), ongoing for data quality**
 
@@ -1018,7 +929,7 @@ High effort to do well, significant liability considerations, and ongoing cost p
 
 ---
 
-## 21. OBD-II Integration
+## 19. OBD-II Integration
 
 **Priority: P4 — Low** | **Effort: ~5–7 days**
 
@@ -1072,27 +983,25 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 | #   | Feature                                   | Priority | Effort    | Key Dependencies                       |
 | --- | ----------------------------------------- | -------- | --------- | -------------------------------------- |
-| 1   | **Viewer Role**                           | **P1**   | 1–2 days  | Existing role system                   |
-| 2   | **Vehicle Equipment (Glovebox)**          | **P1**   | 1–2 days  | Existing Glovebox system               |
-| 3   | **Vehicle Tasks**                         | **P1**   | 2–3 days  | None                                   |
-| 4   | **Additional Expense Categories**         | **P1**   | 1–2 days  | Seed data + optional travel_id FK      |
-| 5   | **Tire Tracking**                         | **P1**   | 2–3 days  | Service intervals integration          |
-| 6   | **Loan/Lease Tracking**                   | **P1**   | 3–4 days  | None (math only)                       |
-| 7   | Recurring Revenues                        | **P2**   | 1–2 days  | Existing scheduled expenses system     |
-| 8   | Revenue Reports                           | **P2**   | 2–3 days  | Existing data + Recharts               |
-| 9   | Data Import                               | **P2**   | 3–5 days  | CSV parsers per competitor format      |
-| 10  | Monthly Budget Estimator                  | **P2**   | 2–3 days  | 3+ months of historical data           |
-| 11  | User Location → Regional Links            | **P2**   | 2–3 days  | Manual seed data per region            |
-| 12  | Service Providers Directory               | **P2**   | 2–3 days  | Google Places API (existing)           |
-| 13  | Checklists                                | **P2**   | 3–4 days  | Existing attachment system             |
-| 14  | Voice Input + Voice Memos                 | **P2**   | 3–4 days  | MediaRecorder API + Whisper + LLM      |
-| 15  | Receipt Scanning                          | **P2**   | 3–5 days  | Claude Vision API or OCR service       |
-| 16  | Native App Wrapper (Capacitor)            | **P3**   | 3–5 days  | Capacitor + Xcode/Android Studio       |
-| 17  | Real-Time Travel Tracking + Time Tracking | **P3**   | 5–7 days  | Feature #16 (Capacitor)                |
-| 18  | Map Visualization                         | **P3**   | 3–5 days  | Google Maps or Mapbox API              |
-| 19  | Nearby Gas Stations                       | **P3**   | 3–5 days  | Google Places API + fuel price sources |
-| 20  | AI Troubleshooting Chatbot                | **P4**   | 5–7 days+ | LLM API + data curation (ongoing)      |
-| 21  | OBD-II Integration                        | **P4**   | 5–7 days  | Feature #16 (Capacitor) + BT adapter   |
+| 1   | **Country-Specific Equipment Prompts**    | **P1**   | 1–2 days  | Existing Glovebox system               |
+| 2   | **Vehicle Tasks**                         | **P1**   | 2–3 days  | None                                   |
+| 3   | **Tire Tracking**                         | **P1**   | 2–3 days  | Service intervals integration          |
+| 4   | **Loan/Lease Tracking**                   | **P1**   | 3–4 days  | None (math only)                       |
+| 5   | Recurring Revenues                        | **P2**   | 1–2 days  | Existing scheduled expenses system     |
+| 6   | Revenue Reports                           | **P2**   | 2–3 days  | Existing data + Recharts               |
+| 7   | Data Import                               | **P2**   | 3–5 days  | CSV parsers per competitor format      |
+| 8   | Monthly Budget Estimator                  | **P2**   | 2–3 days  | 3+ months of historical data           |
+| 9   | User Location → Regional Links            | **P2**   | 2–3 days  | Manual seed data per region            |
+| 10  | Service Providers Directory               | **P2**   | 2–3 days  | Google Places API (existing)           |
+| 11  | Checklists                                | **P2**   | 3–4 days  | Existing attachment system             |
+| 12  | Voice Input + Voice Memos                 | **P2**   | 3–4 days  | MediaRecorder API + Whisper + LLM      |
+| 13  | Receipt Scanning                          | **P2**   | 3–5 days  | Claude Vision API or OCR service       |
+| 14  | Native App Wrapper (Capacitor)            | **P3**   | 3–5 days  | Capacitor + Xcode/Android Studio       |
+| 15  | Real-Time Travel Tracking + Time Tracking | **P3**   | 5–7 days  | Feature #16 (Capacitor)                |
+| 16  | Map Visualization                         | **P3**   | 3–5 days  | Google Maps or Mapbox API              |
+| 17  | Nearby Gas Stations                       | **P3**   | 3–5 days  | Google Places API + fuel price sources |
+| 18  | AI Troubleshooting Chatbot                | **P4**   | 5–7 days+ | LLM API + data curation (ongoing)      |
+| 19  | OBD-II Integration                        | **P4**   | 5–7 days  | Feature #16 (Capacitor) + BT adapter   |
 
 ---
 
@@ -1102,14 +1011,12 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 **Goal**: Make CarExpenses compelling for regular car owners and multi-vehicle families — the largest audience segments. All features work in the existing PWA with no new infrastructure.
 
-| Order | Feature                       | Effort   | Rationale                              |
-| ----- | ----------------------------- | -------- | -------------------------------------- |
-| 1     | Viewer Role                   | 1–2 days | Completes multi-user story             |
-| 2     | Vehicle Equipment (Glovebox)  | 1–2 days | Universal value, trivial effort        |
-| 3     | Vehicle Tasks                 | 2–3 days | Engagement driver, multi-user friendly |
-| 4     | Additional Expense Categories | 1–2 days | Unlocks per-trip costing               |
-| 5     | Tire Tracking                 | 2–3 days | Major expense, seasonal workflow       |
-| 6     | Loan/Lease Tracking           | 3–4 days | High engagement, no external deps      |
+| Order | Feature                      | Effort   | Rationale                              |
+| ----- | ---------------------------- | -------- | -------------------------------------- |
+| 1     | Vehicle Equipment (Glovebox) | 1–2 days | Universal value, trivial effort        |
+| 2     | Vehicle Tasks                | 2–3 days | Engagement driver, multi-user friendly |
+| 3     | Tire Tracking                | 2–3 days | Major expense, seasonal workflow       |
+| 4     | Loan/Lease Tracking          | 3–4 days | High engagement, no external deps      |
 
 **Total: ~12–16 days**
 
@@ -1119,15 +1026,15 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 | Order | Feature                        | Effort   | Rationale                           |
 | ----- | ------------------------------ | -------- | ----------------------------------- |
-| 7     | Recurring Revenues             | 1–2 days | Enables revenue reports             |
-| 8     | Revenue Reports                | 2–3 days | Key for gig workers                 |
-| 9     | Data Import                    | 3–5 days | Removes switching barrier           |
-| 10    | Monthly Budget Estimator       | 2–3 days | Forward-looking value               |
-| 11    | User Location / Regional Links | 2–3 days | Contextual intelligence             |
-| 12    | Service Providers Directory    | 2–3 days | Value builds over time              |
-| 13    | Checklists                     | 3–4 days | Fleet/road-trip value               |
-| 14    | Voice Input + Voice Memos      | 3–4 days | Differentiator, good for marketing  |
-| 15    | Receipt Scanning               | 3–5 days | Friction reduction, API cost gating |
+| 5     | Recurring Revenues             | 1–2 days | Enables revenue reports             |
+| 6     | Revenue Reports                | 2–3 days | Key for gig workers                 |
+| 7     | Data Import                    | 3–5 days | Removes switching barrier           |
+| 8     | Monthly Budget Estimator       | 2–3 days | Forward-looking value               |
+| 9     | User Location / Regional Links | 2–3 days | Contextual intelligence             |
+| 10    | Service Providers Directory    | 2–3 days | Value builds over time              |
+| 11    | Checklists                     | 3–4 days | Fleet/road-trip value               |
+| 12    | Voice Input + Voice Memos      | 3–4 days | Differentiator, good for marketing  |
+| 13    | Receipt Scanning               | 3–5 days | Friction reduction, API cost gating |
 
 **Total: ~22–32 days**
 
@@ -1137,10 +1044,10 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 | Order | Feature                                   | Effort   | Rationale                              |
 | ----- | ----------------------------------------- | -------- | -------------------------------------- |
-| 16    | Native App Wrapper (Capacitor)            | 3–5 days | Foundation for native features         |
-| 17    | Real-Time Travel Tracking + Time Tracking | 5–7 days | Requires Capacitor, huge for fleet/gig |
-| 18    | Map Visualization                         | 3–5 days | Marketing value, power users           |
-| 19    | Nearby Gas Stations                       | 3–5 days | Station finder first, prices later     |
+| 14    | Native App Wrapper (Capacitor)            | 3–5 days | Foundation for native features         |
+| 15    | Real-Time Travel Tracking + Time Tracking | 5–7 days | Requires Capacitor, huge for fleet/gig |
+| 16    | Map Visualization                         | 3–5 days | Marketing value, power users           |
+| 17    | Nearby Gas Stations                       | 3–5 days | Station finder first, prices later     |
 
 **Total: ~14–22 days**
 

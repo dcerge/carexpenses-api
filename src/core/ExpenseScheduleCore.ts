@@ -12,8 +12,9 @@ import { SCHEDULE_TYPES, EXPENSE_SCHEDULE_STATUS, EXPENSE_TYPES, TABLES } from '
 import { camelKeys, STATUSES } from '@sdflc/utils';
 import config from '../config';
 import { logger } from '../logger';
-import { SCHEDULE_CONSTANTS } from '../boundary';
-import { CarStatsUpdater, ServiceIntervalNextUpdater } from '../utils';
+import { SCHEDULE_CONSTANTS, USER_ROLES } from '../boundary';
+import { CarStatsUpdater, FEATURE_CODES, ServiceIntervalNextUpdater } from '../utils';
+import { trialCheckMiddleware } from '../middleware';
 
 dayjs.extend(utc);
 
@@ -49,6 +50,10 @@ class ExpenseScheduleCore extends AppCore {
       ...super.getValidators(),
       ...validators,
     };
+  }
+
+  public async expenseSchedulesQty(): Promise<number> {
+    return this.getGateways().expenseScheduleGw.count({ accountId: this.getContext().accountId });
   }
 
   // ===========================================================================
@@ -495,7 +500,29 @@ class ExpenseScheduleCore extends AppCore {
   // ===========================================================================
 
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to create expence schedules');
+    }
+
+    const trialCheck = await trialCheckMiddleware({
+      core: this,
+      operation: 'create',
+      featureCode: FEATURE_CODES.EXPENSE_SCHEDULES_QTY,
+      featureValue: await this.expenseSchedulesQty(),
+    });
+
+    if (trialCheck.code !== OP_RESULT_CODES.OK) {
+      return trialCheck;
+    }
+
+    // Validate car access
+    const hasAccess = await this.validateCarAccess({ id: params.carId, accountId });
+
+    if (!hasAccess) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to create expence schedules for the vehicle');
+    }
 
     // Calculate totals
     const paramsWithTotals = this.calculateTotals(params);
@@ -539,10 +566,10 @@ class ExpenseScheduleCore extends AppCore {
     const { args } = opt || {};
     const { where } = args || {};
     const { id } = where || {};
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
 
-    if (!id) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense schedule ID is required');
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to update expence schedules');
     }
 
     // Check if schedule exists and user has access
@@ -556,7 +583,7 @@ class ExpenseScheduleCore extends AppCore {
     const hasAccess = await this.validateCarAccess({ id: schedule.carId, accountId });
 
     if (!hasAccess) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense schedule not found');
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to update the expence schedule');
     }
 
     // Don't allow changing accountId or userId
@@ -625,10 +652,14 @@ class ExpenseScheduleCore extends AppCore {
 
   public async beforeRemove(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { id } = where || {};
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
 
     if (!id) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense schedule ID is required');
+    }
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to remove expence schedules');
     }
 
     // Check if schedule exists and user has access
@@ -642,7 +673,7 @@ class ExpenseScheduleCore extends AppCore {
     const hasAccess = await this.validateCarAccess({ id: schedule.carId, accountId });
 
     if (!hasAccess) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense schedule not found');
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to remove the expence schedule');
     }
 
     // Add accountId to where clause for SQL-level security
@@ -660,8 +691,12 @@ class ExpenseScheduleCore extends AppCore {
       return where;
     }
 
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
     const allowedWhere: any[] = [];
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to remove expence schedules');
+    }
 
     for (const item of where) {
       const { id } = item || {};

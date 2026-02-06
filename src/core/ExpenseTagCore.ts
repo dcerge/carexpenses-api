@@ -8,6 +8,7 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 import { AppCore } from './AppCore';
 import { validators } from './validators/expenseTagValidators';
 import { logger } from '../logger';
+import { USER_ROLES } from '../boundary';
 
 dayjs.extend(utc);
 
@@ -61,7 +62,11 @@ class ExpenseTagCore extends AppCore {
 
   public async beforeList(args: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { filter } = args || {};
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to create tags');
+    }
 
     // Filter by accountId for security
     return {
@@ -121,10 +126,14 @@ class ExpenseTagCore extends AppCore {
     const { args } = opt || {};
     const { where } = args || {};
     const { id } = where || {};
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
 
     if (!id) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense tag ID is required');
+    }
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to update tags');
     }
 
     // Check if user owns the tag
@@ -157,10 +166,14 @@ class ExpenseTagCore extends AppCore {
 
   public async beforeRemove(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { id } = where || {};
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
 
     if (!id) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense tag ID is required');
+    }
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to remove tags');
     }
 
     // Check if user owns the tag
@@ -185,7 +198,12 @@ class ExpenseTagCore extends AppCore {
       return where;
     }
 
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to remove tags');
+    }
+
     const allowedWhere: any[] = [];
 
     // Check ownership for each tag

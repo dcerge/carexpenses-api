@@ -7,6 +7,7 @@ const typeDefs = `#graphql
     distanceIn: String
     volumeIn: String
     consumptionIn: String
+    temperatureIn: String
     notifyInMileage: Float
     notifyInDays: Int
   }
@@ -22,6 +23,7 @@ const typeDefs = `#graphql
     distanceIn: String
     volumeIn: String
     consumptionIn: String
+    temperatureIn: String
     notifyInMileage: Float
     notifyInDays: Int
   }

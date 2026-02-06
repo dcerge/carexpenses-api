@@ -9,7 +9,7 @@ import { mapWeatherToDbFields } from '../gateways/apis/weather';
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/expenseValidators';
-import { ENTITY_TYPE_IDS, EXPENSE_TYPES, UserProfile } from '../boundary';
+import { ENTITY_TYPE_IDS, EXPENSE_TYPES, USER_ROLES, UserProfile } from '../boundary';
 import config from '../config';
 import {
   CarStatsUpdater,
@@ -820,7 +820,7 @@ class ExpenseCore extends AppCore {
       };
     }
 
-    // Use AppCore's filterAccessibleCarIds for DRIVER role restriction
+    // Use AppCore's filterAccessibleCarIds for DRIVER/VIEWER role restriction
     let carIdFilter = await this.filterAccessibleCarIds(filter?.id);
 
     carIdFilter = await this.getGateways().carGw.getActiveCarsIds({
@@ -978,8 +978,33 @@ class ExpenseCore extends AppCore {
     });
   }
 
+  private getExepnseTypeName(expenseType: number, plural?: boolean) {
+    switch (expenseType) {
+      default:
+      case EXPENSE_TYPES.EXPENSE:
+        return plural ? 'expenses' : 'expense';
+      case EXPENSE_TYPES.REFUEL:
+        return plural ? 'refuels' : 'refuel';
+      case EXPENSE_TYPES.REVENUE:
+        return plural ? 'revenues' : 'revenue';
+      case EXPENSE_TYPES.TRAVEL_POINT:
+        return plural ? 'waypoints' : 'waypoint';
+    }
+  }
+
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], `You do not have permission to create ${this.getExepnseTypeName(params.expenseType, true)}`);
+    }
+
+    // Validate car access
+    const hasAccess = await this.validateCarAccess({ id: params.carId, accountId });
+
+    if (!hasAccess) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, `You do not have permission to create ${this.getExepnseTypeName(params.expenseType)} for the vehicle`);
+    }
 
     const { uploadedFilesIds, tags, ...restParams } = params;
 
@@ -1150,21 +1175,25 @@ class ExpenseCore extends AppCore {
     const { args } = opt || {};
     const { where } = args || {};
     const { id } = where || {};
-    const { accountId, userId } = this.getContext();
+    const { carId } = params || {};
+    const { accountId, userId, roleId } = this.getContext();
 
-    if (!id) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense ID is required');
-    }
-
-    if (!accountId) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Account ID is required');
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], `You do not have permission to update ${this.getExepnseTypeName(params.expenseType, true)}`);
     }
 
     // Check if user owns the expense
     const expenseBase = await this.getGateways().expenseBaseGw.get(id);
 
     if (!expenseBase || expenseBase.accountId !== accountId) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense not found');
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, `${this.getExepnseTypeName(params.expenseType)} not found`);
+    }
+
+    // Validate car access
+    const hasAccess = await this.validateCarAccess({ id: params.carId, accountId });
+
+    if (!hasAccess) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, `You do not have permission to update the ${this.getExepnseTypeName(params.expenseType)} for the vehicle`);
     }
 
     // Fetch the old extension data for stats delta calculation
@@ -1371,21 +1400,24 @@ class ExpenseCore extends AppCore {
 
   public async beforeRemove(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { id } = where || {};
-    const { accountId } = this.getContext();
-
-    if (!id) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense ID is required');
-    }
-
-    if (!accountId) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Account ID is required');
-    }
+    const { accountId, roleId } = this.getContext();
 
     // Check if user owns the expense
     const expenseBase = await this.getGateways().expenseBaseGw.get(id);
 
     if (!expenseBase || expenseBase.accountId !== accountId) {
-      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense not found');
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, `${this.getExepnseTypeName(expenseBase.expenseType)} not found`);
+    }
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], `You do not have permission to remove ${this.getExepnseTypeName(expenseBase.expenseType, true)}`);
+    }
+
+    // Validate car access
+    const hasAccess = await this.validateCarAccess({ id: expenseBase.carId, accountId });
+
+    if (!hasAccess) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, `You do not have permission to remove the ${this.getExepnseTypeName(expenseBase.expenseType)} for the vehicle`);
     }
 
     // Fetch the extension data for stats update before removal
@@ -1479,10 +1511,10 @@ class ExpenseCore extends AppCore {
       return where;
     }
 
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
 
-    if (!accountId) {
-      return [];
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], `You do not have permission to remove these records`);
     }
 
     const allowedWhere: any[] = [];
@@ -1497,6 +1529,13 @@ class ExpenseCore extends AppCore {
       }
 
       const expenseBase = await this.getGateways().expenseBaseGw.get(id);
+
+      // Validate car access
+      const hasAccess = await this.validateCarAccess({ id: expenseBase.carId, accountId });
+
+      if (!hasAccess) {
+        continue;
+      }
 
       if (expenseBase && expenseBase.accountId === accountId) {
         // Fetch extension data for stats

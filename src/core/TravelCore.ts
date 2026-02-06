@@ -11,11 +11,9 @@ import { CarStatsUpdater, TravelStatsParams } from '../utils/CarStatsUpdater';
 import { weatherGateway } from '../weatherClient';
 import { mapWeatherToDbFields } from '../gateways/apis/weather';
 import { toMetricDistance } from '../utils';
+import { USER_ROLES } from '../boundary';
 
 dayjs.extend(utc);
-
-// Conversion factor: 1 mile = 1.60934 kilometers
-const MI_TO_KM = 1.60934;
 
 interface TravelOperationData {
   firstRecord?: any;
@@ -62,16 +60,6 @@ class TravelCore extends AppCore {
   // ===========================================================================
 
   /**
-   * Convert distance to kilometers
-   */
-  private convertToKm(distance: number, unit: string): number {
-    if (unit === 'mi') {
-      return distance * MI_TO_KM;
-    }
-    return distance; // Already in km
-  }
-
-  /**
    * Calculate distance from odometer readings
    */
   private calculateDistanceFromOdometers(firstOdometer: number | null, lastOdometer: number | null): number | null {
@@ -96,26 +84,6 @@ class TravelCore extends AppCore {
 
     // Reimbursement = rate × distance
     return distance * reimbursementRate;
-  }
-
-  /**
-   * Get user's preferred distance unit from profile
-   */
-  private async getUserDistanceUnit(): Promise<string> {
-    const { userId } = this.getContext();
-
-    try {
-      const userProfile = await this.getGateways().userProfileGw.get(userId);
-
-      if (userProfile && userProfile.length > 0 && userProfile[0].distanceIn) {
-        return userProfile[0].distanceIn;
-      }
-    } catch (error) {
-      // If we can't get user profile, default to km
-      console.error('Error getting user profile for distance unit:', error);
-    }
-
-    return 'km'; // Default to kilometers
   }
 
   /**
@@ -403,11 +371,22 @@ class TravelCore extends AppCore {
   }
 
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
 
     // Extract nested inputs and tagIds
     // the input value for "distance" is always in the car's units - car.mileageIn
     const { firstRecord, lastRecord, tagIds, distance, ...travelParams } = params;
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to create travels');
+    }
+
+    // Validate car access
+    const hasAccess = await this.validateCarAccess({ id: params.carId, accountId });
+
+    if (!hasAccess) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to create a travel for the vehicle');
+    }
 
     // Get user's preferred distance unit
     const { homeCurrency } = await this.getCurrentUserProfile();
@@ -572,10 +551,14 @@ class TravelCore extends AppCore {
     const { args } = opt || {};
     const { where } = args || {};
     const { id } = where || {};
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
 
     if (!id) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Travel ID is required');
+    }
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to update travels');
     }
 
     // Check if user owns the travel
@@ -584,6 +567,13 @@ class TravelCore extends AppCore {
 
     if (!travel || travel.accountId !== accountId) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Travel not found');
+    }
+
+    // Validate car access
+    const hasAccess = await this.validateCarAccess({ id: travel.carId, accountId });
+
+    if (!hasAccess) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to update the travel');
     }
 
     // Get car for mileage unit
@@ -783,10 +773,14 @@ class TravelCore extends AppCore {
 
   public async beforeRemove(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { id } = where || {};
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
 
     if (!id) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Travel ID is required');
+    }
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to remove travels');
     }
 
     // Check if user owns the travel
@@ -794,6 +788,13 @@ class TravelCore extends AppCore {
 
     if (!travel || travel.accountId !== accountId) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Travel not found');
+    }
+
+    // Validate car access
+    const hasAccess = await this.validateCarAccess({ id: travel.carId, accountId });
+
+    if (!hasAccess) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to remove the travel');
     }
 
     // Store travel for afterRemove cleanup
@@ -813,7 +814,7 @@ class TravelCore extends AppCore {
       return items;
     }
 
-    const { accountId, userId } = this.getContext();
+    const { accountId } = this.getContext();
     const requestId = this.getRequestId();
 
     for (const item of items) {
@@ -861,7 +862,12 @@ class TravelCore extends AppCore {
       return where;
     }
 
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to remove travels');
+    }
+
     const allowedWhere: any[] = [];
     const requestId = this.getRequestId();
 
@@ -881,8 +887,12 @@ class TravelCore extends AppCore {
           existingTravel: travel,
         });
 
-        // Add accountId to where clause for SQL-level security
-        allowedWhere.push({ ...item, accountId });
+        const hasAccess = await this.validateCarAccess({ id: travel.carId, accountId });
+
+        if (hasAccess) {
+          // Add accountId to where clause for SQL-level security
+          allowedWhere.push({ ...item, accountId });
+        }
       }
     }
 

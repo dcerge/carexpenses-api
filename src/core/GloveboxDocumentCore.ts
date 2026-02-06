@@ -7,6 +7,7 @@ import { BaseCoreValidatorsInterface, BaseCorePropsInterface, BaseCoreActionsInt
 
 import { AppCore } from './AppCore';
 import { validators } from './validators/gloveboxDocumentValidators';
+import { USER_ROLES } from '../boundary';
 
 dayjs.extend(utc);
 
@@ -162,7 +163,18 @@ class GloveboxDocumentCore extends AppCore {
   }
 
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to create documents');
+    }
+
+    // Validate car access
+    const hasAccess = await this.validateCarAccess({ id: params.carId, accountId });
+
+    if (!hasAccess) {
+      return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to create documents for the vehicle');
+    }
 
     const { uploadedFilesIds, ...restParams } = params;
 
@@ -211,7 +223,7 @@ class GloveboxDocumentCore extends AppCore {
     const { args } = opt || {};
     const { where } = args || {};
     const { id } = where || {};
-    const { accountId, userId } = this.getContext();
+    const { accountId, userId, roleId } = this.getContext();
 
     if (!id) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Document ID is required');
@@ -221,11 +233,24 @@ class GloveboxDocumentCore extends AppCore {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Account ID is required');
     }
 
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to update documents');
+    }
+
     // Check if user owns the document
     const document = await this.getGateways().gloveboxDocumentGw.get(id);
 
     if (!document || document.accountId !== accountId) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Document not found');
+    }
+
+    if (document.carId) {
+      // Validate car access
+      const hasAccess = await this.validateCarAccess({ id: document.carId, accountId });
+
+      if (!hasAccess) {
+        return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to update the document');
+      }
     }
 
     // Don't allow changing accountId
@@ -286,7 +311,7 @@ class GloveboxDocumentCore extends AppCore {
 
   public async beforeRemove(where: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { id } = where || {};
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
 
     if (!id) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Document ID is required');
@@ -296,11 +321,24 @@ class GloveboxDocumentCore extends AppCore {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Account ID is required');
     }
 
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to remove documents');
+    }
+
     // Check if user owns the document
     const document = await this.getGateways().gloveboxDocumentGw.get(id);
 
     if (!document || document.accountId !== accountId) {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Document not found');
+    }
+
+    if (document.carId) {
+      // Validate car access
+      const hasAccess = await this.validateCarAccess({ id: document.carId, accountId });
+
+      if (!hasAccess) {
+        return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to remove the document');
+      }
     }
 
     // Add accountId to where clause for SQL-level security
@@ -319,10 +357,14 @@ class GloveboxDocumentCore extends AppCore {
       return where;
     }
 
-    const { accountId } = this.getContext();
+    const { accountId, roleId } = this.getContext();
 
     if (!accountId) {
       return [];
+    }
+
+    if (roleId === USER_ROLES.VIEWER) {
+      return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to remove documents');
     }
 
     const allowedWhere: any[] = [];
@@ -338,9 +380,19 @@ class GloveboxDocumentCore extends AppCore {
       const document = await this.getGateways().gloveboxDocumentGw.get(id);
 
       if (document && document.accountId === accountId) {
-        // Add accountId to where clause for SQL-level security
-        allowedWhere.push({ ...item, accountId });
+
+        if (document.carId) {
+          const hasAccess = await this.validateCarAccess({ id: document.carId, accountId });
+
+          if (hasAccess) {
+            allowedWhere.push({ ...item, accountId });
+          }
+        } else {
+          // Add accountId to where clause for SQL-level security
+          allowedWhere.push({ ...item, accountId });
+        }
       }
+
     }
 
     return allowedWhere;

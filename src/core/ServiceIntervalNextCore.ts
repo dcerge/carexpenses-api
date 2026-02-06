@@ -323,6 +323,14 @@ class ServiceIntervalNextCore extends AppCore {
       carIds = (cars || []).map((car: any) => car.id);
     }
 
+    // Use AppCore's filterAccessibleCarIds for DRIVER/VIEWER role restriction
+    let carIdFilter = await this.filterAccessibleCarIds(carIds);
+
+    carIdFilter = await this.getGateways().carGw.getActiveCarsIds({
+      accountId,
+      id: carIdFilter
+    });
+
     // Store urgencyStatus filter for afterList (it's computed, not in DB)
     const requestId = this.getRequestId();
     this.listData.set(`list-${requestId}`, {
@@ -332,7 +340,7 @@ class ServiceIntervalNextCore extends AppCore {
     return {
       ...args,
       filter: {
-        carId: carIds,
+        carId: carIdFilter,
         kindId,
         intervalType,
         accountId,
