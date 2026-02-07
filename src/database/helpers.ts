@@ -111,6 +111,11 @@ export const TABLES = {
   VEHICLE_RECALL_LOOKUPS: 'vehicle_recall_lookups',
   VEHICLE_RECALLS: 'vehicle_recalls',
   VEHICLE_RECALL_STATUSES: 'vehicle_recall_statuses',
+
+  // ---------------------------------------------------------------------------
+  // Financing
+  // ---------------------------------------------------------------------------
+  VEHICLE_FINANCING: 'vehicle_financing',
 };
 
 // =============================================================================
@@ -575,6 +580,24 @@ export const FIELDS = {
   VEHICLE_RECALL_ID: 'vehicle_recall_id',
   DISMISSED_AT: 'dismissed_at',
   RESOLVED_AT: 'resolved_at',
+
+  // ---------------------------------------------------------------------------
+  // Vehicle Financing Fields
+  // ---------------------------------------------------------------------------
+  FINANCING_TYPE: 'financing_type',
+  LENDER_NAME: 'lender_name',
+  AGREEMENT_NUMBER: 'agreement_number',
+  START_DATE: 'start_date',
+  END_DATE: 'end_date',
+  TERM_MONTHS: 'term_months',
+  TOTAL_AMOUNT: 'total_amount',
+  FINANCING_CURRENCY: 'financing_currency',
+  INTEREST_RATE: 'interest_rate',
+  DOWN_PAYMENT: 'down_payment',
+  RESIDUAL_VALUE: 'residual_value',
+  MILEAGE_ALLOWANCE: 'mileage_allowance',
+  MILEAGE_ALLOWANCE_UNIT: 'mileage_allowance_unit',
+  MILEAGE_OVERAGE_COST: 'mileage_overage_cost',
 };
 
 // =============================================================================
@@ -783,4 +806,23 @@ export const VEHICLE_RECALL_STATUSES_STATUSES = {
   ACTIVE: 100, // open recall, needs user attention
   DISABLED: 5000, // dismissed by user (acknowledged, not acting)
   REMOVED: 10000, // resolved/repaired by user
+} as const;
+
+// =============================================================================
+// VEHICLE FINANCING STATUS VALUES
+// =============================================================================
+
+export const VEHICLE_FINANCING_STATUS = {
+  ACTIVE: 100,      // Current active financing
+  COMPLETED: 200,   // Paid off (loan) or lease ended naturally
+  REMOVED: 10000,   // Deleted by user
+} as const;
+
+// =============================================================================
+// FINANCING TYPES (vehicle_financing.financing_type)
+// =============================================================================
+
+export const FINANCING_TYPES = {
+  LOAN: 'loan',
+  LEASE: 'lease',
 } as const;

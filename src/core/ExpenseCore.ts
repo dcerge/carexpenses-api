@@ -821,7 +821,7 @@ class ExpenseCore extends AppCore {
     }
 
     // Use AppCore's filterAccessibleCarIds for DRIVER/VIEWER role restriction
-    let carIdFilter = await this.filterAccessibleCarIds(filter?.id);
+    let carIdFilter = await this.filterAccessibleCarIds(filter?.carId);
 
     carIdFilter = await this.getGateways().carGw.getActiveCarsIds({
       accountId,

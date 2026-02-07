@@ -50,3 +50,4 @@ export * from './ExpenseScheduleGw';
 export * from './VehicleRecallLookupGw';
 export * from './VehicleRecallGw';
 export * from './VehicleRecallStatusGw';
+export * from './VehicleFinancingGw';

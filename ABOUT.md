@@ -418,7 +418,7 @@ Share vehicle access with family members or team:
 | **Owner**  | Full access including subscription management | Available |
 | **Admin**  | Full access except subscription settings      | Available |
 | **Driver** | Manage only their assigned vehicles           | Available |
-| **Viewer** | Read-only access to all data                  | Available |
+| **Viewer** | Read-only access to assigned vehicles         | Available |
 
 **Capabilities:**
 
@@ -426,7 +426,7 @@ Share vehicle access with family members or team:
 - Assign multiple vehicles to one driver
 - See who entered each expense
 - Filter reports by user
-- Invite Viewers for read-only access — perfect for spouses checking family car expenses, accountants reviewing records for tax prep, or business partners monitoring fleet costs. Viewers can browse all records, use filters, export reports, and download documents, but cannot create, edit, or delete any data.
+- Invite Viewers for read-only access — perfect for spouses checking family car expenses, accountants reviewing records for tax prep, or business partners monitoring fleet costs. Viewers can browse all records related to assigned vehicle, use filters, export reports, and download documents, but cannot create, edit, or delete any data.
 
 ---
 

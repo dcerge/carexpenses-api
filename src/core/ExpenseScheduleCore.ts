@@ -936,17 +936,20 @@ class ExpenseScheduleCore extends AppCore {
         const schedule = await this.getGateways().expenseScheduleGw.get(id);
 
         if (!schedule || schedule.accountId !== accountId) {
+          this.logger.log(`Schedule ${id} was not found or it belongs to another account`, schedule);
           return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense schedule not found');
         }
 
         const hasAccess = await this.validateCarAccess({ id: schedule.carId, accountId });
 
         if (!hasAccess) {
+          this.logger.log(`The user ${userId} has no permission to run expense schedule for the vehicle ${schedule.carId}`);
           return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'Expense schedule not found');
         }
 
         // Check if schedule is in a valid state
         if (schedule.status === EXPENSE_SCHEDULE_STATUS.COMPLETED) {
+          this.logger.log(`Failed to run expense schedule ${id} it is already completed:`, schedule);
           return OpResult.fail(
             OP_RESULT_CODES.VALIDATION_FAILED,
             {},
@@ -963,12 +966,15 @@ class ExpenseScheduleCore extends AppCore {
 
         // Check if schedule hasn't started yet
         if (startAt.isAfter(today)) {
+          this.logger.log(`Cannot run expense schedule ${id} as it has not started yet:`, schedule);
           return OpResult.fail(
             OP_RESULT_CODES.VALIDATION_FAILED,
             {},
             'Schedule has not started yet. Start date is in the future.'
           );
         }
+
+        this.logger.debug(`Running expense schedule ${id}`);
 
         // Calculate the effective end date (earlier of endAt or today)
         const effectiveEndDate = endAt && endAt.isBefore(today) ? endAt : today;
@@ -992,6 +998,8 @@ class ExpenseScheduleCore extends AppCore {
           effectiveEndDate.toDate()
         );
 
+        this.logger.debug(`Scheduled dates for the schedule ${id} are:`, scheduledDates);
+
         // Get existing expenses WITH DATE RANGE FILTERING for efficiency
         const dateRange = scheduledDates.length > 0
           ? {
@@ -1003,7 +1011,12 @@ class ExpenseScheduleCore extends AppCore {
             end: effectiveEndDate.toDate()
           };
 
+
+        this.logger.debug(`Date range for the schedule ${id} are:`, dateRange);
+
         const existingExpenses = await this.getExpensesByScheduleId(id, accountId, dateRange);
+
+        this.logger.debug(`Existing expenses created by the schedule ${id} are:`, existingExpenses);
 
         // Build a map of existing expenses by date (YYYY-MM-DD)
         const existingByDate = new Map<string, any>();
@@ -1027,6 +1040,10 @@ class ExpenseScheduleCore extends AppCore {
           );
 
           if (orphanedExpenses.length === 0) {
+            this.logger.log(skipPausedPeriod
+              ? `Today does not match any scheduled date for the schedule ${id}`
+              : `No scheduled dates found within the valid range for the schedule ${id}`);
+
             return OpResult.fail(
               OP_RESULT_CODES.VALIDATION_FAILED,
               {},
@@ -1061,6 +1078,8 @@ class ExpenseScheduleCore extends AppCore {
           const dateKey = dayjs(scheduledDate).utc().format('YYYY-MM-DD');
 
           if (!existingByDate.has(dateKey)) {
+            this.logger.debug(`Create an expense on date ${dateKey} from the schedule ${id}`);
+
             // Create new expense for this date
             const expenseId = await this.createExpenseFromSchedule(
               schedule,
@@ -1090,10 +1109,12 @@ class ExpenseScheduleCore extends AppCore {
         if (!skipPausedPeriod) {
           for (const [dateKey, expense] of existingByDate) {
             if (scheduledDateKeys.has(dateKey)) {
+
               // This expense is within valid range, check if it needs updating
               const needsUpdate = this.expenseNeedsUpdate(expense, schedule);
 
               if (needsUpdate) {
+                this.logger.debug(`Updating an expense on date ${dateKey} from the schedule ${id}`, expense);
                 await this.updateExpenseFromSchedule(expense, schedule, userId, now);
                 updatedQty++;
                 hasChanges = true;
@@ -1104,6 +1125,7 @@ class ExpenseScheduleCore extends AppCore {
           // 3. Soft-delete expenses that are outside the valid date range
           for (const [dateKey, expense] of existingByDate) {
             if (!scheduledDateKeys.has(dateKey)) {
+              this.logger.debug(`Remove an expense on date ${dateKey} from the schedule ${id}`, expense);
               // This expense is outside the valid range, soft delete it
               await this.softDeleteExpense(expense, userId, now);
               removedQty++;
@@ -1114,9 +1136,11 @@ class ExpenseScheduleCore extends AppCore {
 
         // Check if anything was done
         if (addedQty === 0 && updatedQty === 0 && removedQty === 0) {
+          this.logger.log(`All scheduled expenses already exist and are up to date`);
+
           return OpResult.fail(
-            OP_RESULT_CODES.VALIDATION_FAILED,
-            {},
+            OP_RESULT_CODES.OK,
+            [this.processItemOnOut(schedule)],
             'All scheduled expenses already exist and are up to date'
           );
         }
@@ -1136,6 +1160,8 @@ class ExpenseScheduleCore extends AppCore {
           schedule.endAt ? new Date(schedule.endAt) : null,
           today.toDate()
         );
+
+        this.logger.debug(`Next scheduled date is ${nextScheduledAt} for the expense schedule ${schedule.id}`);
 
         // Determine new status
         let newStatus = schedule.status;
