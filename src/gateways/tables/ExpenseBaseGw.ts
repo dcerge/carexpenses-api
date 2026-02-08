@@ -5,6 +5,7 @@ import { SORT_ORDER, STATUSES } from '@sdflc/utils';
 
 import config from '../../config';
 import { FIELDS, TABLES } from '../../database';
+import { logger } from '../../logger';
 
 class ExpenseBaseGw extends BaseGateway {
   constructor(props: BaseGatewayPropsInterface) {
@@ -228,6 +229,105 @@ class ExpenseBaseGw extends BaseGateway {
     );
 
     return result?.rows?.[0]?.qty ? Number(result.rows[0].qty) : 0;
+  }
+
+  /**
+   * Fetch aggregate odometer statistics for multiple cars, grouped by car_id.
+   * Used by VehicleFinancingCore for lease mileage tracking.
+   *
+   * For each car, returns the first/latest odometer readings and when_done dates,
+   * filtered to active non-removed records that have odometer data.
+   * The startDate per car allows filtering to only records within the lease term.
+   *
+   * Uses the partial index idx_eb_car_odometer_active for efficient index-only scans.
+   *
+   * @param params.accountId - Account ID for security filtering (required)
+   * @param params.carStartDates - Map of carId -> startDate (ISO string) for per-car filtering
+   * @returns Array of { carId, firstOdometer, latestOdometer, firstReadingDate, latestReadingDate, dataPoints }
+   */
+  async getOdometerStatsByCarIds(params: {
+    accountId: string;
+    carStartDates: Map<string, string>;
+  }): Promise<
+    Array<{
+      carId: string;
+      firstOdometer: number;
+      latestOdometer: number;
+      firstReadingDate: string;
+      latestReadingDate: string;
+      dataPoints: number;
+    }>
+  > {
+    const { accountId, carStartDates } = params;
+
+    if (!accountId || !carStartDates || carStartDates.size === 0) {
+      return [];
+    }
+
+    const carIds = [...carStartDates.keys()];
+
+    // Build CASE expression for per-car startDate filtering
+    // Each car may have a different lease start date
+    // Cast to timestamptz so PostgreSQL can compare with when_done column
+    let startDateCase = '(CASE ';
+    const caseBindings: any[] = [];
+    for (const [carId, startDate] of carStartDates) {
+      startDateCase += `WHEN ${FIELDS.CAR_ID} = ? THEN ?::timestamptz `;
+      caseBindings.push(carId, startDate);
+    }
+    startDateCase += 'END)';
+
+    // The CASE expression is repeated in three FILTER clauses
+    const carIdPlaceholders = carIds.map(() => '?').join(',');
+
+    const sql = `
+      SELECT
+        ${FIELDS.CAR_ID} AS "carId",
+        MIN(${FIELDS.ODOMETER}) FILTER (WHERE ${FIELDS.WHEN_DONE} >= ${startDateCase}) AS "firstOdometer",
+        MAX(${FIELDS.ODOMETER}) AS "latestOdometer",
+        MIN(${FIELDS.WHEN_DONE}) FILTER (WHERE ${FIELDS.WHEN_DONE} >= ${startDateCase}) AS "firstReadingDate",
+        MAX(${FIELDS.WHEN_DONE}) AS "latestReadingDate",
+        COUNT(*) FILTER (WHERE ${FIELDS.WHEN_DONE} >= ${startDateCase}) AS "dataPoints"
+      FROM ${config.dbSchema}.${TABLES.EXPENSE_BASES}
+      WHERE ${FIELDS.CAR_ID} IN (${carIdPlaceholders})
+        AND ${FIELDS.ACCOUNT_ID} = ?
+        AND ${FIELDS.ODOMETER} IS NOT NULL
+        AND ${FIELDS.STATUS} = ?
+        AND ${FIELDS.REMOVED_AT} IS NULL
+      GROUP BY ${FIELDS.CAR_ID}
+    `;
+
+    const bindings = [
+      // Three repetitions of CASE bindings for the three FILTER clauses
+      ...caseBindings,
+      ...caseBindings,
+      ...caseBindings,
+      // WHERE clause bindings
+      ...carIds,
+      accountId,
+      STATUSES.ACTIVE,
+    ];
+
+    const items = await this.getDb().runRawQuery(sql, bindings);
+
+    if (!items?.rows) {
+      return [];
+    }
+
+    const result = items.rows
+      .filter((row: any) => row.firstOdometer != null && row.latestOdometer != null)
+      .map((row: any) => ({
+        carId: row.carId,
+        firstOdometer: parseFloat(row.firstOdometer),
+        latestOdometer: parseFloat(row.latestOdometer),
+        firstReadingDate: row.firstReadingDate,
+        latestReadingDate: row.latestReadingDate,
+        dataPoints: parseInt(row.dataPoints, 10) || 0,
+      }));
+
+    logger.debug('=== getOdometerStatsByCarIds.result = ', result);
+
+    return result;
   }
 }
 

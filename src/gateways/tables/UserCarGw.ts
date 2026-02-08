@@ -46,7 +46,7 @@ class UserCarGw extends BaseGateway {
     await super.onListFilter(query, filterParams);
 
     if (accountId) {
-      query.whereIn(FIELDS.ACCOUNT_ID, castArray(accountId));
+      query.whereIn(`${TABLES.USER_CARS}.${FIELDS.ACCOUNT_ID}`, castArray(accountId));
     }
 
     if (userId) {
@@ -54,7 +54,7 @@ class UserCarGw extends BaseGateway {
     }
 
     if (carId) {
-      query.whereIn(FIELDS.CAR_ID, castArray(carId));
+      query.whereIn(`${TABLES.USER_CARS}.${FIELDS.CAR_ID}`, castArray(carId));
     }
 
     if (roleId) {

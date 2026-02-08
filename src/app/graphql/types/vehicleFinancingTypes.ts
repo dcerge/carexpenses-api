@@ -90,6 +90,44 @@ const typeDefs = `#graphql
     percentComplete: Float
     "Total mileage allowance for the full lease term (annual allowance × term in years)"
     totalMileageAllowance: Float
+
+    # Computed: estimated monthly payment
+    "Estimated monthly payment calculated from financing terms (loan amortization or lease formula). Uses formula only — does not reflect the linked expense schedule payment."
+    estimatedMonthlyPayment: Float
+
+    # Computed: cost breakdown (for visualization)
+    "Cost breakdown: for loans — principal (totalAmount minus downPayment); for leases — total depreciation (netCapCost minus residualValue)"
+    costPrincipal: Float
+    "Cost breakdown: for loans — total interest over life of financing; for leases — total finance charges (money factor portion)"
+    costTotalInterest: Float
+    "Cost breakdown: total all-in cost including down payment and all payments"
+    costTotal: Float
+    "Cost breakdown: interest/finance charges as percentage of principal/depreciation (e.g. 15.2 for 15.2%)"
+    costInterestPercent: Float
+    "Cost breakdown: down payment as percentage of total cost (for bar chart visualization, 0-100)"
+    costDownPaymentBarPercent: Float
+    "Cost breakdown: principal/depreciation as percentage of total cost (for bar chart visualization, 0-100)"
+    costPrincipalBarPercent: Float
+    "Cost breakdown: interest/finance charges as percentage of total cost (for bar chart visualization, 0-100)"
+    costInterestBarPercent: Float
+
+    # Computed: mileage tracking (lease only, derived from odometer data in expense_bases)
+    "Actual distance driven since lease start, in mileageAllowanceUnit (km or mi). Null if no odometer data available."
+    mileageDriven: Float
+    "Mileage driven as percentage of total mileage allowance (0-100). Null if allowance or odometer data not available."
+    mileageUsedPercent: Float
+    "Projected annual mileage rate based on current driving pattern, in mileageAllowanceUnit. Null if insufficient data for projection."
+    annualMileageRate: Float
+    "Projected total mileage at end of lease term, in mileageAllowanceUnit. Null if insufficient data."
+    projectedTotalMileage: Float
+    "Projected overage beyond total mileage allowance (0 if under pace). Null if projection not available."
+    projectedOverage: Float
+    "Projected overage cost based on mileageOverageCost rate, in financingCurrency. Null if overage cost rate or projection not available."
+    projectedOverageCost: Float
+    "Mileage pace status relative to linear allowance schedule: under_pace, on_pace, over_pace. Uses ±5% tolerance. Null if insufficient data."
+    mileagePaceStatus: String
+    "Number of odometer data points available during the lease period. Useful for UI confidence indicators."
+    mileageDataPoints: Int
   }
 
   type VehicleFinancingResult implements OpResult {
