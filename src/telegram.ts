@@ -1,7 +1,7 @@
 // ./src/telegram.ts
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import { ConnectorTelegramGw } from 'gateways';
+import { ConnectorTelegramGw } from './gateways';
 import { redisClient } from './redisClient';
 import { logger } from './logger';
 import config from './config';

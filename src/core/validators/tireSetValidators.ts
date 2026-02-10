@@ -7,7 +7,7 @@ import {
 } from '@sdflc/backend-helpers';
 import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { rulesMultipleUuidInId, ruleStatus } from './commonRules';
-import { TIRE_SET_STATUSES } from 'database';
+import { TIRE_SET_STATUSES } from '../../database';
 
 // ===========================================================================
 // Valid values
