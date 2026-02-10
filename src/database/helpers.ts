@@ -622,6 +622,20 @@ export const FIELDS = {
   QUANTITY: 'quantity',
   BRAND: 'brand',
   POSITION: 'position',
+
+  // Tire Warning & Tracking Fields
+  // (add to the "Tire Tracking Fields" section)
+  INSTALLED_AT: 'installed_at',
+  STORED_AT: 'stored_at',
+  MILEAGE_WARRANTY_KM: 'mileage_warranty_km',
+  AGE_LIMIT_YEARS: 'age_limit_years',
+  TREAD_LIMIT_MM: 'tread_limit_mm',
+  WARNING_FLAGS: 'warning_flags',
+  ODOMETER_AT_INSTALL_KM: 'odometer_at_install_km',
+  MILEAGE_ACCUMULATED_KM: 'mileage_accumulated_km',
+  TREAD_DEPTH_CURRENT: 'tread_depth_current',
+  TREAD_DEPTH_MEASURED_AT: 'tread_depth_measured_at',
+
 };
 
 // =============================================================================
@@ -886,4 +900,52 @@ export const TIRE_CONDITIONS = {
   NEW: 'new',                       // Purchased new
   USED: 'used',                     // Purchased used
   CAME_WITH_VEHICLE: 'came_with_vehicle',  // Already on vehicle when acquired
+} as const;
+
+// --- TIRE WARNING FLAGS (bitmask values) -------------------------------------
+// Used in tire_sets.warning_flags and tire_set_items.warning_flags.
+// "Warning" = 70% of threshold reached, plan ahead.
+// "Critical" = 100% of threshold reached, replace now.
+// For tread depth the logic is inverted: warning at 130% of limit, critical at 100%.
+
+export const TIRE_WARNING_FLAGS = {
+  /** Tire age >= 70% of age_limit_years (from DOT code) */
+  AGE_WARNING: 1,    // bit 0
+  /** Tire age >= 100% of age_limit_years */
+  AGE_CRITICAL: 2,    // bit 1
+  /** Total mileage >= 70% of mileage_warranty_km */
+  MILEAGE_WARNING: 4,    // bit 2
+  /** Total mileage >= 100% of mileage_warranty_km */
+  MILEAGE_CRITICAL: 8,    // bit 3
+  /** Tread depth <= 130% of tread_limit_mm (approaching minimum) */
+  TREAD_WARNING: 16,   // bit 4
+  /** Tread depth <= 100% of tread_limit_mm (at or below minimum) */
+  TREAD_CRITICAL: 32,   // bit 5
+  /** Wrong tire type for current season (set-level only) */
+  SEASONAL_MISMATCH: 64,   // bit 6
+  /** Set has been in storage longer than threshold (set-level only) */
+  STORAGE_LONG: 128,  // bit 7
+  /** Tread depth measurement is older than threshold (item-level only) */
+  TREAD_STALE: 256,  // bit 8
+} as const;
+
+// --- TIRE WARNING DEFAULTS ---------------------------------------------------
+// Global defaults used when tire_sets threshold columns are null.
+// Cron job uses: COALESCE(tire_set.mileage_warranty_km, TIRE_WARNING_DEFAULTS.mileageWarrantyKm)
+
+export const TIRE_WARNING_DEFAULTS = {
+  /** Default mileage warranty: 80,000 km */
+  mileageWarrantyKm: 80000,
+  /** Default age limit: 10 years (industry standard maximum) */
+  ageLimitYears: 10,
+  /** Default minimum tread depth: 2.0 mm */
+  treadLimitMm: 2.0,
+  /** Storage warning after 24 months without use */
+  storageWarningMonths: 24,
+  /** Tread measurement considered stale after 12 months */
+  treadStaleMonths: 12,
+  /** Warning level as fraction of critical threshold (70%) */
+  warningRatio: 0.7,
+  /** Tread warning multiplier: warn when depth <= limit * 1.3 */
+  treadWarningMultiplier: 1.3,
 } as const;

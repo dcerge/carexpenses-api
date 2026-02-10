@@ -48,6 +48,18 @@ const rulesList = new Checkit({
       message: 'Search keyword should be a string',
     },
   ],
+  hasWarnings: [
+    {
+      rule: 'boolean',
+      message: 'hasWarnings should be a boolean',
+    },
+  ],
+  warningFlags: [
+    {
+      rule: 'integer',
+      message: 'warningFlags should be an integer bitmask',
+    },
+  ],
 });
 
 // ===========================================================================
@@ -115,6 +127,24 @@ const rulesCreate = new Checkit({
       message: 'Notes should be a string',
     },
   ],
+  mileageWarrantyKm: [
+    {
+      rule: 'integer',
+      message: 'Mileage warranty should be an integer (km)',
+    },
+  ],
+  ageLimitYears: [
+    {
+      rule: 'integer',
+      message: 'Age limit should be an integer (years)',
+    },
+  ],
+  treadLimitMm: [
+    {
+      rule: 'numeric',
+      message: 'Tread limit should be a number (mm)',
+    },
+  ],
   ...ruleStatus([TIRE_SET_STATUSES.ACTIVE, TIRE_SET_STATUSES.RETIRED, TIRE_SET_STATUSES.STORED]),
 });
 
@@ -163,6 +193,24 @@ const rulesUpdate = new Checkit({
     {
       rule: 'string',
       message: 'Notes should be a string',
+    },
+  ],
+  mileageWarrantyKm: [
+    {
+      rule: 'integer',
+      message: 'Mileage warranty should be an integer (km)',
+    },
+  ],
+  ageLimitYears: [
+    {
+      rule: 'integer',
+      message: 'Age limit should be an integer (years)',
+    },
+  ],
+  treadLimitMm: [
+    {
+      rule: 'numeric',
+      message: 'Tread limit should be a number (mm)',
     },
   ],
   ...ruleStatus([TIRE_SET_STATUSES.ACTIVE, TIRE_SET_STATUSES.RETIRED, TIRE_SET_STATUSES.STORED]),
@@ -216,6 +264,63 @@ const validateQuantity = (quantity: number | null | undefined): string | null =>
 
   if (quantity > 20) {
     return 'Quantity cannot exceed 20';
+  }
+
+  return null;
+};
+
+/**
+ * Validate mileage warranty threshold
+ */
+const validateMileageWarrantyKm = (value: number | null | undefined): string | null => {
+  if (value == null) {
+    return null;
+  }
+
+  if (!Number.isInteger(value) || value < 1000) {
+    return 'Mileage warranty must be at least 1,000 km';
+  }
+
+  if (value > 500000) {
+    return 'Mileage warranty cannot exceed 500,000 km';
+  }
+
+  return null;
+};
+
+/**
+ * Validate age limit threshold
+ */
+const validateAgeLimitYears = (value: number | null | undefined): string | null => {
+  if (value == null) {
+    return null;
+  }
+
+  if (!Number.isInteger(value) || value < 1) {
+    return 'Age limit must be at least 1 year';
+  }
+
+  if (value > 20) {
+    return 'Age limit cannot exceed 20 years';
+  }
+
+  return null;
+};
+
+/**
+ * Validate tread limit threshold
+ */
+const validateTreadLimitMm = (value: number | null | undefined): string | null => {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value !== 'number' || value < 0.5) {
+    return 'Tread limit must be at least 0.5 mm';
+  }
+
+  if (value > 10) {
+    return 'Tread limit cannot exceed 10 mm';
   }
 
   return null;
@@ -282,7 +387,7 @@ const validateTireSetItem = (item: any, index: number): string | null => {
     }
   }
 
-  // Validate tread depth
+  // Validate tread depth initial
   if (item.treadDepthInitial != null) {
     if (typeof item.treadDepthInitial !== 'number' || item.treadDepthInitial < 0) {
       return `Item at index ${index}: initial tread depth must be a non-negative number`;
@@ -290,6 +395,33 @@ const validateTireSetItem = (item: any, index: number): string | null => {
 
     if (item.treadDepthInitial > 30) {
       return `Item at index ${index}: initial tread depth cannot exceed 30 mm`;
+    }
+  }
+
+  // Validate tread depth current
+  if (item.treadDepthCurrent != null) {
+    if (typeof item.treadDepthCurrent !== 'number' || item.treadDepthCurrent < 0) {
+      return `Item at index ${index}: current tread depth must be a non-negative number`;
+    }
+
+    if (item.treadDepthCurrent > 30) {
+      return `Item at index ${index}: current tread depth cannot exceed 30 mm`;
+    }
+  }
+
+  // Validate mileage accumulated (only for new items — user-entered initial mileage)
+  if (item.mileageAccumulatedKm != null) {
+    if (typeof item.mileageAccumulatedKm !== 'number' || item.mileageAccumulatedKm < 0) {
+      return `Item at index ${index}: accumulated mileage must be a non-negative number`;
+    }
+
+    if (item.mileageAccumulatedKm > 1000000) {
+      return `Item at index ${index}: accumulated mileage cannot exceed 1,000,000`;
+    }
+
+    // Warn if setting mileage on existing items (should only be set on new items)
+    if (item.id) {
+      return `Item at index ${index}: accumulated mileage can only be set when creating new items`;
     }
   }
 
@@ -329,6 +461,9 @@ const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpd
     tireSetStatus,
     quantity,
     items,
+    mileageWarrantyKm,
+    ageLimitYears,
+    treadLimitMm,
   } = args?.params || {};
 
   const { accountId } = opt.core.getContext();
@@ -380,6 +515,31 @@ const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpd
   if (quantityError) {
     return [
       new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError('quantity', quantityError),
+      {},
+    ];
+  }
+
+  // Validate warning thresholds
+  const mileageWarrantyError = validateMileageWarrantyKm(mileageWarrantyKm);
+  if (mileageWarrantyError) {
+    return [
+      new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError('mileageWarrantyKm', mileageWarrantyError),
+      {},
+    ];
+  }
+
+  const ageLimitError = validateAgeLimitYears(ageLimitYears);
+  if (ageLimitError) {
+    return [
+      new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError('ageLimitYears', ageLimitError),
+      {},
+    ];
+  }
+
+  const treadLimitError = validateTreadLimitMm(treadLimitMm);
+  if (treadLimitError) {
+    return [
+      new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError('treadLimitMm', treadLimitError),
       {},
     ];
   }

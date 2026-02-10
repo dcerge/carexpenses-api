@@ -31,6 +31,77 @@ const typeDefs = `#graphql
     "Whether tires are registered with manufacturer for recalls"
     isRegistered: Boolean
 
+    # =========================================================================
+    # Mileage tracking
+    # =========================================================================
+
+    """
+    Odometer reading when this item was last installed on the vehicle.
+    Stored in km internally. Returned in the car's mileageIn unit (km or mi).
+    Null when the tire set is in storage.
+    """
+    odometerAtInstall: Float
+
+    """
+    Frozen historical mileage accumulated across all previous installation
+    periods (swap-out cycles). Does not include the current installation.
+    For used tires, includes any user-entered initial mileage.
+    Returned in the car's mileageIn unit (km or mi).
+    """
+    mileageAccumulatedPrevious: Float
+    """
+    Same as mileageAccumulatedPrevious but converted to the user's distanceIn
+    unit from their profile settings. Useful when the user's preferred distance
+    unit differs from the car's mileageIn unit (e.g., car tracks miles but
+    user prefers km).
+    """
+    mileageAccumulatedPreviousDisplay: Float
+
+    """
+    Live mileage driven during the current installation period, computed as
+    (currentOdometer - odometerAtInstall). Null when the tire set is in
+    storage (not currently installed). Zero if installed but vehicle hasn't
+    moved yet.
+    Returned in the car's mileageIn unit (km or mi).
+    """
+    mileageSinceInstall: Float
+    """
+    Same as mileageSinceInstall but in the user's distanceIn unit.
+    Null when the tire set is in storage.
+    """
+    mileageSinceInstallDisplay: Float
+
+    """
+    Total lifetime mileage: mileageAccumulatedPrevious + mileageSinceInstall.
+    Always available (for stored tires, equals mileageAccumulatedPrevious).
+    Returned in the car's mileageIn unit (km or mi).
+    """
+    mileageTotal: Float
+    """
+    Same as mileageTotal but in the user's distanceIn unit.
+    """
+    mileageTotalDisplay: Float
+
+    # =========================================================================
+    # Tread depth tracking
+    # =========================================================================
+
+    "Latest measured tread depth in mm, updated by user"
+    treadDepthCurrent: Float
+    "When tread_depth_current was last measured by the user"
+    treadDepthMeasuredAt: String
+
+    # =========================================================================
+    # Warning flags
+    # =========================================================================
+
+    """
+    Bitmask of active warnings for this item, computed by daily cron job.
+    1=AGE_WARNING, 2=AGE_CRITICAL, 4=MILEAGE_WARNING, 8=MILEAGE_CRITICAL,
+    16=TREAD_WARNING, 32=TREAD_CRITICAL, 256=TREAD_STALE.
+    """
+    warningFlags: Int
+
     "Additional notes"
     notes: String
 
@@ -60,7 +131,7 @@ const typeDefs = `#graphql
     # Tire set info
     "User-friendly label (e.g., Summer 2024, Winter Nokians)"
     name: String
-    "Tire type: summer, winter, all_season, performance, off_road"
+    "Tire type: summer, winter, all_season, all_weather, performance, off_road"
     tireType: String
     "Where tires are stored when not on vehicle"
     storageLocation: String
@@ -69,6 +140,49 @@ const typeDefs = `#graphql
 
     "Additional notes"
     notes: String
+
+    # =========================================================================
+    # Installation & storage timestamps
+    # =========================================================================
+
+    "When the tire set was last installed (activated) on the vehicle"
+    installedAt: String
+    "When the tire set was last removed from the vehicle and placed in storage"
+    storedAt: String
+
+    # =========================================================================
+    # Warning thresholds (null = use global defaults)
+    # =========================================================================
+
+    """
+    Mileage warranty in the user's distanceIn unit (km or mi).
+    Stored internally in km. Critical at 100%, warning at 70%.
+    Null = global default (80,000 km).
+    """
+    mileageWarranty: Float
+    """
+    Maximum tire age in years from DOT code. Critical at 100%, warning at 70%.
+    Null = global default (10 years).
+    """
+    ageLimitYears: Int
+    """
+    Minimum acceptable tread depth in mm. Critical at 100%, warning at 130%.
+    Null = global default (2.0 mm).
+    """
+    treadLimitMm: Float
+
+    # =========================================================================
+    # Warning flags
+    # =========================================================================
+
+    """
+    Bitmask of active warnings, computed by daily cron job. Bitwise OR of all
+    item-level flags plus set-level flags (SEASONAL_MISMATCH, STORAGE_LONG).
+    1=AGE_WARNING, 2=AGE_CRITICAL, 4=MILEAGE_WARNING, 8=MILEAGE_CRITICAL,
+    16=TREAD_WARNING, 32=TREAD_CRITICAL, 64=SEASONAL_MISMATCH, 128=STORAGE_LONG,
+    256=TREAD_STALE.
+    """
+    warningFlags: Int
 
     # System fields
     "Record status: 100=Currently installed on vehicle, 300=Off vehicle, in storage, 5000=Disposed of, sold, or worn out, 10000=Removed"
@@ -158,6 +272,19 @@ const typeDefs = `#graphql
     "Existing expense ID to link as purchase record"
     expenseId: ID
 
+    # Mileage tracking
+    """
+    Initial accumulated mileage for used tires or tires that came with the
+    vehicle. Entered in the car's mileageIn unit (km or mi), converted to km
+    before storage. Defaults to 0 for new tires. Example: enter 18641 for
+    tires bought second-hand with ~30,000 km on them if car uses miles.
+    """
+    mileageAccumulated: Float
+
+    # Tread depth tracking
+    "Current tread depth measurement in mm"
+    treadDepthCurrent: Float
+
     "Additional notes"
     notes: String
 
@@ -170,7 +297,7 @@ const typeDefs = `#graphql
     carId: ID
     "User-friendly label"
     name: String
-    "Tire type: summer, winter, all_season,  all_weather, performance, off_road"
+    "Tire type: summer, winter, all_season, all_weather, performance, off_road"
     tireType: String
     "Where tires are stored when not on vehicle"
     storageLocation: String
@@ -180,6 +307,14 @@ const typeDefs = `#graphql
     notes: String
     "Status: 100=Currently installed on vehicle, 300=Off vehicle, in storage, 5000=Disposed of, sold, or worn out, 10000=Removed"
     status: Int
+
+    # Warning thresholds (null = use global defaults)
+    "Mileage warranty in the user's distanceIn unit. Converted to km for storage. Critical at 100%, warning at 70%. Null = global default (80,000 km)."
+    mileageWarranty: Float
+    "Maximum tire age in years. Critical at 100%, warning at 70%. Null = global default (10 years)."
+    ageLimitYears: Int
+    "Minimum acceptable tread depth in mm. Critical at 100%, warning at 130%. Null = global default (2.0 mm)."
+    treadLimitMm: Float
 
     "Tire items in this set"
     items: [TireSetItemInput!]
@@ -198,10 +333,8 @@ const typeDefs = `#graphql
     installTireSetId: ID!
     "Where to store the outgoing set"
     storageLocation: String
-    "Whether to create a swap expense (uses expenseDetails)"
-    createExpense: Boolean
-    "Swap expense details. Uses standard ExpenseInput. kindId defaults to 22 (SEASONAL_TIRE_SERVICE) if not specified. odometer is required for distance tracking."
-    expenseDetails: ExpenseInput
+    "Swap expense details. Uses standard ExpenseInput. kindId defaults to 22 (SEASONAL_TIRE_SERVICE) if not specified. odometer is required for mileage tracking."
+    expenseDetails: ExpenseInput!
   }
 
   input TireSetFilter {
@@ -215,6 +348,17 @@ const typeDefs = `#graphql
     searchKeyword: String
     "Filter by record status"
     status: [Int]
+
+    # Warning filters
+    "If true, return only sets with warning_flags > 0. If false, only sets with no warnings."
+    hasWarnings: Boolean
+    """
+    Filter by specific warning flag bits. Returns sets where (warning_flags & value) > 0.
+    Use bitmask values: 1=AGE_WARNING, 2=AGE_CRITICAL, 4=MILEAGE_WARNING, 8=MILEAGE_CRITICAL,
+    16=TREAD_WARNING, 32=TREAD_CRITICAL, 64=SEASONAL_MISMATCH, 128=STORAGE_LONG, 256=TREAD_STALE.
+    Combine with bitwise OR for multiple flags, e.g., 6 = AGE_CRITICAL | MILEAGE_WARNING.
+    """
+    warningFlags: Int
   }
 
   input TireSetWhereInput {

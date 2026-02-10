@@ -105,6 +105,26 @@ class TireSetGw extends BaseGateway {
 
     return filtersAppliedQty;
   }
+
+  /**
+   * Get distinct account IDs that have non-deleted tire sets in ACTIVE or STORED status.
+   * Used by the warning flags cron job to process accounts in batches.
+   *
+   * @param statuses - Array of statuses to include (e.g., [ACTIVE, STORED])
+   * @returns Array of account ID strings
+   */
+  async getDistinctAccountIds(statuses: number[]): Promise<string[]> {
+    const placeholders = statuses.map(() => '?').join(', ');
+
+    const result = await this.getDb().runRawQuery(
+      `SELECT DISTINCT account_id FROM ${TABLES.TIRE_SETS} ` +
+      `WHERE removed_at IS NULL AND status IN (${placeholders}) ` +
+      `ORDER BY account_id`,
+      statuses,
+    );
+
+    return result?.rows?.map((row: any) => row.account_id) || [];
+  }
 }
 
 export { TireSetGw };

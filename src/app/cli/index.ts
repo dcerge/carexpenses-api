@@ -50,10 +50,33 @@ const runExpenseSchedules = async () => {
   const context = await getContext();
 
   try {
+    if (redisClient) {
+      await redisClient.connect();
+    }
+
     logger.log('Running expense schedules...');
     await context.cores.expenseScheduleCore.processScheduledExpenses({
       batchSize: 100,
       maxSchedules: 10000,
+    });
+
+    logger.log('Recalculation complete.');
+  } finally {
+    process.exit(0);
+  }
+};
+
+const runTireSchedules = async () => {
+  const context = await getContext();
+
+  try {
+    if (redisClient) {
+      await redisClient.connect();
+    }
+
+    await context.cores.tireSetCore.computeWarningFlags({
+      batchSize: 100,
+      maxAccounts: 10000,
     });
 
     logger.log('Recalculation complete.');
@@ -142,6 +165,14 @@ yargs(process.argv.splice(2))
       return yargs;
     },
     runExpenseSchedules,
+  )
+  .command(
+    'run-tires-check',
+    'Run tires check',
+    (yargs) => {
+      return yargs;
+    },
+    runTireSchedules,
   )
   .command(
     'transfer-files',
