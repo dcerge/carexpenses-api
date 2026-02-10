@@ -164,6 +164,8 @@ const typeDefs = `#graphql
     costPartsHc: Float
     "Brief note about the expense or revenue (expenseType=2,5)"
     shortNote: String
+    "Reference to a tire set for expense kinds that are related to tires"
+    tireSetId: ID
     
     # ==========================================================================
     # Refuel-specific fields (expenseType = 1)
@@ -219,6 +221,8 @@ const typeDefs = `#graphql
     uploadedFiles: [UploadedFile]
     "Associated tags"
     tags: [ExpenseTag]
+    "Associaated tire set"
+    tireSet: TireSet
   }
 
   type ExpenseResult implements OpResult {
@@ -312,6 +316,8 @@ const typeDefs = `#graphql
     costPartsHc: Float
     "Brief note (expenseType=2,5)"
     shortNote: String
+    "Reference to a tire set for expense kinds that are related to tires"
+    tireSetId: ID
     
     # Refuel-specific fields (expenseType = 1)
     refuelVolume: Float

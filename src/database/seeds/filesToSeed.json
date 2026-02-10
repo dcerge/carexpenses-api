@@ -12,6 +12,7 @@
     ["revenue_categories"],
     ["revenue_category_l_10_n"],
     ["revenue_kinds"],
-    ["revenue_kind_l_10_n"]
+    ["revenue_kind_l_10_n"],
+    ["tire_brands"]
   ]
 }

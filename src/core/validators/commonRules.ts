@@ -45,7 +45,7 @@ export const rulePlanId = () => {
   };
 };
 
-export const ruleStatus = () => {
+export const ruleStatus = (customStatuses?: number[] | undefined) => {
   return {
     status: [
       {
@@ -54,7 +54,7 @@ export const ruleStatus = () => {
       },
       {
         rule: function (value) {
-          const supportedStatuses = [0, 100];
+          const supportedStatuses = customStatuses ?? [0, 100];
           if (supportedStatuses.includes(Number(value)) == false) {
             throw new Error(`Allowed status value is one of: ${supportedStatuses.join(', ')}`);
           }

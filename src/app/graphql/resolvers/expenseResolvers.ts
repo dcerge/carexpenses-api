@@ -73,6 +73,15 @@ const resolvers = buildDefaultResolvers({
 
         return revenueKind ?? null;
       },
+      async tireSet(parent, args, context) {
+        const { tireSet, tireSetId } = parent || {};
+
+        if (!tireSet && tireSetId) {
+          return context.gateways.tireSetGw.get(tireSetId).then((item) => context.cores.tireSetCore.processItemOnOut(item));
+        }
+
+        return tireSet ?? null;
+      },
       async uploadedFilesIds(parent, args, context) {
         const { uploadedFilesIds, id } = parent || {};
 

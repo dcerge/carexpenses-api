@@ -1,3 +1,4 @@
+// ./src/database/seeds/objects/vehicle_makes.js
 const { vehicleMakes } = require('./vehicleMakesData');
 const { STATUSES } = require('@sdflc/utils');
 

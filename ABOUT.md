@@ -165,6 +165,47 @@ Capture point-in-time vehicle snapshots for any significant moment in your vehic
 
 ---
 
+## Vehicle Financing
+
+Track loan and lease details for your vehicles and see at a glance where you stand — payments remaining, balance owed, mileage pace, and projected costs.
+
+**Financing record includes:**
+
+- **Financing type**: Loan or Lease
+- **Lender**: Bank, credit union, or leasing company name
+- **Agreement number**: Loan or lease account number
+- **Term**: Start date, end date, and term length in months
+- **Financials**: Total amount (principal or lease cost), annual interest rate, down payment, and financing currency
+- **Lease-specific fields**: Residual/buyout value, annual mileage allowance (km or mi), and per-unit overage cost
+- **Notes**: Additional terms or conditions
+- **Linked payment schedule**: Automatically creates a recurring expense schedule for loan or lease payments — weekly, monthly, yearly, or one-time
+
+**Computed insights (loans):**
+
+- Payments remaining and estimated remaining balance
+- Term completion percentage with visual progress ring
+- Cost breakdown: principal, total interest, and down payment shown as an animated stacked bar with exact amounts and percentages
+- Estimated monthly payment calculated from loan amortization formula
+
+**Computed insights (leases):**
+
+- Payments remaining and term completion percentage
+- Cost breakdown: depreciation, finance charges, and down payment
+- Estimated monthly payment calculated from lease formula (depreciation + money factor)
+- **Mileage tracking**: Actual distance driven vs. total mileage allowance, derived from odometer readings across refuels, expenses, checkpoints, and travels
+- **Mileage pace status**: Under pace, on pace, or over pace (±5% tolerance against linear allowance schedule) — color-coded for quick scanning
+- **Projections**: Annual mileage rate, projected total mileage at lease end, projected overage distance, and projected overage cost
+- **Data confidence indicator**: Shows the number of odometer readings backing the projection, with a note when data is limited
+
+**Integration with existing features:**
+
+- **Scheduled expenses**: Payment schedule auto-created from financing terms — supports all schedule types (weekly, monthly, yearly, one-time) with full cost breakdown template
+- **Odometer data**: Mileage tracking pulls from all record types that capture odometer readings, requiring no extra data entry
+- **Multi-currency**: Financing amounts and payment schedules support any currency with home currency conversion
+- **Role-based access**: Follows the same Owner/Admin/Driver/Viewer permissions as all other features
+
+---
+
 ## Service Intervals & Reminders
 
 Configure recurring maintenance schedules to receive timely notifications:

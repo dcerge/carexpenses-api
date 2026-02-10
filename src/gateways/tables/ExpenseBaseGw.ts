@@ -50,6 +50,7 @@ class ExpenseBaseGw extends BaseGateway {
       withOdometer,
       expenseScheduleId,
       pointType,
+      tireSetId
     } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
@@ -104,6 +105,14 @@ class ExpenseBaseGw extends BaseGateway {
         table
           .where(FIELDS.LOCATION, 'ilike', `%${searchKeyword}%`)
           .orWhere(FIELDS.WHERE_DONE, 'ilike', `%${searchKeyword}%`);
+      });
+    }
+
+    if (tireSetId) {
+      const self = this;
+      query.innerJoin(TABLES.EXPENSES, function (this: any) {
+        this.on(`${TABLES.EXPENSES}.${FIELDS.ID}`, '=', `${TABLES.EXPENSE_BASES}.${FIELDS.ID}`);
+        this.andOn(`${TABLES.EXPENSES}.${FIELDS.TIRE_SET_ID}`, '=', self.getDb().raw('?', tireSetId));
       });
     }
   }
@@ -324,8 +333,6 @@ class ExpenseBaseGw extends BaseGateway {
         latestReadingDate: row.latestReadingDate,
         dataPoints: parseInt(row.dataPoints, 10) || 0,
       }));
-
-    logger.debug('=== getOdometerStatsByCarIds.result = ', result);
 
     return result;
   }

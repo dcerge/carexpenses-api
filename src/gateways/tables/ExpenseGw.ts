@@ -36,7 +36,7 @@ class ExpenseGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { id, kindId, accountId } = filterParams || {};
+    const { id, kindId, accountId, tireSetId } = filterParams || {};
     const self = this;
 
     await super.onListFilter(query, filterParams);
@@ -47,6 +47,10 @@ class ExpenseGw extends BaseGateway {
 
     if (kindId) {
       query.whereIn(FIELDS.KIND_ID, castArray(kindId));
+    }
+
+    if (tireSetId) {
+      query.whereIn(FIELDS.TIRE_SET_ID, castArray(tireSetId));
     }
 
     // Security filter through expense_bases join

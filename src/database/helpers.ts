@@ -116,6 +116,13 @@ export const TABLES = {
   // Financing
   // ---------------------------------------------------------------------------
   VEHICLE_FINANCING: 'vehicle_financing',
+
+  // ---------------------------------------------------------------------------
+  // Tire Tracking
+  // ---------------------------------------------------------------------------
+  TIRE_BRANDS: 'tire_brands',
+  TIRE_SETS: 'tire_sets',
+  TIRE_SET_ITEMS: 'tire_set_items',
 };
 
 // =============================================================================
@@ -598,6 +605,23 @@ export const FIELDS = {
   MILEAGE_ALLOWANCE: 'mileage_allowance',
   MILEAGE_ALLOWANCE_UNIT: 'mileage_allowance_unit',
   MILEAGE_OVERAGE_COST: 'mileage_overage_cost',
+
+  // ---------------------------------------------------------------------------
+  // Tire Tracking Fields
+  // ---------------------------------------------------------------------------
+  TIRE_SET_ID: 'tire_set_id',
+  TIRE_TYPE: 'tire_type',
+  TIRE_SET_STATUS: 'tire_set_status',
+  STORAGE_LOCATION: 'storage_location',
+  TIRE_SIZE: 'tire_size',
+  TIRE_CONDITION: 'tire_condition',
+  TREAD_DEPTH_INITIAL: 'tread_depth_initial',
+  DOT_CODE: 'dot_code',
+  IS_REGISTERED: 'is_registered',
+  WEBSITE: 'website',
+  QUANTITY: 'quantity',
+  BRAND: 'brand',
+  POSITION: 'position',
 };
 
 // =============================================================================
@@ -825,4 +849,41 @@ export const VEHICLE_FINANCING_STATUS = {
 export const FINANCING_TYPES = {
   LOAN: 'loan',
   LEASE: 'lease',
+} as const;
+
+// --- TIRE TYPE VALUES --------------------------------------------------------
+
+export const TIRE_TYPES = {
+  SUMMER: 'summer',
+  WINTER: 'winter',
+  ALL_SEASON: 'all_season',
+  ALL_WEATHER: 'all_weather',
+  PERFORMANCE: 'performance',
+  OFF_ROAD: 'off_road',
+} as const;
+
+
+// --- TIRE SET STATUS VALUES --------------------------------------------------
+
+
+export const TIRE_SET_STATUSES = {
+  ACTIVE: 100,       // Currently installed on vehicle
+  STORED: 300,       // Off vehicle, in storage
+  RETIRED: 5000,     // Disposed of, sold, or worn out
+} as const;
+
+// --- TIRE POSITION VALUES ----------------------------------------------------
+
+export const TIRE_POSITIONS = {
+  ALL: 'all',             // Same tires all around
+  FRONT: 'front',         // Front axle only (staggered setup)
+  REAR: 'rear',           // Rear axle only (staggered setup)
+} as const;
+
+// --- TIRE CONDITION VALUES ---------------------------------------------------
+
+export const TIRE_CONDITIONS = {
+  NEW: 'new',                       // Purchased new
+  USED: 'used',                     // Purchased used
+  CAME_WITH_VEHICLE: 'came_with_vehicle',  // Already on vehicle when acquired
 } as const;

@@ -582,6 +582,7 @@ class ExpenseCore extends AppCore {
 
         if (expense) {
           merged.kindId = expense.kindId;
+          merged.tireSetId = expense.tireSetId;
           merged.costWork = expense.costWork;
           merged.costParts = expense.costParts;
           merged.costWorkHc = expense.costWorkHc;
@@ -745,6 +746,7 @@ class ExpenseCore extends AppCore {
     const {
       // Exclude extension table fields
       kindId,
+      tireSetId,
       costWork,
       costParts,
       costWorkHc,
@@ -760,6 +762,15 @@ class ExpenseCore extends AppCore {
       ...baseFields
     } = params;
 
+    if (baseFields.tax == null) {
+      baseFields.tax = 0;
+    }
+
+    if (baseFields.fees == null) {
+      baseFields.fees = 0;
+    }
+
+
     return baseFields;
   }
 
@@ -769,8 +780,9 @@ class ExpenseCore extends AppCore {
   private extractExpenseFields(params: any): any {
     return {
       kindId: params.kindId,
-      costWork: params.costWork,
-      costParts: params.costParts,
+      tireSetId: params.tireSetId,
+      costWork: params.costWork ?? 0,
+      costParts: params.costParts ?? 0,
       costWorkHc: params.costWorkHc,
       costPartsHc: params.costPartsHc,
       shortNote: params.shortNote,

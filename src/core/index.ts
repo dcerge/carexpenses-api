@@ -35,3 +35,5 @@ export * from './RevenueKindCore';
 export * from './ExpenseScheduleCore';
 export * from './VehicleRecallCore';
 export * from './VehicleFinancingCore';
+export * from './TireBrandCore';
+export * from './TireSetCore';
