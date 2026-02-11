@@ -1,10 +1,10 @@
 # CarExpenses
 
-**The vehicle expense tracker built for families and teams.**
+**One app for every car, every driver, every cost.**
 
-CarExpenses is a mobile-friendly Progressive Web Application (PWA) that helps drivers, families, and small businesses understand the true cost of vehicle ownership. Unlike single-user apps that leave families juggling separate accounts, CarExpenses is built for how people actually live — with shared vehicles, multiple drivers, and the need to stay tax-ready year-round.
+CarExpenses is a mobile-friendly Progressive Web Application (PWA) that helps you understand and manage the true cost of vehicle ownership. Track fuel, maintenance, trips, tires, tasks, documents, and every other vehicle-related expense — and share it all with family members, co-drivers, or your team.
 
-Track fuel consumption, maintenance costs, travel logs, and every vehicle-related expense in one place. See where your money actually goes, collaborate with family members or team drivers, and generate tax-compliant reports when you need them.
+Whether you're managing one family car or a small fleet, CarExpenses gives everyone a single place to log, review, and stay on top of what your vehicles need. Free to start. Works on any device. No app store required.
 
 An internet connection is required.
 
@@ -13,16 +13,19 @@ An internet connection is required.
 ## Who CarExpenses Is For
 
 **Multi-Vehicle Families**
-Parents sharing cars with teen drivers. Partners tracking household vehicle costs. Families who want consolidated expense management without spreadsheet chaos.
+Parents sharing cars with teen drivers. Partners splitting household vehicle costs. Families who want one shared view of every car's expenses, maintenance, and documents — without spreadsheet chaos.
 
 **Gig Economy Workers**
-Delivery drivers, rideshare operators, and contractors who need every deductible mile documented. Track business vs. personal use, link revenue to trips, and stay audit-ready for IRS/CRA.
+Delivery drivers, rideshare operators, and contractors who need every deductible mile and expense documented. Track business vs. personal use, link revenue to trips, and stay audit-ready for IRS/CRA.
 
 **Small Fleet Operators**
-Businesses with 5–40 vehicles who need affordable fleet management. Role-based access lets owners maintain oversight while drivers log their own expenses.
+Businesses with 5–40 vehicles who need affordable fleet oversight. Role-based access lets owners maintain control while drivers log their own fuel, expenses, and trips.
 
 **Car Enthusiasts & Meticulous Owners**
-Drivers who want a complete vehicle history — from purchase to eventual sale. Checkpoints, maintenance records, and documents that preserve (and prove) your vehicle's story.
+Drivers who want a complete vehicle history — from purchase to eventual sale. Checkpoints, tire records, maintenance logs, and documents that preserve (and prove) your vehicle's story.
+
+**Anyone Who Shares a Vehicle**
+Roommates splitting a car, couples with one vehicle, parents lending a car to a college student — if more than one person drives it, CarExpenses keeps everyone on the same page.
 
 ---
 
@@ -294,6 +297,80 @@ Check for open safety recalls on your vehicles using official government databas
 
 - Dashboard indicator when new recall data is available for any of your vehicles
 - Email notifications when new recalls are published (pending mass email sending infrastructure)
+
+---
+
+## Tire Management
+
+CarExpenses includes a comprehensive tire tracking system designed to help vehicle owners manage their tire inventory, monitor tire health, and keep accurate service records.
+
+### Tire Sets & Items
+
+Each vehicle can have multiple tire sets (e.g., "Summer 2024," "Winter Nokians"), and each set contains individual tire items that track specific details like brand, model, size, DOT manufacturing code, tread depth, and position on the vehicle. This structure supports real-world scenarios where tires are partially replaced — for example, two worn front tires swapped for a different brand while keeping the rears.
+
+### Lifecycle Tracking
+
+Tire sets follow a clear lifecycle with three statuses: **Active** (currently installed on the vehicle), **Stored** (off the vehicle, in storage), and **Retired** (disposed of, sold, or worn out). The system enforces that each vehicle can only have one active tire set at a time, preventing data conflicts.
+
+### Seasonal Swap
+
+A dedicated swap workflow handles the seasonal tire change process. When swapping, the system automatically moves the current active set to storage, installs the selected stored set, records the odometer reading, accumulates mileage on the outgoing tires, and optionally creates a service expense record — all in a single operation. Users can specify the storage location for the outgoing set and log the service shop details with address auto-detection.
+
+### Mileage Tracking
+
+The system tracks tire mileage across multiple installation periods. Each time tires are removed from a vehicle, the driven distance is calculated from the odometer delta and accumulated into the tire's lifetime total. For used tires or tires that came with the vehicle, users can enter an estimated initial mileage. Live mileage for currently installed tires is computed on the fly from the vehicle's current odometer reading. All values are stored internally in kilometers and converted to the car's mileage unit and the user's preferred distance unit for display.
+
+### Warning System
+
+A daily background job evaluates every tire set and item across all accounts, computing warning flags as a bitmask for efficient querying and display:
+
+- **Age warnings** — parsed from the DOT manufacturing code on each tire, flagged at 70% and 100% of the configurable age limit (default: 10 years)
+- **Mileage warnings** — based on total lifetime mileage against the mileage warranty threshold (default: 80,000 km), flagged at 70% and 100%
+- **Tread depth warnings** — compared against a configurable minimum tread limit (default: 2.0 mm), with warning at 130% of the limit and critical at the limit itself
+- **Stale tread measurement** — flagged when the last tread depth reading is older than 12 months
+- **Extended storage** — flagged when a stored set has been sitting for an extended period
+
+Users can override the default thresholds (mileage warranty, age limit, tread limit) per tire set. Warning indicators appear throughout the interface — on set cards, item rows, and in the edit drawer — using color-coded badges and border accents to draw attention to tires that need inspection or replacement.
+
+### Expense Integration
+
+Tire operations integrate directly with the expense tracking system. Users can create a purchase expense when adding a new tire set or an additional expense when updating one (e.g., partial replacement). Swap operations automatically generate a service expense record. Expenses are linked both at the set level and at the individual item level, so users can see exactly which tires were purchased in each transaction. A mini expense timeline on each tire set card shows recent service history with totals.
+
+### Interface
+
+The tire management UI follows the application's mobile-first design with swipeable cards for quick actions on mobile, collapsible form sections to reduce clutter, animated list transitions, and auto-location detection for service records. The edit drawer supports inline management of tire items with expandable/collapsible cards, real-time quantity calculation, and contextual fields that appear based on tire condition (e.g., initial mileage input only shows for used tires).
+
+---
+
+# Vehicle Tasks — Feature Description
+
+## Keep Track of Everything Your Vehicles Need
+
+Life with a car means a never-ending list of things to remember: renew the registration, swap to winter tires, buy replacement wipers, schedule that inspection. CarExpenses now includes a built-in task manager designed specifically for vehicle owners, so nothing falls through the cracks.
+
+### Per-Vehicle To-Do Lists
+
+Create tasks for any vehicle in your garage — or for your account as a whole. Each task can have a due date, priority level (low, medium, high), and a category to keep things organized: purchases, appointments, seasonal prep, repairs, administrative items, and more.
+
+### Smart Recurrence
+
+Some things come back every year — registration renewals, seasonal tire swaps, insurance deadlines. Set tasks to repeat on a weekly, monthly, or yearly schedule. When you complete a recurring task, the next occurrence is automatically created with the correct due date, so you never have to remember to re-add it.
+
+### Dashboard at a Glance
+
+Your dashboard highlights the tasks that need attention right now. Overdue items surface at the top in red, followed by tasks due soon and those already in progress. You'll always know what needs doing next without digging through lists.
+
+### Shared Task Lists
+
+In a shared account — whether it's a family or a small fleet — anyone with Driver access or above can create, view, and complete tasks. Assign a task to a specific person so everyone knows who's responsible. One family member adds "rotate tires on the Honda," another completes it. That's real collaboration around vehicle care.
+
+### Simple Workflow: To Do → In Progress → Complete
+
+Move tasks through a straightforward three-step workflow. Tap the checkbox to mark a task complete, or set it to "In Progress" when you've started working on it. Completed tasks stay in your history with a record of who completed them and when.
+
+### Priorities and Due Dates
+
+Flag urgent items as high priority so they stand out with a colored border and badge. Set due dates to get visual countdowns — "3 days left," "due tomorrow," or "overdue by 2 days" — right on the task card.
 
 ---
 

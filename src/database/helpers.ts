@@ -123,6 +123,11 @@ export const TABLES = {
   TIRE_BRANDS: 'tire_brands',
   TIRE_SETS: 'tire_sets',
   TIRE_SET_ITEMS: 'tire_set_items',
+
+  // ---------------------------------------------------------------------------
+  // Vehicle Tasks (To-Do List)
+  // ---------------------------------------------------------------------------
+  VEHICLE_TASKS: 'vehicle_tasks',
 };
 
 // =============================================================================
@@ -636,6 +641,18 @@ export const FIELDS = {
   TREAD_DEPTH_CURRENT: 'tread_depth_current',
   TREAD_DEPTH_MEASURED_AT: 'tread_depth_measured_at',
 
+  // ---------------------------------------------------------------------------
+  // Vehicle Task Fields (To-Do List)
+  // ---------------------------------------------------------------------------
+  TITLE: 'title',
+  PRIORITY: 'priority',
+  DUE_DATE: 'due_date',
+  REMINDER_DATE: 'reminder_date',
+  COMPLETED_AT: 'completed_at',
+  CREATED_BY_USER_ID: 'created_by_user_id',
+  ASSIGNED_TO_USER_ID: 'assigned_to_user_id',
+  COMPLETED_BY_USER_ID: 'completed_by_user_id',
+  LINKED_EXPENSE_ID: 'linked_expense_id',
 };
 
 // =============================================================================
@@ -804,7 +821,7 @@ export const TANK_TYPES = {
 };
 
 // =============================================================================
-// SCHEDULE TYPES (expense_schedules.schedule_type)
+// SCHEDULE TYPES (expense_schedules.schedule_type / vehicle_tasks.schedule_type)
 // =============================================================================
 
 export const SCHEDULE_TYPES = {
@@ -948,4 +965,25 @@ export const TIRE_WARNING_DEFAULTS = {
   warningRatio: 0.7,
   /** Tread warning multiplier: warn when depth <= limit * 1.3 */
   treadWarningMultiplier: 1.3,
+} as const;
+
+// =============================================================================
+// VEHICLE TASK STATUS VALUES (vehicle_tasks.status)
+// =============================================================================
+
+export const VEHICLE_TASK_STATUS = {
+  IN_PROGRESS: 50,   // Someone is actively working on this task, its value needs to be less then TODO to list in-progress first
+  TODO: 100,          // Task is pending, not yet started
+  COMPLETE: 300,      // Task is done
+  REMOVED: 10000,     // Soft-deleted
+} as const;
+
+// =============================================================================
+// VEHICLE TASK PRIORITY VALUES (vehicle_tasks.priority)
+// =============================================================================
+
+export const VEHICLE_TASK_PRIORITY = {
+  LOW: 100,           // No urgency
+  MEDIUM: 200,        // Should be done soon
+  HIGH: 300,          // Needs immediate attention
 } as const;

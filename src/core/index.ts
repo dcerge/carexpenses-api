@@ -37,3 +37,4 @@ export * from './VehicleRecallCore';
 export * from './VehicleFinancingCore';
 export * from './TireBrandCore';
 export * from './TireSetCore';
+export * from './VehicleTaskCore';

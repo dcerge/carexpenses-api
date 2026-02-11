@@ -70,170 +70,114 @@ Minimal effort since the equipment tracking system is already built — this is 
 
 ---
 
-## 2. Vehicle Tasks (To-Do List)
+## 2. # Vehicle Tasks — Remaining Work
 
-**Priority: P1 — High** | **Effort: ~2–3 days**
+## 1. Convert to Expense Workflow
 
-### What it does
+**Priority: P2 — Medium** | **Effort: ~1–2 days**
 
-A lightweight task list for ad-hoc vehicle-related to-dos that don't fit into the scheduled maintenance system: "buy new wipers," "get headlight alignment checked," "renew parking permit," "clean interior before road trip." Tasks can have due dates, priorities, and can optionally convert to expense or service records upon completion.
+### Problem
 
-### Data model
+When a user completes a task like "buy new wipers" or "replace brake pads," the cost should be trackable as an expense. Currently, users must manually create a separate expense record and there is no connection between the task and the expense.
 
-**New `vehicle_tasks` table:**
+### Solution
 
-| Field                              | Type         | Description                                        |
-| ---------------------------------- | ------------ | -------------------------------------------------- |
-| id                                 | uuid         | Primary key                                        |
-| account_id                         | uuid         | FK to accounts                                     |
-| vehicle_id                         | uuid         | FK to vehicles (nullable — for account-wide tasks) |
-| title                              | varchar(255) | Task description                                   |
-| notes                              | text         | Additional details                                 |
-| due_date                           | date         | Optional due date                                  |
-| priority                           | enum         | 'low', 'medium', 'high'                            |
-| status                             | enum         | 'pending', 'completed', 'cancelled'                |
-| completed_at                       | timestamp    | When marked complete                               |
-| completed_by_user_id               | uuid         | Who completed it                                   |
-| linked_expense_id                  | uuid         | FK to expenses (if converted)                      |
-| created_by_user_id                 | uuid         | Who created the task                               |
-| created_at, updated_at, deleted_at | timestamps   | Standard audit fields                              |
+Add a "Log as expense" flow that triggers when a task is completed (or available as an action on any completed task). The flow opens the expense creation form pre-filled with data from the task, and on save links the expense back to the task via `linked_expense_id`.
 
-### Implementation approach
+### Implementation
 
 **Backend:**
 
-1. Standard CRUD operations: `vehicleTasks`, `vehicleTask`, `vehicleTaskCreate`, `vehicleTaskUpdate`, `vehicleTaskDelete`
-2. Query filters: by vehicle, by status (pending/completed), by due date range, by assignee
-3. Batch operations: mark multiple tasks complete, delete completed tasks older than X days
+- Add a new mutation or extend `vehicleTaskUpdate` to accept `linkedExpenseId` so the frontend can link the expense after creation
+- Validate that the linked expense belongs to the same account
+- When fetching tasks, resolve the `linkedExpense` reference so the UI can show expense details (amount, date)
 
 **Frontend:**
 
-1. **Tasks tab on vehicle detail page**: List of pending tasks with due dates and priorities, completed tasks collapsed below
-2. **Dashboard widget**: "Upcoming Tasks" card showing tasks due in the next 7 days across all vehicles, sorted by due date
-3. **Quick add**: Floating action button or inline input for rapid task creation
-4. **Task detail sheet**: Edit task, add notes, mark complete, convert to expense
+1. **Completion prompt**: After the `vehicleTaskComplete` mutation succeeds, show a confirmation toast or bottom sheet asking: _"Task completed! Would you like to log this as an expense?"_
+   - **Yes** → Open the `ExpenseEditDrawer` pre-filled with:
+     - `carId` from the task
+     - Description/notes pre-filled from the task title
+     - Date set to today
+   - **No** / dismiss → Task is simply marked complete (current behavior)
 
-**Convert to expense workflow:**
+2. **Post-creation linking**: When the expense is successfully created from the prompt:
+   - Call `vehicleTaskUpdate` with `linkedExpenseId` set to the new expense ID
+   - Refresh the task in the dashboard/list to show the "Expense logged" indicator
 
-When completing a task like "buy new wipers," offer a prompt: "Log this as an expense?" If yes, open the expense form pre-filled with the task title as the description. On save, link the expense to the task (`linked_expense_id`). The task shows "Completed · Logged as expense" with a link to the expense record.
+3. **Completed task action**: On already-completed tasks that have no linked expense, show a "Log as expense" action button in the task card footer and swipe actions. This covers cases where the user dismissed the initial prompt but wants to link an expense later.
 
-**Multi-user collaboration:**
+4. **Linked expense display**: The task list already shows a linked expense indicator (`Receipt` icon + "Expense logged" text). Enhance this to be clickable, navigating to the linked expense detail/edit page.
 
-Tasks inherit the account's sharing model. All users with Driver or higher access can create, view, and complete tasks. A family account might have one person create "rotate tires on the Honda" and another person complete it — this is the multi-user value proposition in action.
+### Acceptance criteria
 
-### Considerations
-
-- Tasks are intentionally simple and don't replace the service intervals system. Service intervals are for recurring, scheduled maintenance with odometer/time triggers. Tasks are for one-off items
-- Don't over-engineer: no subtasks, no complex assignment workflows, no notifications beyond the dashboard widget. Keep it lightweight
-- Account-wide tasks (vehicle_id = null) are useful for things like "research new car insurance" that aren't tied to a specific vehicle
-- Consider a "suggested tasks" feature based on vehicle age or season ("Check antifreeze levels" in October) — but this is a future enhancement, not MVP
-
-### Integration with existing features
-
-- **Dashboard**: Tasks widget shows pending count and nearest due dates
-- **Vehicle detail**: Tasks tab alongside Refuels, Expenses, etc.
-- **Expenses**: Two-way link between tasks and expenses
-- **Notifications** (future): Push notification for tasks due today (requires native app wrapper)
-
-### Why P1
-
-Simple feature that increases daily engagement — users return to the app to check off tasks, not just to log expenses. The multi-user angle is strong: shared task lists are genuinely useful for families and fleets ("I added a task, you completed it"). The "convert to expense" workflow bridges the gap between planning and tracking. Low implementation effort with existing patterns. Universal appeal: every car owner has things they need to remember to do.
+- [ ] Completing a task shows a prompt to log an expense
+- [ ] Dismissing the prompt completes the task without side effects
+- [ ] Accepting the prompt opens the expense form pre-filled with task data
+- [ ] Successfully created expense is linked to the task via `linkedExpenseId`
+- [ ] Completed tasks without a linked expense show a "Log as expense" action
+- [ ] Linked expense indicator on task cards is clickable and navigates to the expense
+- [ ] Recurring tasks: the prompt appears on each completion (each occurrence is independent)
+- [ ] Proper permission checks: only users who can create expenses see the prompt
 
 ---
 
-## 3. Tire Tracking
+## 2. "My Tasks" vs "All Tasks" Toggle
 
-**Priority: P1 — High** | **Effort: ~2–3 days**
+**Priority: P2 — Medium** | **Effort: ~0.5 day**
 
-### What it does
+### Problem
 
-Users track tire sets installed on their vehicles with full details: brand, model, size, type (summer/winter/all-season), installation date, odometer at install, and purchase price. The system calculates wear metrics (km driven on current tires), integrates with service intervals for rotation and replacement reminders, and feeds tire costs into reporting.
+In shared accounts (families, fleets), users see all tasks for all users. There is no quick way to filter down to "tasks assigned to me" vs "everything," which can cause confusion about ownership and lead to duplicate effort.
 
-### Data model
+### Solution
 
-**New `vehicle_tires` table:**
+Add a simple toggle or segmented control to the dashboard tasks widget and the task list that filters between "My tasks" (where `assignedToUserId` matches the current user) and "All tasks" (no user filter). Default to "My tasks" when the user has tasks assigned to them; otherwise default to "All tasks."
 
-| Field                              | Type       | Description                                                                      |
-| ---------------------------------- | ---------- | -------------------------------------------------------------------------------- |
-| id                                 | uuid       | Primary key                                                                      |
-| account_id                         | uuid       | FK to accounts                                                                   |
-| vehicle_id                         | uuid       | FK to vehicles                                                                   |
-| brand                              | varchar    | Manufacturer (Michelin, Continental, etc.)                                       |
-| model                              | varchar    | Tire model name                                                                  |
-| size                               | varchar    | Size code (e.g., "225/45R17")                                                    |
-| tire_type                          | enum       | 'summer', 'winter', 'all_season', 'performance', 'off_road'                      |
-| position                           | enum       | 'all', 'front', 'rear' — for vehicles with staggered setups                      |
-| quantity                           | int        | Number of tires (typically 4, but could be 2 for motorcycles or staggered swaps) |
-| purchase_date                      | date       | When purchased                                                                   |
-| purchase_price                     | numeric    | Total cost for the set                                                           |
-| purchase_currency                  | varchar    | Currency code                                                                    |
-| installed_at                       | date       | When mounted on vehicle                                                          |
-| odometer_at_install                | numeric    | Odometer reading at installation (stored in km)                                  |
-| removed_at                         | date       | When removed/replaced (null if current)                                          |
-| odometer_at_removal                | numeric    | Odometer at removal                                                              |
-| tread_depth_initial                | numeric    | Starting tread depth in mm (optional)                                            |
-| dot_code                           | varchar    | DOT manufacturing date code (optional, for age tracking)                         |
-| notes                              | text       | Additional notes                                                                 |
-| is_current                         | boolean    | Currently installed on vehicle                                                   |
-| created_at, updated_at, deleted_at | timestamps | Standard audit fields                                                            |
-
-**New `tire_brands` lookup table** (optional, for autocomplete):
-
-| Field           | Type    | Description |
-| --------------- | ------- | ----------- |
-| id              | int     | Primary key |
-| name            | varchar | Brand name  |
-| name_normalized | varchar | For search  |
-
-Seed with common brands: Michelin, Continental, Bridgestone, Goodyear, Pirelli, Dunlop, Hankook, Yokohama, Nokian, BFGoodrich, Toyo, Firestone, Kumho, Cooper, Falken, etc.
-
-### Implementation approach
+### Implementation
 
 **Backend:**
 
-1. Create migration for `vehicle_tires` table with proper indexes on `vehicle_id`, `account_id`, and `is_current`
-2. CRUD operations via GraphQL: `vehicleTires`, `vehicleTire`, `vehicleTireCreate`, `vehicleTireUpdate`, `vehicleTireDelete`
-3. Computed fields in resolver: `distanceDriven` (current odometer minus odometer_at_install), `monthsInstalled`, `costPerKm` (purchase_price / distance_driven)
-4. When a new tire set is marked as `is_current`, automatically set `is_current = false` and populate `removed_at` / `odometer_at_removal` on the previous current set
+- No changes needed — the `VehicleTaskFilter.assignedToUserId` filter already exists
+- The dashboard gateway query may need a parameter to optionally filter by `assigned_to_user_id`
 
 **Frontend:**
 
-1. New "Tires" tab on vehicle detail page, similar to existing tabs (Refuels, Expenses, etc.)
-2. List view showing current tires prominently, with history below
-3. Tire form with brand autocomplete, size format validation (regex for standard tire size codes), and tire type selector
-4. Dashboard card for vehicles with seasonal tires: "Winter tire swap recommended" based on date rules (configurable per region or user preference)
+1. **Dashboard widget**: Add a small segmented control (`My Tasks` | `All`) above the task list in `DashboardVehicleTasks`. When toggled, re-fetch dashboard tasks with or without `assignedToUserId` filter.
 
-**Service interval integration:**
+2. **Persistence**: Store the user's preference in local component state (or user profile if we want it to persist across sessions).
 
-1. Add tire-related service types to `service_interval_types`: "Tire Rotation", "Tire Replacement", "Tire Pressure Check", "Wheel Alignment"
-2. When a tire set is installed, offer to auto-create a rotation interval (e.g., every 10,000 km)
-3. Tire replacement reminders can be distance-based (e.g., 60,000 km) or tread-depth-based if the user tracks tread measurements
+3. **Smart default**: On mount, check if the current user has any assigned tasks. If yes, default to "My Tasks." If no tasks are assigned to anyone, default to "All."
 
-**Reports integration:**
+4. **Badge counts**: Show counts for both segments so the user knows at a glance: `My Tasks (3) | All (7)`.
 
-1. Add "Tires" as a cost category in expense reports (sum of purchase_price from tire records)
-2. Per-vehicle tire cost per km metric
-3. Tire cost comparison: which brand/model gave the best value (cost per km driven)
+### Acceptance criteria
 
-### Seasonal tire swap workflow
+- [ ] Toggle visible on dashboard tasks widget
+- [ ] "My Tasks" filters to `assignedToUserId = currentUser`
+- [ ] "All" shows all tasks regardless of assignment
+- [ ] Unassigned tasks appear in both views
+- [ ] Smart default: "My Tasks" if user has assigned tasks, "All" otherwise
+- [ ] Single-user accounts: toggle is hidden (no value in filtering)
 
-For users in regions with mandatory or recommended seasonal tire changes (Canada, Russia, Scandinavia, Germany):
+---
 
-1. User logs two tire sets per vehicle: summer and winter
-2. "Swap Tires" action: select which set to install, enter current odometer, system handles the `is_current` flag swap
-3. Optional: integrate with User Location (Feature #11) to show seasonal swap reminders based on regional norms ("Swap to winter tires by October 15" for Alberta users)
+## Tire Tracking — Remaining Work
 
-### Considerations
+**Priority: P2 — Medium** | **Effort: ~5–6 days**
 
-- Tire size validation should accept standard formats: "225/45R17", "225/45/17", "P225/45R17" — normalize on save
-- DOT code parsing: the last four digits indicate manufacturing week and year (e.g., "2319" = week 23 of 2019). Could calculate tire age and warn if tires are over 6 years old regardless of tread
-- Staggered tire setups (different front/rear sizes, common on sports cars) need the `position` field
-- Motorcycle support: quantity of 2, different size format conventions
-- Some users track tread depth over time — consider a `tire_measurements` child table for users who want to log periodic tread checks, but this can be a future enhancement
+Core tire management is complete (sets/items CRUD, swap workflow, mileage tracking, warning system, expense integration, mobile UI). The following items from the original spec remain:
 
-### Why P1
+### Tasks
 
-Tires represent a significant recurring expense that users currently can't track properly — often the second-largest vehicle expense after fuel. The seasonal swap workflow is a genuine pain point in cold-climate countries (Canada, Russia, Scandinavia — key target markets) that no competitor handles well. Implementation leverages existing patterns (similar to service intervals) and feeds valuable data into reports. The cost-per-km analysis helps users make informed purchasing decisions. Universal relevance: every vehicle has tires.
+| #   | Task                                                                                                                                                                                                                                | Effort    | Priority |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------- |
+| 1   | **Service interval integration** — Add tire-related service types (Rotation, Replacement, Pressure Check, Alignment). Auto-create rotation interval on install. Link tire warnings to reminders.                                    | ~1 day    | P2       |
+| 2   | **Reports integration** — Tire costs in expense category breakdowns. Cost-per-km per tire set. Brand/model value comparison. Tire line item in yearly summaries.                                                                    | ~1–2 days | P2       |
+| 3   | **Seasonal mismatch warnings** — Implement the `SEASONAL_MISMATCH` flag (currently a TODO). Resolve user hemisphere, define season boundaries, flag summer tires in winter and vice versa. Dashboard "swap by [date]" notification. | ~1 day    | P2       |
+| 4   | **Tread depth history** — New `tire_tread_measurements` table to track depth over time instead of overwriting. Wear chart and remaining life prediction.                                                                            | ~1 day    | P3       |
+| 5   | **Tire brands lookup** — Seed table with common brands for autocomplete in the item form.                                                                                                                                           | ~0.5 day  | P3       |
+| 6   | **Dashboard tire status card** — Widget showing vehicles with active tire warnings and quick-swap action.                                                                                                                           | ~0.5 day  | P3       |
 
 ---
 
