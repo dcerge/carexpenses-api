@@ -15,3 +15,5 @@ export * from './ServiceIntervalNextUpdater';
 export * from './consumptionCalculator';
 export * from './reimbursementRates';
 export * from './financingCalculations';
+export * from './prompts';
+export * from './filesHelpers';

@@ -38,3 +38,4 @@ export * from './VehicleFinancingCore';
 export * from './TireBrandCore';
 export * from './TireSetCore';
 export * from './VehicleTaskCore';
+export * from './ScannerCore';

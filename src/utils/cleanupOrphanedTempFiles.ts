@@ -9,45 +9,7 @@ import { logger } from '../logger';
 const MAX_AGE_HOURS = 24;
 
 /**
- * Parse requestId to extract timestamp
- * Format: YYYYMMDDHHmmSS-XXXX (e.g., 20241130184532-NPRW)
- * Returns the timestamp as a Date object, or null if parsing fails
- */
-const parseRequestIdTimestamp = (requestId: string): Date | null => {
-  try {
-    // Extract the timestamp part (before the dash)
-    const parts = requestId.split('-');
-    if (parts.length < 2) {
-      return null;
-    }
-
-    const timestampStr = parts[0];
-    if (timestampStr.length !== 14) {
-      return null;
-    }
-
-    const year = parseInt(timestampStr.substring(0, 4), 10);
-    const month = parseInt(timestampStr.substring(4, 6), 10) - 1; // JS months are 0-indexed
-    const day = parseInt(timestampStr.substring(6, 8), 10);
-    const hour = parseInt(timestampStr.substring(8, 10), 10);
-    const minute = parseInt(timestampStr.substring(10, 12), 10);
-    const second = parseInt(timestampStr.substring(12, 14), 10);
-
-    const date = new Date(Date.UTC(year, month, day, hour, minute, second));
-
-    // Validate the date is reasonable
-    if (isNaN(date.getTime())) {
-      return null;
-    }
-
-    return date;
-  } catch (error) {
-    return null;
-  }
-};
-
-/**
- * Delete a temp folder and all its contents
+ * Delete a temp folder and all its contents recursively
  */
 const deleteTempFolder = (folderPath: string): boolean => {
   try {
@@ -55,21 +17,19 @@ const deleteTempFolder = (folderPath: string): boolean => {
       return true;
     }
 
-    // Delete all files in the folder
-    const files = fs.readdirSync(folderPath);
-    for (const file of files) {
-      const filePath = path.join(folderPath, file);
-      const stat = fs.statSync(filePath);
+    const entries = fs.readdirSync(folderPath);
+
+    for (const entry of entries) {
+      const entryPath = path.join(folderPath, entry);
+      const stat = fs.statSync(entryPath);
 
       if (stat.isDirectory()) {
-        // Recursively delete subdirectories (shouldn't happen, but just in case)
-        deleteTempFolder(filePath);
+        deleteTempFolder(entryPath);
       } else {
-        fs.unlinkSync(filePath);
+        fs.unlinkSync(entryPath);
       }
     }
 
-    // Delete the folder itself
     fs.rmdirSync(folderPath);
     return true;
   } catch (error: any) {
@@ -79,13 +39,29 @@ const deleteTempFolder = (folderPath: string): boolean => {
 };
 
 /**
+ * Get the age of a folder in hours using filesystem timestamps.
+ * Uses the most recent of mtime and birthtime to determine when
+ * the folder was last actively used.
+ */
+const getFolderAgeHours = (stat: fs.Stats): number => {
+  const now = Date.now();
+
+  // Use mtime (last modification) as primary indicator — this updates when
+  // files are added/removed from the directory
+  const lastActivity = stat.mtimeMs;
+  const ageMs = now - lastActivity;
+
+  return ageMs / (1000 * 60 * 60);
+};
+
+/**
  * Cleanup orphaned temp upload folders on application startup.
  *
- * This function scans the temp/uploads directory for folders that:
- * 1. Are named with a valid requestId format (YYYYMMDDHHmmSS-XXXX)
- * 2. Are older than MAX_AGE_HOURS
+ * This function scans the temp/uploads directory for folders that
+ * have not been modified within the last MAX_AGE_HOURS.
  *
- * These folders are considered orphaned (from crashed or interrupted submissions)
+ * These folders are considered orphaned (from crashed or interrupted
+ * submissions where the normal post-processing cleanup did not run)
  * and are safely deleted.
  *
  * Call this function once during application startup.
@@ -95,57 +71,75 @@ export const cleanupOrphanedTempFiles = (): void => {
 
   logger.log(`Checking for orphaned temp files in: ${tempBaseDir}`);
 
-  // Check if temp directory exists
   if (!fs.existsSync(tempBaseDir)) {
     logger.log('Temp uploads directory does not exist, nothing to clean up');
     return;
   }
 
   try {
-    const folders = fs.readdirSync(tempBaseDir);
-    const now = new Date();
+    const entries = fs.readdirSync(tempBaseDir);
+    const now = Date.now();
     let deletedCount = 0;
     let skippedCount = 0;
+    let filesDeletedCount = 0;
 
-    for (const folderName of folders) {
-      const folderPath = path.join(tempBaseDir, folderName);
+    for (const entryName of entries) {
+      const entryPath = path.join(tempBaseDir, entryName);
 
-      // Skip if not a directory
-      const stat = fs.statSync(folderPath);
-      if (!stat.isDirectory()) {
+      let stat: fs.Stats;
+      try {
+        stat = fs.statSync(entryPath);
+      } catch (statError: any) {
+        logger.warn(`Cannot stat entry ${entryName}: ${statError.message}`);
         continue;
       }
 
-      // Try to parse the folder name as a requestId
-      const timestamp = parseRequestIdTimestamp(folderName);
+      if (stat.isDirectory()) {
+        // Directory — check age and remove if orphaned
+        const ageHours = getFolderAgeHours(stat);
 
-      if (!timestamp) {
-        // Folder name doesn't match requestId format
-        // Could be a legacy folder or something else - skip it
-        logger.log(`Skipping folder with non-requestId name: ${folderName}`);
-        skippedCount++;
-        continue;
-      }
+        if (ageHours > MAX_AGE_HOURS) {
+          // Count files inside before deleting for logging
+          let fileCount = 0;
+          try {
+            fileCount = fs.readdirSync(entryPath).length;
+          } catch (_) {
+            // Ignore — we'll attempt deletion anyway
+          }
 
-      // Calculate age in hours
-      const ageMs = now.getTime() - timestamp.getTime();
-      const ageHours = ageMs / (1000 * 60 * 60);
+          logger.log(
+            `Deleting orphaned temp folder: ${entryName} (age: ${ageHours.toFixed(1)} hours, ${fileCount} entries)`
+          );
 
-      if (ageHours > MAX_AGE_HOURS) {
-        // Folder is older than threshold - delete it
-        logger.log(`Deleting orphaned temp folder: ${folderName} (age: ${ageHours.toFixed(1)} hours)`);
-
-        if (deleteTempFolder(folderPath)) {
-          deletedCount++;
+          if (deleteTempFolder(entryPath)) {
+            deletedCount++;
+            filesDeletedCount += fileCount;
+          }
+        } else {
+          logger.log(`Keeping recent temp folder: ${entryName} (age: ${ageHours.toFixed(1)} hours)`);
+          skippedCount++;
         }
       } else {
-        // Folder is recent - might still be in processing
-        logger.log(`Keeping recent temp folder: ${folderName} (age: ${ageHours.toFixed(1)} hours)`);
-        skippedCount++;
+        // Stray file directly in temp/uploads — clean up if old
+        const ageMs = now - stat.mtimeMs;
+        const ageHours = ageMs / (1000 * 60 * 60);
+
+        if (ageHours > MAX_AGE_HOURS) {
+          try {
+            fs.unlinkSync(entryPath);
+            logger.log(`Deleted orphaned temp file: ${entryName} (age: ${ageHours.toFixed(1)} hours)`);
+            filesDeletedCount++;
+          } catch (unlinkError: any) {
+            logger.warn(`Failed to delete orphaned temp file ${entryName}: ${unlinkError.message}`);
+          }
+        }
       }
     }
 
-    logger.log(`Orphaned temp files cleanup complete: ${deletedCount} deleted, ${skippedCount} skipped`);
+    logger.log(
+      `Orphaned temp cleanup complete: ${deletedCount} folders deleted, ` +
+      `${filesDeletedCount} files removed, ${skippedCount} recent folders kept`
+    );
   } catch (error: any) {
     logger.error('Error during orphaned temp files cleanup:', error.message);
   }
