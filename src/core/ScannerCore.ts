@@ -11,6 +11,7 @@ import { AppCore } from './AppCore';
 
 import config from '../config';
 import {
+  FEATURE_CODES,
   RECEIPT_SCAN_SYSTEM_PROMPT,
   RECEIPT_SCAN_USER_PROMPT,
   ReceiptScanResult,
@@ -39,6 +40,15 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
  * Core file for Scanning receipts
  */
 class ScannerCore extends AppCore {
+
+  private getHeaders() {
+    const { req } = this.getContext();
+
+    return {
+      cookie: req.headers['cookie'],
+    };
+  }
+
   /**
    * The method receives an uploaded file and scans it using Claude Vision API
    */
@@ -51,6 +61,7 @@ class ScannerCore extends AppCore {
         const utcNow = dayjs().utc();
 
         let tempFilePaths: string[] = [];
+        let usageIncremented = false;
 
         try {
           /**
@@ -107,6 +118,37 @@ class ScannerCore extends AppCore {
             );
           }
 
+          // --- Check feature usage limit before calling Claude API ---
+          const usageResult = await this.getGateways().appFeatureUsageGw.increment({
+            featureCode: FEATURE_CODES.MONTLY_RECEIPT_SCANS_QTY,
+            incrementBy: 1,
+            headers: this.getHeaders()
+          });
+
+          if (usageResult.code < 0) {
+            this.logger.log(
+              `Receipt scan blocked by usage limit: feature=${FEATURE_CODES.MONTLY_RECEIPT_SCANS_QTY}, ` +
+              `error=${usageResult.getErrorSummary()}`
+            );
+
+            const errorMessage = usageResult.code === OP_RESULT_CODES.LIMIT_REACHED
+              ? `You've reached your monthly receipt scan limit. Upgrade your plan for more scans.`
+              : `Failed to verify scan usage. Please try again.`;
+
+            return this.failure(usageResult.code, errorMessage);
+          }
+
+          usageIncremented = true;
+
+          // Log remaining scans for monitoring
+          const usageData = Array.isArray(usageResult.data) ? usageResult.data[0] : null;
+          if (usageData) {
+            this.logger.log(
+              `Receipt scan usage: ${usageData.usageCount} of ${usageData.maxUsageCount} used ` +
+              `(${usageData.remainingCount} remaining)`
+            );
+          }
+
           // --- Read file and convert to base64 ---
           const fileBuffer = fs.readFileSync(receiptFile.path);
           const base64Data = fileBuffer.toString('base64');
@@ -134,6 +176,9 @@ class ScannerCore extends AppCore {
 
           if (aiResult.didFail()) {
             this.logger.error(`Claude Vision API call failed: ${aiResult.getErrorSummary()}`);
+            await this.rollBackUsage();
+            usageIncremented = false;
+
             return this.failure(
               OP_RESULT_CODES.FAILED,
               `Failed to scan receipt. Please try again or enter data manually.`
@@ -146,6 +191,9 @@ class ScannerCore extends AppCore {
 
           if (!rawText) {
             this.logger.error('Claude Vision API returned empty response');
+            await this.rollBackUsage();
+            usageIncremented = false;
+
             return this.failure(
               OP_RESULT_CODES.FAILED,
               `Receipt scan returned empty result. The image may be unreadable. Please try again with a clearer photo.`
@@ -166,6 +214,9 @@ class ScannerCore extends AppCore {
           } catch (parseError: any) {
             this.logger.error(`Failed to parse Claude Vision response as JSON: ${parseError.message}`);
             this.logger.debug(`Raw response: ${rawText.substring(0, 500)}`);
+            await this.rollBackUsage();
+            usageIncremented = false;
+
             return this.failure(
               OP_RESULT_CODES.FAILED,
               `Failed to parse scan results. Please try again with a clearer photo.`
@@ -176,6 +227,9 @@ class ScannerCore extends AppCore {
           if (typeof scanResult.success !== 'boolean' || !scanResult.fields || !scanResult.extra) {
             this.logger.error('Claude Vision response has unexpected structure');
             this.logger.debug(`Parsed response: ${JSON.stringify(scanResult).substring(0, 500)}`);
+            await this.rollBackUsage();
+            usageIncremented = false;
+
             return this.failure(
               OP_RESULT_CODES.FAILED,
               `Receipt scan returned unexpected data. Please try again.`
@@ -187,9 +241,14 @@ class ScannerCore extends AppCore {
             this.logger.log(
               `Receipt scan was not successful: ${scanResult.failureReason || 'Unknown reason'}`
             );
+            await this.rollBackUsage();
+            usageIncremented = false;
+
             // Still return the result — frontend can show the failure reason to user
             return this.success([scanResult]);
           }
+
+          // --- From this point on, the scan was successful — usage stays incremented ---
 
           // --- Convert whenDone from user's local time to UTC ---
           if (scanResult.fields?.whenDone && currentTimeZoneOffset != null) {
@@ -237,6 +296,12 @@ class ScannerCore extends AppCore {
           return this.success([scanResult]);
         } catch (error: any) {
           this.logger.error(`Failed to scan receipt: ${error.message}`);
+
+          // Roll back usage on unexpected exceptions
+          if (usageIncremented) {
+            await this.rollBackUsage();
+          }
+
           return this.failure(OP_RESULT_CODES.EXCEPTION, `Failed to scan receipt: ${error.message}`);
         } finally {
           // --- Clean up temp files and their directories ---
@@ -278,6 +343,30 @@ class ScannerCore extends AppCore {
       hasTransaction: false,
       doingWhat: 'scanning expense receipt',
     });
+  }
+
+  /**
+   * Rolls back a feature usage increment when the scan fails.
+   * Silently handles errors — a failed rollback should not block
+   * the error response to the user.
+   */
+  private async rollBackUsage(): Promise<void> {
+    try {
+      const decrementResult = await this.getGateways().appFeatureUsageGw.decrement({
+        featureCode: FEATURE_CODES.MONTLY_RECEIPT_SCANS_QTY,
+        headers: this.getHeaders()
+      });
+
+      if (decrementResult.code < 0) {
+        this.logger.warn(
+          `Failed to roll back scan usage: ${decrementResult.getErrorSummary()}`
+        );
+      } else {
+        this.logger.log(`Rolled back scan usage for '${FEATURE_CODES.MONTLY_RECEIPT_SCANS_QTY}'`);
+      }
+    } catch (error: any) {
+      this.logger.warn(`Exception rolling back scan usage: ${error.message}`);
+    }
   }
 
   /**
