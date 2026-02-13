@@ -1,14 +1,14 @@
-import { omit } from 'lodash';
-import { OpResult, queryGraphQL } from '@sdflc/api-helpers';
-import { HEADERS } from '@sdflc/backend-helpers';
 import FormData from 'form-data';
 import fs from 'fs';
 import axios from 'axios';
+import { omit } from 'lodash';
+import { OpResult, queryGraphQL } from '@sdflc/api-helpers';
+import { HEADERS } from '@sdflc/backend-helpers';
 
 import { logger } from '../../logger';
 import config from '../../config';
 
-interface UploadedFileFilter {
+export interface UploadedFileFilter {
   id?: string[];
   accountId?: string[];
   userId?: string[];
@@ -19,7 +19,23 @@ interface UploadedFileFilter {
   status?: number[];
 }
 
-interface UploadedFileInput {
+export interface UploadedFile {
+  id?: string;
+  accountId?: string;
+  userId?: string;
+  sizeBytes?: number;
+  filePath?: string;
+  name?: string;
+  originalFilename?: string;
+  fileUrl?: string;
+  thumbnailUrl?: string;
+  mimeType?: string;
+  notes?: string;
+  status?: number;
+  createdAt?: string;
+}
+
+export interface UploadedFileInput {
   filePath?: string | null;
   name?: string | null;
   originalFilename?: string | null;
@@ -28,7 +44,7 @@ interface UploadedFileInput {
   status?: number | null;
 }
 
-interface UploadedFileWhereInput {
+export interface UploadedFileWhereInput {
   id?: string;
   accountId?: string;
   userId?: string;
@@ -36,7 +52,7 @@ interface UploadedFileWhereInput {
   filePathLike?: string;
 }
 
-interface UploadFileParams {
+export interface UploadFileParams {
   accountId: string;
   userId?: string;
   filePath: string;
@@ -216,7 +232,9 @@ class UploadedFileGw {
       });
 
       // Add metadata
-      formData.append('accountId', params.accountId);
+      if (params.accountId) {
+        formData.append('accountId', params.accountId);
+      }
       if (params.userId) {
         formData.append('userId', params.userId);
       }

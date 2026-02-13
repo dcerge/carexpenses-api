@@ -403,6 +403,77 @@ Revenue entries can exist independently or be associated with a specific travel 
 
 ---
 
+# Receipt Scanning
+
+## Overview
+
+CarExpenses includes a built-in receipt scanner powered by AI vision technology. Instead of manually entering expense details, users can simply take a photo of a receipt and the app will automatically extract the relevant information and pre-fill the form — saving time and reducing data entry errors.
+
+## How It Works
+
+1. **Tap "Scan Receipt"** on any vehicle card on the dashboard
+2. **Take a photo** using the full-screen camera view, or **choose an existing image** from the phone's gallery or computer's files, then preview and confirm
+3. **Wait a few seconds** while the AI analyzes the image (a progress overlay shows each step)
+4. **Review the pre-filled form** — the app opens the correct form (refuel or expense) with all extracted data already populated
+5. **Make any adjustments** and save
+
+## What Gets Recognized
+
+### Fuel Receipts
+
+Gas station receipts are automatically classified as refuels. The scanner extracts:
+
+- Station name and address
+- Date and time of purchase
+- Fuel volume and unit (liters or gallons)
+- Price per unit
+- Fuel grade (Regular, Premium, Diesel, etc.)
+- Total cost, tax, and fees
+- Currency
+- Payment method
+
+### General Expense Receipts
+
+All other receipts are classified as expenses and automatically assigned to the most appropriate category. Supported receipt types include:
+
+- **Maintenance & repairs** — oil changes, brake work, tire services, mechanic invoices with labor and parts breakdowns
+- **Car washes & detailing**
+- **Parking** — with duration, entry/exit times, and zone information
+- **Traffic fines & tickets** — including violation type, ticket number, and due date
+- **Tolls** — with road name, entry and exit points
+- **Insurance** — policy number and coverage period
+- **Food & drinks** — restaurants, coffee shops, groceries (auto-classified by time of day)
+- **Lodging** — hotels, hostels, vacation rentals
+- **Entertainment** — attractions, events, tours
+- **Transportation** — ferries, transit, taxis, rental vehicles
+- **Travel fees** — border fees, roaming, laundry, tips
+
+## Multi-Language Support
+
+The scanner recognizes receipts in any language — English, French, Russian, Spanish, German, Chinese, and more. Vendor names and addresses are preserved in their original language.
+
+## Automatic Currency Detection
+
+The scanner detects the currency from symbols, country context, or text on the receipt. For North American receipts, it distinguishes between CAD and USD based on location clues like province/state or postal code format.
+
+## Location Detection
+
+When a receipt includes an address or business name, the app automatically geocodes the location so it's saved with the expense record.
+
+## Receipt Image Storage
+
+The original receipt photo is automatically uploaded and attached to the expense record as a document, so users always have a copy for their records or tax purposes.
+
+## Smart Details in Comments
+
+Information that doesn't fit into standard form fields — such as receipt numbers, payment card last four digits, pump numbers, work order numbers, staff names, and itemized breakdowns — is compiled into the comments field for reference.
+
+## Usage Limits
+
+Receipt scanning is a metered feature tied to the user's subscription plan, with a monthly scan allowance. If a scan fails (blurry image, unrecognizable document), the scan count is not charged.
+
+---
+
 ## Checklists (_coming soon_)
 
 Create structured, repeatable checklists to enforce consistency, safety, and compliance before or after vehicle usage.

@@ -23,7 +23,7 @@ import {
   isExecutableOrDangerousFile,
   sanitizeFieldName,
 } from '../utils';
-import { ClaudeMediaType } from '../gateways';
+import { ClaudeMediaType, UploadedFile } from '../gateways';
 
 dayjs.extend(utc);
 
@@ -280,6 +280,13 @@ class ScannerCore extends AppCore {
             scanResult.expenseType = 2;
           }
 
+          // --- Upload receipt image to ms_storage ---
+          await this.uploadReceiptToStorage({
+            scanResult,
+            receiptFile,
+            accountId: opt.accountId,
+          });
+
           // --- Log usage for cost tracking ---
           const usage = aiData?.response?.usage;
           if (usage) {
@@ -343,6 +350,78 @@ class ScannerCore extends AppCore {
       hasTransaction: false,
       doingWhat: 'scanning expense receipt',
     });
+  }
+
+  /**
+   * Uploads the scanned receipt image to ms_storage and attaches the file info
+   * to the scan result. Non-blocking: if upload fails, the scan result is still
+   * returned without uploadedFiles — user can re-attach manually.
+   */
+  private async uploadReceiptToStorage(params: {
+    scanResult: ReceiptScanResult;
+    receiptFile: { path: string; originalname: string; mimetype: string };
+    accountId: string;
+  }): Promise<void> {
+    const { scanResult, receiptFile } = params;
+    const { accountId, userId } = this.getContext();
+
+    try {
+      this.logger.log(
+        `Uploading scanned receipt to storage: ${receiptFile.originalname} (${receiptFile.mimetype})`
+      );
+
+      // Add timestamp before extension to ensure unique filenames
+      // e.g., "receipt.jpg" -> "receipt-20250213143025.jpg"
+      const ext = path.extname(receiptFile.originalname);
+      const nameWithoutExt = path.basename(receiptFile.originalname, ext);
+      const timestamp = dayjs().utc().format('YYYYMMDDHHmmss');
+      const uniqueName = `${nameWithoutExt}-${timestamp}${ext}`;
+
+      const uploadedFile = await this.getGateways().uploadedFileGw.create({
+        accountId,
+        userId,
+        filePath: receiptFile.path,
+        originalFilename: receiptFile.originalname,
+        mimeType: receiptFile.mimetype,
+        name: uniqueName,
+        notes: `Receipt scan: ${scanResult.description || 'Scanned receipt'}`,
+        headers: this.getHeaders(),
+      });
+
+      if (!uploadedFile) {
+        const lastError = this.getGateways().uploadedFileGw.getLastCreateError();
+        this.logger.warn(
+          `Failed to upload receipt to storage: ${lastError?.getErrorSummary?.() || 'Unknown error'}. ` +
+          `Scan result will be returned without uploaded file.`
+        );
+        return;
+      }
+
+      // Map the storage response to the ReceiptScanUploadedFile shape
+      const uploadedFileInfo: UploadedFile = {
+        id: uploadedFile.id,
+        sizeBytes: uploadedFile.sizeBytes,
+        name: uploadedFile.name,
+        originalFilename: uploadedFile.originalFilename,
+        fileUrl: uploadedFile.fileUrl,
+        thumbnailUrl: uploadedFile.thumbnailUrl,
+        mimeType: uploadedFile.mimeType,
+        notes: uploadedFile.notes,
+        status: uploadedFile.status,
+      };
+
+      scanResult.uploadedFiles = [uploadedFileInfo];
+
+      this.logger.log(
+        `Receipt uploaded to storage successfully: fileId=${uploadedFile.id}, ` +
+        `size=${uploadedFile.sizeBytes} bytes`
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Exception uploading receipt to storage: ${error.message}. ` +
+        `Scan result will be returned without uploaded file.`
+      );
+    }
   }
 
   /**

@@ -7,6 +7,8 @@
  * so the frontend can pre-fill the add/edit form with minimal transformation.
  */
 
+import { UploadedFile } from "../../gateways";
+
 // =============================================================================
 // Response Types
 // =============================================================================
@@ -37,6 +39,12 @@ export interface ReceiptScanResult {
    * for display or logging purposes (e.g. line items, card info, pump number).
    */
   extra: ReceiptScanExtra;
+  /**
+   * Files uploaded to ms_storage after a successful scan.
+   * Contains the receipt image(s) stored for later attachment to the expense record.
+   * Only populated when the scan is successful and upload succeeds.
+   */
+  uploadedFiles?: UploadedFile[];
 }
 
 /** Fields that map directly to ExpenseInput */

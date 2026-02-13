@@ -72,7 +72,7 @@ Minimal effort since the equipment tracking system is already built — this is 
 
 ## 2. # Vehicle Tasks — Remaining Work
 
-## 1. Convert to Expense Workflow
+### 1. Convert to Expense Workflow
 
 **Priority: P2 — Medium** | **Effort: ~1–2 days**
 
@@ -109,7 +109,7 @@ Add a "Log as expense" flow that triggers when a task is completed (or available
 
 4. **Linked expense display**: The task list already shows a linked expense indicator (`Receipt` icon + "Expense logged" text). Enhance this to be clickable, navigating to the linked expense detail/edit page.
 
-### Acceptance criteria
+#### Acceptance criteria
 
 - [ ] Completing a task shows a prompt to log an expense
 - [ ] Dismissing the prompt completes the task without side effects
@@ -122,19 +122,19 @@ Add a "Log as expense" flow that triggers when a task is completed (or available
 
 ---
 
-## 2. "My Tasks" vs "All Tasks" Toggle
+### 2. "My Tasks" vs "All Tasks" Toggle
 
 **Priority: P2 — Medium** | **Effort: ~0.5 day**
 
-### Problem
+#### Problem
 
 In shared accounts (families, fleets), users see all tasks for all users. There is no quick way to filter down to "tasks assigned to me" vs "everything," which can cause confusion about ownership and lead to duplicate effort.
 
-### Solution
+#### Solution
 
 Add a simple toggle or segmented control to the dashboard tasks widget and the task list that filters between "My tasks" (where `assignedToUserId` matches the current user) and "All tasks" (no user filter). Default to "My tasks" when the user has tasks assigned to them; otherwise default to "All tasks."
 
-### Implementation
+#### Implementation
 
 **Backend:**
 
@@ -151,7 +151,7 @@ Add a simple toggle or segmented control to the dashboard tasks widget and the t
 
 4. **Badge counts**: Show counts for both segments so the user knows at a glance: `My Tasks (3) | All (7)`.
 
-### Acceptance criteria
+#### Acceptance criteria
 
 - [ ] Toggle visible on dashboard tasks widget
 - [ ] "My Tasks" filters to `assignedToUserId = currentUser`
@@ -869,14 +869,18 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 ---
 
+## 20. Add fuel based cost of each travel based on driven distance, recent car consumption and recent car costs
+
+## 21.
+
 ## Priority Summary
 
 | #   | Feature                                   | Priority | Effort    | Key Dependencies                       |
 | --- | ----------------------------------------- | -------- | --------- | -------------------------------------- |
 | 1   | **Country-Specific Equipment Prompts**    | **P1**   | 1–2 days  | Existing Glovebox system               |
-| 2   | **Vehicle Tasks**                         | **P1**   | 2–3 days  | None                                   |
-| 3   | **Tire Tracking**                         | **P1**   | 2–3 days  | Service intervals integration          |
-| 4   | **Loan/Lease Tracking**                   | **P1**   | 3–4 days  | None (math only)                       |
+| 2   | **Vehicle Tasks**                         | **P1**   | 2–3 days  | DONE                                   |
+| 3   | **Tire Tracking**                         | **P1**   | 2–3 days  | DONE                                   |
+| 4   | **Loan/Lease Tracking**                   | **P1**   | 3–4 days  | DONE                                   |
 | 5   | Recurring Revenues                        | **P2**   | 1–2 days  | Existing scheduled expenses system     |
 | 6   | Revenue Reports                           | **P2**   | 2–3 days  | Existing data + Recharts               |
 | 7   | Data Import                               | **P2**   | 3–5 days  | CSV parsers per competitor format      |
@@ -885,7 +889,7 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 | 10  | Service Providers Directory               | **P2**   | 2–3 days  | Google Places API (existing)           |
 | 11  | Checklists                                | **P2**   | 3–4 days  | Existing attachment system             |
 | 12  | Voice Input + Voice Memos                 | **P2**   | 3–4 days  | MediaRecorder API + Whisper + LLM      |
-| 13  | Receipt Scanning                          | **P2**   | 3–5 days  | Claude Vision API or OCR service       |
+| 13  | Receipt Scanning                          | **P2**   | 3–5 days  | DONE                                   |
 | 14  | Native App Wrapper (Capacitor)            | **P3**   | 3–5 days  | Capacitor + Xcode/Android Studio       |
 | 15  | Real-Time Travel Tracking + Time Tracking | **P3**   | 5–7 days  | Feature #16 (Capacitor)                |
 | 16  | Map Visualization                         | **P3**   | 3–5 days  | Google Maps or Mapbox API              |
