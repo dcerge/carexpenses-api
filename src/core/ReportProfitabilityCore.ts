@@ -16,7 +16,6 @@ import {
   RevenueKindBreakdownRaw,
   CategoryBreakdownRaw,
   KindBreakdownRaw,
-  CurrencyAmountRaw,
   TripProfitabilityRaw,
   CarOdometerRangeRaw,
   UserProfile,
@@ -28,6 +27,8 @@ import {
   RevenueKindBreakdown,
   BreakEvenAnalysis,
   ProfitabilityReport,
+  OdometerWarningRaw,
+  OdometerWarning
 } from '../boundary';
 
 dayjs.extend(utc);
@@ -189,6 +190,8 @@ class ReportProfitabilityCore extends ReportBaseCore {
       rawData.monthlyTrend,
     );
 
+    const odometerWarnings = this.buildOdometerWarnings(rawData.odometerWarningData, distanceIn);
+
     return {
       dateFrom,
       dateTo,
@@ -234,6 +237,7 @@ class ReportProfitabilityCore extends ReportBaseCore {
 
       // Break-even
       breakEven,
+      odometerWarnings,
 
       // User preferences
       distanceUnit: distanceIn,
@@ -625,6 +629,89 @@ class ReportProfitabilityCore extends ReportBaseCore {
   }
 
   // ===========================================================================
+  // Odometer Warnings
+  // ===========================================================================
+
+  /**
+   * Build odometer warning data with gap detection and warning levels.
+   *
+   * Warning levels:
+   * - "none": >= 90% of records have odometer data, no large gaps
+   * - "low": 70-89% completeness or largest gap > 500km
+   * - "high": < 70% completeness or no odometer data at all
+   */
+  private buildOdometerWarnings(
+    rawData: OdometerWarningRaw[],
+    distanceIn: string,
+  ): OdometerWarning[] {
+    return rawData.map((raw) => {
+      const { carId, totalRecords, recordsWithOdometer, recordsMissingOdometer, odometerReadings } = raw;
+
+      const missingPercentage = totalRecords > 0
+        ? this.roundToTwoDecimals((recordsMissingOdometer / totalRecords) * 100)
+        : 0;
+
+      // Find largest gap between consecutive readings
+      const largestGapKm = this.findLargestOdometerGap(odometerReadings);
+      const largestGapDistance = largestGapKm != null
+        ? fromMetricDistanceRounded(largestGapKm, distanceIn)
+        : null;
+
+      // Determine warning level
+      const completenessRate = totalRecords > 0 ? (recordsWithOdometer / totalRecords) * 100 : 0;
+      const warningLevel = this.determineWarningLevel(completenessRate, recordsWithOdometer, largestGapKm);
+
+      return {
+        carId,
+        totalRecords,
+        recordsWithOdometer,
+        recordsMissingOdometer,
+        missingPercentage,
+        largestGapDistance,
+        warningLevel,
+      };
+    });
+  }
+
+  /**
+   * Find the largest gap (in km) between consecutive odometer readings.
+   * Readings must already be sorted by when_done ascending.
+   */
+  private findLargestOdometerGap(readings: number[]): number | null {
+    if (readings.length < 2) return null;
+
+    let maxGap = 0;
+    for (let i = 1; i < readings.length; i++) {
+      const gap = readings[i] - readings[i - 1];
+      if (gap > maxGap) {
+        maxGap = gap;
+      }
+    }
+
+    return maxGap > 0 ? maxGap : null;
+  }
+
+  /**
+   * Determine warning level based on completeness and gap thresholds
+   */
+  private determineWarningLevel(
+    completenessRate: number,
+    recordsWithOdometer: number,
+    largestGapKm: number | null,
+  ): string {
+    // No odometer data at all
+    if (recordsWithOdometer === 0) return 'high';
+
+    // Low completeness
+    if (completenessRate < 70) return 'high';
+
+    // Medium completeness or large gap (> 500 km unaccounted)
+    if (completenessRate < 90 || (largestGapKm != null && largestGapKm > 500)) return 'low';
+
+    return 'none';
+  }
+
+  // ===========================================================================
   // Empty Report
   // ===========================================================================
 
@@ -690,6 +777,8 @@ class ReportProfitabilityCore extends ReportBaseCore {
         breakEvenDayInPeriod: null,
         isProfitable: false,
       },
+
+      odometerWarnings: [],
 
       distanceUnit: userProfile.distanceIn,
       volumeUnit: userProfile.volumeIn,

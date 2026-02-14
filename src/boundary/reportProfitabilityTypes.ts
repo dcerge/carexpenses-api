@@ -102,6 +102,7 @@ export interface ProfitabilityReportRawData {
   foreignExpenseTotals: CurrencyAmountRaw[];
   carOdometerRanges: CarOdometerRangeRaw[];
   tripsWithRevenue: TripProfitabilityRaw[];
+  odometerWarningData: OdometerWarningRaw[];
   carIds: string[];
 }
 
@@ -271,10 +272,29 @@ export interface ProfitabilityReport {
 
   // Break-even
   breakEven: BreakEvenAnalysis;
+  odometerWarnings: OdometerWarning[];
 
   // User preferences
   distanceUnit: string;
   volumeUnit: string;
   homeCurrency: string;
   vehiclesCount: number;
+}
+
+export interface OdometerWarningRaw {
+  carId: string;
+  totalRecords: number;
+  recordsWithOdometer: number;
+  recordsMissingOdometer: number;
+  odometerReadings: number[]; // ordered list of odometer values in km
+}
+
+export interface OdometerWarning {
+  carId: string;
+  totalRecords: number;
+  recordsWithOdometer: number;
+  recordsMissingOdometer: number;
+  missingPercentage: number;
+  largestGapDistance: number | null;
+  warningLevel: string; // 'none' | 'low' | 'high'
 }

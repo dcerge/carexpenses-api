@@ -180,6 +180,22 @@ const typeDefs = `#graphql
     isProfitable: Boolean
   }
 
+  type OdometerWarning {
+    carId: ID
+    "Total expense_bases records for this car in the period"
+    totalRecords: Int
+    "Records that have a non-null odometer value"
+    recordsWithOdometer: Int
+    "Records missing odometer"
+    recordsMissingOdometer: Int
+    "Percentage of records missing odometer (0-100)"
+    missingPercentage: Float
+    "Largest gap between consecutive odometer readings (in user's distance unit)"
+    largestGapDistance: Float
+    "Warning level based on data completeness"
+    warningLevel: String
+  }
+
   # -- - Main Report Type-- -
 
   """
@@ -198,6 +214,8 @@ const typeDefs = `#graphql
     dateFrom: String
     dateTo: String
     periodDays: Int
+
+    odometerWarnings: [OdometerWarning]
 
     # =========================================================================
     # Summary KPIs(Home Currency)

@@ -15,6 +15,7 @@ import {
   CurrencyAmountRaw,
   TripProfitabilityRaw,
   CarOdometerRangeRaw,
+  OdometerWarningRaw,
 } from '../../boundary';
 
 // =============================================================================
@@ -76,6 +77,7 @@ class ReportProfitabilityGw extends BaseGateway {
       foreignExpenseTotals,
       carOdometerRanges,
       tripsWithRevenue,
+      odometerWarningData,
     ] = await Promise.all([
       this.getVehicleProfitability(params),
       this.getMonthlyTrend(params),
@@ -87,6 +89,7 @@ class ReportProfitabilityGw extends BaseGateway {
       this.getForeignExpenseTotals(params),
       this.getCarOdometerRanges(params),
       this.getTripsWithRevenue(params),
+      this.getOdometerWarningData(params),
     ]);
 
     return {
@@ -100,6 +103,7 @@ class ReportProfitabilityGw extends BaseGateway {
       foreignExpenseTotals,
       carOdometerRanges,
       tripsWithRevenue,
+      odometerWarningData,
       carIds,
     };
   }
@@ -755,6 +759,72 @@ class ReportProfitabilityGw extends BaseGateway {
         tagColor: t.tag_color,
       })),
     }));
+  }
+
+  // ===========================================================================
+  // Odometer Warning Data
+  // ===========================================================================
+
+  /**
+   * Get odometer completeness and readings data per car for gap detection
+   */
+  private async getOdometerWarningData(params: GetDataParams): Promise<OdometerWarningRaw[]> {
+    const schema = config.dbSchema;
+    const { bindings, whereClause } = this.buildBaseConditions(params, 'eb');
+
+    // Query 1: Count total records vs records with odometer per car
+    const countsSql = `
+      SELECT
+        eb.${FIELDS.CAR_ID} AS car_id,
+        COUNT(*) AS total_records,
+        COUNT(eb.${FIELDS.ODOMETER}) AS with_odometer
+      FROM ${schema}.${TABLES.EXPENSE_BASES} eb
+      ${whereClause}
+      GROUP BY eb.${FIELDS.CAR_ID}
+    `;
+
+    // Query 2: Ordered odometer readings per car for gap detection
+    const readingsSql = `
+      SELECT
+        eb.${FIELDS.CAR_ID} AS car_id,
+        eb.${FIELDS.ODOMETER} AS odometer
+      FROM ${schema}.${TABLES.EXPENSE_BASES} eb
+      ${whereClause}
+        AND eb.${FIELDS.ODOMETER} IS NOT NULL
+      ORDER BY eb.${FIELDS.CAR_ID}, eb.${FIELDS.WHEN_DONE} ASC
+    `;
+
+    const [countsResult, readingsResult] = await Promise.all([
+      this.getDb().runRawQuery(countsSql, [...bindings]),
+      this.getDb().runRawQuery(readingsSql, [...bindings]),
+    ]);
+
+    const countsRows = countsResult?.rows || [];
+    const readingsRows = readingsResult?.rows || [];
+
+    // Group readings by car_id
+    const readingsMap = new Map<string, number[]>();
+    for (const row of readingsRows) {
+      const carId = row.car_id;
+      if (!readingsMap.has(carId)) {
+        readingsMap.set(carId, []);
+      }
+      readingsMap.get(carId)!.push(this.parseFloat(row.odometer));
+    }
+
+    return countsRows.map((row: any) => {
+      const carId = row.car_id;
+      const totalRecords = this.parseInt(row.total_records);
+      const recordsWithOdometer = this.parseInt(row.with_odometer);
+
+      return {
+        carId,
+        totalRecords,
+        recordsWithOdometer,
+        recordsMissingOdometer: totalRecords - recordsWithOdometer,
+        odometerReadings: readingsMap.get(carId) || [],
+      };
+    });
   }
 
   // ===========================================================================
