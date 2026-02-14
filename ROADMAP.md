@@ -549,47 +549,45 @@ The `MediaRecorder` approach eliminates the cross-browser limitation that made t
 
 ---
 
-## 13. Receipt Scanning for Refuels and Expenses
+## 13. # Receipt Scanning — v2 Roadmap
 
-**Priority: P2 — Medium-High** | **Effort: ~3–5 days**
+## Overview
 
-### What it does
+Version 1 of receipt scanning delivers the core flow: snap a photo, extract data, pre-fill the form. Version 2 focuses on making the feature smarter, more polished, and better integrated with the rest of the app.
 
-User snaps a photo of a gas station receipt. The app extracts station name, date, fuel volume, price per unit, total cost, and payment method, then pre-fills the refuel form.
+---
 
-### How to build it
+## Smarter Vehicle Matching
 
-**OCR/Parsing options (from simplest to most powerful):**
+When a receipt contains a license plate number, automatically match it to the correct vehicle in the user's account instead of requiring manual selection. This is especially useful for users managing multiple vehicles.
 
-1. **Claude/GPT Vision API (recommended for MVP)** — Send the receipt image directly to a multimodal LLM. Prompt it to extract structured JSON with fields matching the refuel form. Pros: excellent accuracy on varied receipt formats, handles multiple languages, no specialized OCR service needed. Cost: ~$0.01–0.03 per receipt.
+## Scan Limit UX
 
-2. **Dedicated Receipt OCR APIs** — Services like Veryfi, Taggun, Mindee, and Klippa offer specialized receipt parsing with 95–99% accuracy. They return structured data (vendor, date, line items, tax, total). Veryfi specifically mentions fleet/fuel receipt support. Cost: $0.05–0.15 per receipt depending on volume and provider.
+Show users how many receipt scans they have remaining in their monthly allowance. When the limit is reached, display a clear message with an option to upgrade their plan — rather than a generic error.
 
-3. **Google Vision OCR + custom parsing** — Use Google Cloud Vision for raw text extraction, then parse with regex or LLM. More control but more development effort.
+## Retry Flow
 
-**Recommended approach (Claude Vision):**
+When a scan fails (blurry image, unrecognizable document), offer a "Try Again" action that reopens the camera immediately instead of requiring the user to tap the scan button again from scratch.
 
-1. User takes photo or selects from gallery
-2. Frontend compresses image and uploads to backend
-3. Backend sends image to Claude API with prompt: "Extract from this fuel receipt: station name, address, date, time, fuel type, volume (liters or gallons), price per unit, total price, currency. Return as JSON."
-4. Backend maps JSON to refuel form fields
-5. Frontend pre-fills form; user reviews and submits
+## Batch Scanning
 
-### Extending to expenses
+Allow users to scan multiple receipts in a row without returning to the dashboard between each one. Useful after a road trip or when catching up on a backlog of receipts.
 
-The same pipeline works for general expense receipts (mechanic invoices, parking receipts, car wash receipts). The prompt just needs to extract different fields. This makes the feature reusable across all expense types.
+## Offline Queuing
 
-### Considerations
+When the user has no internet connection, save the captured photo locally and queue it for scanning once connectivity is restored. This supports the PWA offline-first experience and is common during travel or in areas with poor reception.
 
-- Receipt quality varies wildly (faded thermal paper, crumpled, poorly lit) — LLM vision handles this better than traditional OCR
-- Multi-currency receipts (traveling users) need currency detection — LLMs handle this naturally
-- Storage: receipt images can be attached as documents (existing attachment system)
-- Gate behind paid plans to manage API costs, or allow a limited number of scans on free plan
-- Privacy: receipt images may contain payment card numbers — consider masking or not storing raw images after extraction
+## Cost Monitoring Dashboard
 
-### Why P2
+Track AI API usage and costs across all users. Provide an internal admin view showing scan volume, token consumption, and spend trends to help manage operational costs as the user base grows.
 
-Directly reduces the biggest friction point (manual data entry for refuels). Gas station receipts have a fairly consistent structure, making extraction reliable. The Claude Vision approach keeps it simple — no new vendor dependency. Users who refuel 2–4 times per month will notice the time savings immediately.
+## Scan History
+
+Let users view a log of their past scans, including failed attempts, so they can re-process a receipt or troubleshoot recognition issues.
+
+## Multi-Page Document Support
+
+Support scanning multi-page invoices or documents (e.g., detailed mechanic invoices) by allowing the user to capture multiple photos that are combined into a single scan request.
 
 ---
 

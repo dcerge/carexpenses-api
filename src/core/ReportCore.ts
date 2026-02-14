@@ -4,14 +4,12 @@ import utc from 'dayjs/plugin/utc';
 
 import { BaseCorePropsInterface, BaseCoreActionsInterface } from '@sdflc/backend-helpers';
 
-import { AppCore } from './AppCore';
 import { validators } from './validators/reportValidators';
 import {
   fromMetricDistanceRounded,
   fromMetricVolume,
   calculateConsumption,
   calculateConsumptionFromData,
-  FuelTypeConsumption,
   ConsumptionCalculationResult,
   isElectricFuelType,
   isHydrogenFuelType,
@@ -28,13 +26,11 @@ import {
   UserProfile,
   YearlyReportRawData,
   MonthlyBreakdownRaw,
-  TravelReportFilter,
   TravelReportRawData,
   TravelRaw,
   TravelTagRaw,
   LinkedExpenseTotalRaw,
   DestinationFallbackRaw,
-  CarOdometerRangeRaw,
   PeriodExpenseBreakdownRaw,
   TravelTypeSummaryRaw,
   TravelReport,
@@ -49,15 +45,14 @@ import {
 } from '../boundary';
 
 import {
-  getReimbursementRates,
   getRateForTravelType,
   calculateTieredReimbursement,
   isDeductibleTravelType,
   getDeductibleTravelTypes,
-  ReimbursementRateConfig,
 } from '../utils/reimbursementRates';
 
 import { EXPENSE_TYPES } from '../database';
+import { ReportBaseCore } from './ReportBaseCore';
 
 dayjs.extend(utc);
 
@@ -65,7 +60,7 @@ dayjs.extend(utc);
 // Core Class
 // =============================================================================
 
-class ReportCore extends AppCore {
+class ReportCore extends ReportBaseCore {
   constructor(props: BaseCorePropsInterface) {
     super({
       ...props,
@@ -850,17 +845,6 @@ class ReportCore extends AppCore {
   // ===========================================================================
 
   /**
-   * Transform currency amounts with rounding
-   */
-  private transformCurrencyAmounts(amounts: CurrencyAmountRaw[]): any[] {
-    return amounts.map((item) => ({
-      currency: item.currency,
-      amount: this.roundToTwoDecimals(item.amount),
-      recordsCount: item.recordsCount,
-    }));
-  }
-
-  /**
    * Transform category breakdown with percentage calculation
    */
   private transformCategoryBreakdown(rows: CategoryBreakdownRaw[], totalExpensesHc: number): any[] {
@@ -898,14 +882,6 @@ class ReportCore extends AppCore {
   // Calculation Helpers
   // ===========================================================================
 
-  /**
-   * Calculate number of days in the period (inclusive)
-   */
-  private calculatePeriodDays(dateFrom: string, dateTo: string): number {
-    const from = dayjs.utc(dateFrom);
-    const to = dayjs.utc(dateTo);
-    return to.diff(from, 'day') + 1;
-  }
 
   /**
    * Calculate average fuel price per volume unit (based on HC cost)
@@ -934,44 +910,10 @@ class ReportCore extends AppCore {
   }
 
   /**
-   * Calculate percentage
-   */
-  private calculatePercentage(value: number, total: number): number {
-    if (total <= 0) {
-      return 0;
-    }
-    return (value / total) * 100;
-  }
-
-  /**
    * Sum foreign records count from currency amounts array
    */
   private sumForeignRecordsCount(amounts: CurrencyAmountRaw[]): number {
     return amounts.reduce((sum, item) => sum + item.recordsCount, 0);
-  }
-
-  /**
-   * Safe division that returns 0 if divisor is 0 or value is null
-   */
-  private safeDivide(value: number | null, divisor: number): number {
-    if (value === null || divisor <= 0) {
-      return 0;
-    }
-    return value / divisor;
-  }
-
-  /**
-   * Round to 2 decimal places
-   */
-  private roundToTwoDecimals(value: number): number {
-    return Math.round(value * 100) / 100;
-  }
-
-  /**
-   * Round to 3 decimal places (for fuel prices)
-   */
-  private roundToThreeDecimals(value: number): number {
-    return Math.round(value * 1000) / 1000;
   }
 
   // ===========================================================================
@@ -1296,21 +1238,6 @@ class ReportCore extends AppCore {
   // ===========================================================================
   // Travel Report Calculation Helpers
   // ===========================================================================
-
-  /**
-   * Calculate total distance from odometer ranges (sum of max - min per car)
-   */
-  private calculateTotalDistanceFromOdometers(ranges: CarOdometerRangeRaw[]): number {
-    let totalKm = 0;
-
-    for (const range of ranges) {
-      if (range.minOdometerKm != null && range.maxOdometerKm != null) {
-        totalKm += range.maxOdometerKm - range.minOdometerKm;
-      }
-    }
-
-    return totalKm;
-  }
 
   /**
    * Calculate business use percentage
