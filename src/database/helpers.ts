@@ -128,6 +128,8 @@ export const TABLES = {
   // Vehicle Tasks (To-Do List)
   // ---------------------------------------------------------------------------
   VEHICLE_TASKS: 'vehicle_tasks',
+
+  PARKING_SESSIONS: 'parking_sessions',
 };
 
 // =============================================================================
@@ -653,6 +655,19 @@ export const FIELDS = {
   ASSIGNED_TO_USER_ID: 'assigned_to_user_id',
   COMPLETED_BY_USER_ID: 'completed_by_user_id',
   LINKED_EXPENSE_ID: 'linked_expense_id',
+
+  // ---------------------------------------------------------------------------
+  // Parking Session Fields
+  // ---------------------------------------------------------------------------
+  START_TIME: 'start_time',
+  END_TIME: 'end_time',
+  DURATION_MINUTES: 'duration_minutes',
+  INITIAL_PRICE: 'initial_price',
+  FINAL_PRICE: 'final_price',
+  CURRENCY: 'currency',
+  FORMATTED_ADDRESS: 'formatted_address',
+  STARTED_BY: 'started_by',
+  ENDED_BY: 'ended_by',
 };
 
 // =============================================================================
@@ -986,4 +1001,13 @@ export const VEHICLE_TASK_PRIORITY = {
   LOW: 100,           // No urgency
   MEDIUM: 200,        // Should be done soon
   HIGH: 300,          // Needs immediate attention
+} as const;
+
+// =============================================================================
+// PARKING SESSION STATUS VALUES (parking_sessions.status)
+// =============================================================================
+
+export const PARKING_SESSION_STATUS = {
+  ACTIVE: 100,       // Session in progress
+  COMPLETED: 200,    // Session ended
 } as const;

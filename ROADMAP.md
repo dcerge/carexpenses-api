@@ -22,6 +22,267 @@ Effort estimates assume our current pace (one feature end-to-end in ~2 days). Pr
 
 ---
 
+# 1 Parking Sessions
+
+## Overview
+
+Parking Sessions is a real-time parking tracking feature that allows users to record where they parked, track parking duration, get walking directions back to their vehicle, and automatically generate parking expenses upon session completion. The feature addresses a high-frequency use case — parking is one of the most common vehicle-related expenses, and capturing it in real-time eliminates the need for after-the-fact data entry.
+
+## Problem Statement
+
+Currently, users must manually create a parking expense after the fact, often forgetting the exact location, duration, or amount paid. There is no way to remember where the car is parked, no timer to track parking duration, and no quick way to navigate back to the vehicle. This leads to incomplete expense records and a poor user experience around one of the most frequent vehicle costs.
+
+## Goals
+
+- Enable one-tap parking session start directly from the vehicle card
+- Track parking location with GPS coordinates and address for easy navigation back
+- Provide real-time countdown (paid parking) or elapsed time (free parking) visible across all pages
+- Streamline expense creation by auto-generating a parking expense on session close
+- Support free parking scenarios where the user simply wants to remember their car's location
+
+## User Segments
+
+- **Gig economy / delivery drivers** — frequent paid parking in urban areas, need accurate expense records for tax deductions
+- **Multi-vehicle families** — need to track where each vehicle is parked, especially in shared-use scenarios
+- **Small fleet operators** — drivers can log parking sessions that automatically flow into fleet expense reports
+- **General consumers** — anyone who forgets where they parked or wants to track parking spend
+
+---
+
+## Workflow
+
+### 1. Starting a Parking Session
+
+**Entry point:** The vehicle card's quick actions bar includes a parking button. The button reflects the current state:
+
+- **No active session:** The button shows a default parking icon/label (e.g., "Park"). Tapping initiates the start flow.
+- **Active session exists:** The button changes appearance (e.g., highlighted color, pulsing indicator, or label changes to "Parked") to signal an active session. Tapping opens the active parking detail drawer instead of starting a new session.
+
+Since the parking button is on the vehicle card, the vehicle is already known — no vehicle selection step is needed.
+
+**Start flow (bottom sheet or drawer):**
+
+1. **Capture location**
+   - The app requests the user's current GPS coordinates.
+   - A map preview is displayed with a pin at the detected position.
+   - The address is reverse-geocoded and shown for confirmation.
+   - The user can adjust the pin by dragging it (useful for parking garages or GPS inaccuracy).
+   - The user can manually edit the address text.
+
+2. **Parking details (all optional)**
+   - **Duration** — How long they paid for. Quick presets (30 min, 1h, 2h, 3h) and a custom input option. Can be skipped entirely for free or unknown-duration parking.
+   - **Price paid** — Amount paid upfront. Can be skipped; the user will be asked again when ending the session.
+   - **Notes** — Free text field for context (e.g., "Level 3, spot B12", "next to the blue pillar", "metered parking on Main St").
+
+3. **Confirm and start**
+   - Start time defaults to the current time but is editable (in case the user is logging a session that started a few minutes ago).
+   - On confirmation, a parking session record is created with status `active`.
+
+### 2. Active Parking Badge (Global)
+
+Once a parking session is active, a persistent badge is displayed across all pages of the application, following the same pattern as the existing active travel badge.
+
+**Display logic:**
+
+| Scenario                         | Badge Display                                | Example               |
+| -------------------------------- | -------------------------------------------- | --------------------- |
+| Duration entered, time remaining | Countdown of time left                       | ⏱ 38 min left         |
+| Duration entered, time expired   | Overtime elapsed since expiry, warning style | ⚠️ Expired 12 min ago |
+| No duration entered              | Elapsed time since start                     | 🅿️ Parked 1h 12m      |
+
+The badge clearly labels what the user is seeing so there is no ambiguity between "time left" and "time elapsed."
+
+**Interaction:** Tapping the badge opens the active parking detail drawer.
+
+### 3. Active Parking Detail View
+
+When the user taps the active parking badge or the parking quick action button on a vehicle card with an active session, a detail drawer (bottom sheet) opens with the following sections:
+
+**Location section:**
+
+- Google Maps static image preview showing the parked location pin
+- Address text
+- **"Directions" button** — Opens Google Maps (or the device's default map app) with walking directions from the user's current location to the parked vehicle
+
+**Timer section:**
+
+- Larger, more prominent version of the badge countdown or elapsed time display
+- If duration was set: a visual progress indicator (progress bar or circular ring) showing how much time has passed vs. total duration
+
+**Actions:**
+
+- **"Add Time"** — Visible only when the user entered a duration. Allows extending the session by adding more time (quick presets: +15 min, +30 min, +1h, custom). Updates the session's total duration.
+- **"Edit"** — Allows updating notes, correcting the location pin/address, or adjusting the start time.
+- **"End Parking"** — Initiates the session close flow.
+
+### 4. Ending a Parking Session
+
+When the user taps "End Parking":
+
+**Step 1 — Review and adjust times:**
+
+- **Start time** — Displayed and editable (in case the user needs to correct it).
+- **End time** — Defaults to the current time, editable (in case the user is closing the session after already leaving the parking spot).
+- **Total duration** — Calculated and displayed based on start and end times.
+
+**Step 2 — Final price:**
+
+- If a price was entered at start, it is pre-filled but fully editable.
+- If no price was entered, the field is empty.
+- The user can enter 0 or leave it blank to indicate free parking.
+- Currency follows the vehicle's or account's configured default.
+
+**Step 3 — Notes:**
+
+- Pre-filled with any notes from the session, editable.
+- The user can add closing notes or context.
+
+**Step 4 — Confirm and close.**
+
+**On save:**
+
+- The parking session status is updated to `completed` with the final end time and price.
+- **If final price > 0:** An expense record is automatically created with:
+  - Category: Parking
+  - Date: The session's start time
+  - Amount: The final price
+  - Vehicle: The session's vehicle
+  - Location: The session's coordinates and address
+  - Reference: A link back to the parking session record
+  - Notes: Carried over from the session
+- **If final price = 0 or blank:** No expense is created. The session is stored as a completed free parking record.
+
+### 5. Parking History
+
+Completed parking sessions are accessible through a parking history view, filterable by vehicle and date range. Each entry displays:
+
+- Date and time
+- Location / address
+- Total duration
+- Cost (or "Free")
+
+Tapping a completed session opens its detail view showing the full map, times, notes, and — if an expense was generated — a link to the associated expense record. Conversely, parking expenses display a link back to their originating parking session.
+
+---
+
+## Business Rules
+
+| Rule                           | Description                                                                                                                                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One active session per vehicle | A vehicle cannot have more than one active parking session at a time. Multiple vehicles can each have their own active session simultaneously.                                                       |
+| Expense generation             | An expense is only created when the session is closed with a final price greater than zero.                                                                                                          |
+| Free parking support           | Sessions with no price or zero price are valid. They serve as location bookmarks without generating expenses.                                                                                        |
+| Role-based access              | Account members with Owner, Admin, or Driver roles can start, edit, and end parking sessions for vehicles they have access to. Viewers can see active and completed sessions but cannot modify them. |
+| Vehicle lifecycle              | Active parking sessions should be resolved before a vehicle can be deleted or transferred.                                                                                                           |
+| Timezone handling              | Start and end times are stored in UTC and displayed in the user's local timezone.                                                                                                                    |
+| Currency                       | Defaults to the vehicle's or account's configured home currency.                                                                                                                                     |
+
+---
+
+## Data Model
+
+### Table: `parking_sessions`
+
+| Column              | Type        | Description                                                                               |
+| ------------------- | ----------- | ----------------------------------------------------------------------------------------- |
+| `id`                | UUID        | Primary key                                                                               |
+| `account_id`        | UUID        | Account reference (for SQL-level security filtering) - reference to external microservice |
+| `car_id`            | UUID        | Associated vehicle - refrences to the table `cars`                                        |
+| `travel_id`         | UUID        | Associated travel - reference to the table `travels`                                      |
+| `start_time`        | TIMESTAMPTZ | When parking started                                                                      |
+| `end_time`          | TIMESTAMPTZ | When parking ended (null while active)                                                    |
+| `duration_minutes`  | INTEGER     | Paid duration in minutes (nullable — null means free/unknown)                             |
+| `initial_price`     | DECIMAL     | Price entered at start (nullable)                                                         |
+| `final_price`       | DECIMAL     | Price confirmed at end (nullable)                                                         |
+| `currency`          | VARCHAR     | Currency code: USD, CAD, EUR, etc                                                         |
+| `latitude`          | DECIMAL     | GPS latitude of parking location                                                          |
+| `longitude`         | DECIMAL     | GPS longitude of parking location                                                         |
+| `formatted_address` | TEXT        | Reverse-geocoded or manually entered address                                              |
+| `uploaded_file_id`  | UUID        | Reference to a photo from the parking spot, then moved to an expense                      |
+| `notes`             | TEXT        | User notes (nullable)                                                                     |
+| `expense_id`        | UUID        | Reference to generated expense (nullable, set on close)                                   |
+| `started_by`        | UUID        | User who started the session - reference to external microservice                         |
+| `ended_by`          | UUID        | User who ended the session (nullable) - reference to external microservice                |
+| `status`            | INTEGER     | 100 - active, 200 - complete                                                              |
+| `created_at`        | TIMESTAMPTZ | Record creation timestamp                                                                 |
+| `updated_at`        | TIMESTAMPTZ | Record update timestamp                                                                   |
+| `deleted_at`        | TIMESTAMPTZ | Soft delete timestamp                                                                     |
+| `created_by`        | TIMESTAMPTZ | Record created by userId - reference to external microservice                             |
+| `updated_by`        | TIMESTAMPTZ | Record updated by userId - reference to external microservice                             |
+| `deleted_by`        | TIMESTAMPTZ | Soft deleted by userId - reference to external microservice                               |
+
+**Indexes:**
+
+- `account_id` + `car_id` + `status` (for quick lookup of active sessions per vehicle)
+- `account_id` + `status` (for listing all active sessions across account)
+- `account_id` + `car_id` + `start_time` (for history queries)
+
+**Constraints:**
+
+- Unique partial index on (`account_id`, `car_id`) WHERE `status = 100` — enforces one active session per vehicle at the database level
+
+---
+
+## UI Components
+
+### New Components
+
+| Component                  | Type    | Description                                                                                     |
+| -------------------------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `ParkingQuickActionButton` | Feature | Vehicle card quick action button with active state indication                                   |
+| `StartParkingDrawer`       | Feature | Bottom sheet for starting a new parking session (location capture, duration, price, notes)      |
+| `ActiveParkingBadge`       | Feature | Global persistent badge showing countdown or elapsed time (follows active travel badge pattern) |
+| `ActiveParkingDrawer`      | Feature | Bottom sheet showing parking detail with map, timer, directions, and action buttons             |
+| `EndParkingDrawer`         | Feature | Bottom sheet for closing a session (time review, final price, notes)                            |
+| `ParkingHistoryList`       | Feature | List of completed parking sessions with filters                                                 |
+| `ParkingSessionDetail`     | Feature | Detail view for a completed parking session                                                     |
+| `DurationPicker`           | Generic | Reusable duration input with quick presets and custom entry                                     |
+
+### Modified Components
+
+| Component                  | Change                                                          |
+| -------------------------- | --------------------------------------------------------------- |
+| Vehicle card quick actions | Add parking button with active session state awareness          |
+| Global layout / app shell  | Add `ActiveParkingBadge` alongside existing active travel badge |
+| Expense detail view        | Show link to originating parking session when applicable        |
+
+---
+
+## Notifications
+
+**PWA phase (current):** No push notifications. The active parking badge serves as the sole visual reminder across all pages. The badge's countdown/overtime display provides passive awareness.
+
+**Capacitor phase (future):** When native app support is implemented, add local push notifications:
+
+- Reminder at a configurable interval before expiry (e.g., 10 minutes before)
+- Alert when parking time has expired
+- Optional periodic reminders if overtime continues
+
+---
+
+## Localization
+
+All user-facing strings must support the existing four languages: English, Spanish, French, and Russian. Key translation areas include:
+
+- Badge text patterns ("X min left", "Parked Xh Ym", "Expired X min ago")
+- Drawer labels and button text
+- Duration presets
+- Parking history list labels
+- Error messages (e.g., "This vehicle already has an active parking session")
+
+---
+
+## Future Enhancements
+
+- **Parking rate calculator** — Enter hourly/daily rates and auto-calculate cost based on duration
+- **Favorite parking locations** — Save frequently used parking spots for quick reuse
+- **Parking photos** — Capture a photo of the parking spot, level marker, or ticket
+- **Parking garage integration** — Partner APIs for real-time availability and pricing
+- **Shared session visibility** — Real-time badge visibility for other account members (e.g., family member can see where the car is parked)
+- **Expense receipt attachment** — Attach parking receipt photo/scan to the generated expense
+
+---
+
 ## 1. Country-Specific Equipment Prompts (Digital Glovebox Extension)
 
 **Priority: P1 — High** | **Effort: ~1 day**
@@ -212,41 +473,77 @@ Near-zero incremental effort since it reuses the scheduled expenses infrastructu
 
 ---
 
-## 6. Revenue Reports
+## 6. # Profitability Report — Remaining Work
 
-**Priority: P2 — Medium-High** | **Effort: ~2–3 days**
+Remaining Tasks
 
-### What it does
+### 1. Prorated Expenses for Per-Trip Profitability (#5)
 
-Dedicated reporting for vehicle profitability: net profit per vehicle, per trip, per km/mile, and over time. Shows whether a vehicle is actually making money after accounting for all expenses (fuel, maintenance, insurance, loan payments, depreciation).
+**Problem:** Currently trip profit only includes expenses directly linked via `travel_id`. Unlinked period expenses (insurance, loan payments, unlinked refuels) are ignored, making per-trip profit appear higher than reality.
 
-### How to build it
+**Approach:** Distance-based proration — each trip gets a share of unlinked expenses proportional to `tripDistance / totalDistance`.
 
-**Metrics to compute:**
+**Design decisions needed:**
 
-- **Net profit per vehicle**: Total revenues − total expenses (including fuel, maintenance, insurance, financing) for a selected period
-- **Profit per trip**: For trips with attached revenue (rideshare, delivery), show revenue − (fuel cost for that distance + prorated daily expenses)
-- **Profit per distance**: Net revenue per km/mile driven — the key metric for gig workers deciding whether a gig is worth it
-- **Break-even analysis**: At current rates, how many km/trips until the vehicle pays for itself this month
-- **Trend charts**: Monthly profit/loss over time with expense and revenue lines
+- Proration basis: distance-based (trip km / total km) — confirmed
+- Which expenses to prorate: all unlinked (refuels + maintenance + other) — needs confirmation
+- Trips without distance: skip proration or fall back to equal distribution — needs confirmation
 
-**Implementation approach:**
+**Changes required:**
 
-1. Add a "Profitability" tab to the existing reports page
-2. Query existing revenues and expenses by vehicle and date range — all data already exists in the database
-3. Use Recharts (already in the stack) for profit/loss line charts and bar breakdowns
-4. Include financing costs from loan/lease data (Feature #6) when available
-5. Export to CSV/PDF for tax reporting
+| Layer              | Change                                                                                                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GraphQL**        | Add `proratedExpensesHc`, `totalCostHc` to `TripProfitability`. Add `totalProratedExpensesHc`, `totalAllCostsHc` to `TripProfitabilityTotals`. Add `totalUnlinkedExpensesHc` to `ProfitabilityReport` for transparency                      |
+| **Boundary**       | New `UnlinkedExpenseTotals` raw type. Update `TripProfitability` and `TripProfitabilityTotals` interfaces                                                                                                                                   |
+| **Gateway**        | New query: total unlinked expenses in period (WHERE `travel_id IS NULL`), split by refuels/maintenance/other. Or derive from existing totals minus sum of linked                                                                            |
+| **Core**           | Calculate proration ratio per trip. Add `proratedExpensesHc = unlinkedTotal × (tripDistance / totalDistance)`. Update `netProfitHc = revenue - linkedExpenses - proratedExpenses`. Handle edge cases: no distance data, zero total distance |
+| **API Service**    | Add new fields to GQL query and TypeScript types                                                                                                                                                                                            |
+| **Frontend**       | Add prorated expenses column to `TripProfitabilityTable`. Update totals row. Add tooltip/note explaining proration method                                                                                                                   |
+| **CSV Export**     | Add prorated and total cost columns to trip CSV export                                                                                                                                                                                      |
+| **Print Template** | Add prorated column to trips table in print output                                                                                                                                                                                          |
 
-### Considerations
+### 2. Per-Platform/Tag Breakdown (#4)
 
-- Distance-based calculations need reliable odometer data — warn if odometer gaps exist
-- Multi-currency scenarios: convert all amounts to the user's home currency for aggregation
-- Gig workers may want to see per-platform breakdown (Uber vs. Lyft vs. DoorDash) — this could be supported via revenue categories or tags
+**Problem:** Gig workers want to see profitability per platform (Uber vs. Lyft vs. DoorDash). Tags exist but the report only uses them as filters, not as a breakdown dimension.
 
-### Why P2
+**Deferred** — to be added later.
 
-Revenue tracking without profitability reports is only half the story. Gig workers making financial decisions ("Should I keep driving for this platform?") need clear profit-per-km data. All the underlying data already exists — this is a reporting/UI layer on top. Pairs naturally with recurring revenues (Feature #7).
+### 3. Language Hardcoded in Gateway
+
+**Problem:** Multiple places in `ReportProfitabilityGw` have `const lang = 'en'; // TODO`. Revenue/expense category and kind names are only returned in English.
+
+**Fix:** Pass user's language from `userProfile.lang` through the params to the gateway. Update `GetDataParams` to include `lang`, thread it from core's `buildReport` method.
+
+**Changes required:**
+
+| Layer       | Change                                                                                                                                                                                  |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Gateway** | Add `lang` to `GetDataParams`. Replace `const lang = 'en'` with `params.lang` in all 4 breakdown queries (revenue by category, revenue by kind, expenses by category, expenses by kind) |
+| **Core**    | Pass `userProfile.lang` (or locale) to gateway `getData()` call                                                                                                                         |
+
+### 4. Monthly Trend `expensesCount` Always Zero
+
+**Problem:** `expensesCount` in `ProfitabilityMonthlyTrend` is hardcoded to `0` with comment "Not tracked at monthly level in gateway."
+
+**Fix:** Add expense count to the monthly queries, or sum refuel + maintenance + other counts. Low effort.
+
+### 5. Foreign Currency Breakdown Not Populated
+
+**Problem:** The aggregation helpers (`aggregateCategoryRows`, `aggregateKindRows`, etc.) initialize `foreignCurrencies: []` but never separate HC vs. foreign currency rows. The SQL groups by `home_currency` but the aggregation just sums everything into `totalAmountHc`.
+
+**Fix:** In the aggregation helpers, detect when `paid_in_currency != home_currency` and populate the `foreignCurrencies` array with per-currency totals. This requires adjusting the SQL to also group by `paid_in_currency` and selecting `total_price` (original currency amount) alongside `total_price_in_hc`.
+
+**Effort:** Medium — affects 4 aggregation methods and their corresponding SQL queries.
+
+---
+
+## Priority Order
+
+1. **Prorated expenses (#5 from original list)** — Core feature gap for gig workers
+2. **Language fix** — Quick win, affects data correctness for non-English users
+3. **Monthly expensesCount** — Trivial fix
+4. **Foreign currency breakdown** — Medium effort, affects multi-currency users
+5. **Per-platform breakdown** — Deferred to future iteration
 
 ---
 
@@ -869,7 +1166,9 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 ## 20. Add fuel based cost of each travel based on driven distance, recent car consumption and recent car costs
 
-## 21.
+## 21. Add fuel based cost per distance for a trip
+
+## 22. Use API to fetch vehicle details by make, model and year - we need fuel tank details
 
 ## Priority Summary
 
@@ -903,12 +1202,12 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 **Goal**: Make CarExpenses compelling for regular car owners and multi-vehicle families — the largest audience segments. All features work in the existing PWA with no new infrastructure.
 
-| Order | Feature                      | Effort   | Rationale                              |
-| ----- | ---------------------------- | -------- | -------------------------------------- |
-| 1     | Vehicle Equipment (Glovebox) | 1–2 days | Universal value, trivial effort        |
-| 2     | Vehicle Tasks                | 2–3 days | Engagement driver, multi-user friendly |
-| 3     | Tire Tracking                | 2–3 days | Major expense, seasonal workflow       |
-| 4     | Loan/Lease Tracking          | 3–4 days | High engagement, no external deps      |
+| Order | Feature                      | Effort   | Rationale |
+| ----- | ---------------------------- | -------- | --------- |
+| 1     | Vehicle Equipment (Glovebox) | 1–2 days | DONE      |
+| 2     | Vehicle Tasks                | 2–3 days | DONE      |
+| 3     | Tire Tracking                | 2–3 days | DONE      |
+| 4     | Loan/Lease Tracking          | 3–4 days | DONE      |
 
 **Total: ~12–16 days**
 
@@ -916,17 +1215,17 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 **Goal**: Round out the feature set for gig workers, add polish that helps with competitor switching, and increase data value.
 
-| Order | Feature                        | Effort   | Rationale                           |
-| ----- | ------------------------------ | -------- | ----------------------------------- |
-| 5     | Recurring Revenues             | 1–2 days | Enables revenue reports             |
-| 6     | Revenue Reports                | 2–3 days | Key for gig workers                 |
-| 7     | Data Import                    | 3–5 days | Removes switching barrier           |
-| 8     | Monthly Budget Estimator       | 2–3 days | Forward-looking value               |
-| 9     | User Location / Regional Links | 2–3 days | Contextual intelligence             |
-| 10    | Service Providers Directory    | 2–3 days | Value builds over time              |
-| 11    | Checklists                     | 3–4 days | Fleet/road-trip value               |
-| 12    | Voice Input + Voice Memos      | 3–4 days | Differentiator, good for marketing  |
-| 13    | Receipt Scanning               | 3–5 days | Friction reduction, API cost gating |
+| Order | Feature                        | Effort   | Rationale                          |
+| ----- | ------------------------------ | -------- | ---------------------------------- |
+| 5     | Recurring Revenues             | 1–2 days | Enables revenue reports            |
+| 6     | Revenue Reports                | 2–3 days | Key for gig workers                |
+| 7     | Data Import                    | 3–5 days | Removes switching barrier          |
+| 8     | Monthly Budget Estimator       | 2–3 days | Forward-looking value              |
+| 9     | User Location / Regional Links | 2–3 days | Contextual intelligence            |
+| 10    | Service Providers Directory    | 2–3 days | Value builds over time             |
+| 11    | Checklists                     | 3–4 days | Fleet/road-trip value              |
+| 12    | Voice Input + Voice Memos      | 3–4 days | Differentiator, good for marketing |
+| 13    | Receipt Scanning               | 3–5 days | DONE                               |
 
 **Total: ~22–32 days**
 

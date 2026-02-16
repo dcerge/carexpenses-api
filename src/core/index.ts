@@ -40,3 +40,4 @@ export * from './TireSetCore';
 export * from './VehicleTaskCore';
 export * from './ScannerCore';
 export * from './ReportProfitabilityCore';
+export * from './ParkingSessionCore';

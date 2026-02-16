@@ -572,17 +572,109 @@ Track your trips for tax compliance and mileage deductions (IRS/CRA):
 - **Filtering**: By date range, vehicle, travel type, or tags
 - **Tax-ready output**: All the information needed for IRS Schedule C or CRA T2125 vehicle expense claims
 
-### Upcoming Services
+### Profitability Report
 
-- View all scheduled maintenance and their due dates
-- See what's coming up based on distance or time triggers
-- Never miss an oil change, tire rotation, or inspection
+#### Overview
 
-### Data Export
+The Profitability Report helps gig workers, delivery drivers, and small fleet operators answer the most important question: "Is my vehicle actually making money?" It compares all vehicle revenue against all expenses — fuel, maintenance, and other costs — to show net profit, profit margins, and profit per kilometer or mile driven.
 
-- Export any report to CSV
-- Print any report (to paper or PDF)
-- Your data is always yours — export anytime, no restrictions
+#### How It Works
+
+1. **Open the Reports section** and select the Profitability tab
+2. **Set the date range** using the toolbar — defaults to the current year
+3. **Optionally filter** by specific vehicles or tags to narrow the analysis
+4. **Review the report** — the page loads automatically with summary cards, charts, tables, and break-even analysis
+5. **Export the data** as CSV files or print/save as PDF for tax reporting
+
+#### Summary KPIs
+
+The top of the report shows key performance indicators at a glance:
+
+- **Total Revenue** — all income recorded against selected vehicles in the period
+- **Total Expenses** — combined refuels, maintenance, and other costs
+- **Net Profit** — revenue minus expenses, with color coding (green for profit, red for loss)
+- **Profit Margin** — net profit as a percentage of revenue
+- **Profit per Distance** — net profit per kilometer or mile, the key metric for deciding whether a gig is worth it
+- **Daily Averages** — average daily revenue, expenses, and net profit to show run-rate performance
+
+All amounts are displayed in the user's home currency. If expenses or revenue were recorded in foreign currencies, the original currency totals are shown alongside the converted amounts.
+
+#### Break-Even Analysis
+
+The report calculates whether the selected vehicles are profitable overall and provides:
+
+- **Profitable or not** — a clear yes/no indicator for the period
+- **Break-even day** — if profitable, the approximate day in the period when cumulative revenue first exceeded cumulative expenses
+- **Days to break even** — if currently unprofitable, an estimate of how many more days at the current revenue rate it would take to cover all expenses
+
+#### Monthly Trend Chart
+
+An interactive chart shows revenue, expenses, and net profit month by month over the selected period. This makes it easy to spot seasonal patterns, identify months where costs spiked, or see whether profitability is improving or declining over time.
+
+## Per-Vehicle Profitability
+
+A detailed table breaks down profitability for each vehicle individually:
+
+- Revenue, expenses, and net profit per vehicle
+- Profit margin per vehicle
+- Distance driven per vehicle
+- Profit per distance unit per vehicle
+
+This helps users identify which vehicles are earning their keep and which are costing more than they bring in.
+
+#### Revenue Breakdown
+
+Revenue is broken down by category and sub-category (kind), showing:
+
+- Total amount and number of records per category
+- Percentage of total revenue each category represents
+- A pie chart for visual comparison
+
+This is useful for seeing which income sources contribute most — for example, comparing rideshare earnings versus delivery income.
+
+#### Expense Breakdown
+
+Expenses are broken down the same way — by category and sub-category — so users can see where their money is going. Refuels, maintenance, and other costs are each shown with their share of total expenses.
+
+#### Per-Trip Profitability
+
+For trips that have linked revenue records, the report shows per-trip profitability:
+
+- Trip date, destination, and distance
+- Revenue earned on the trip
+- Linked refuels and expenses
+- Net profit and profit per distance unit
+- Tags associated with the trip
+
+A totals row summarizes all trips with linked revenue. This table is especially useful for delivery drivers who want to evaluate individual runs.
+
+#### Odometer Data Quality Warnings
+
+Since distance-based metrics depend on accurate odometer readings, the report checks each vehicle's data quality and warns when:
+
+- A vehicle has no odometer readings at all
+- A significant percentage of records are missing odometer data
+- There are unusually large gaps between consecutive readings
+
+Warnings appear as an alert banner near the top of the report, with per-vehicle details and a severity level (low or high) so users know how much to trust the distance-based calculations.
+
+#### Export Options
+
+The report can be exported in several formats:
+
+- **CSV — Summary** — all KPI metrics, daily averages, and break-even data
+- **CSV — Per Vehicle** — the full vehicle profitability table
+- **CSV — Monthly Trend** — month-by-month revenue, expenses, and profit
+- **CSV — Per Trip** — the trip profitability table with all columns
+- **Print / Save as PDF** — a formatted printable page with all sections, suitable for tax records or sharing with an accountant
+
+#### Multi-Currency Support
+
+Revenue and expenses recorded in different currencies are converted to the user's home currency for aggregation. Foreign currency totals are shown separately so users can see the original amounts alongside the converted values.
+
+#### Unit Preferences
+
+All distance values follow the user's preferred unit setting — kilometers or miles. Volume and currency formatting also respect user preferences, ensuring the report reads naturally regardless of locale.
 
 ---
 
