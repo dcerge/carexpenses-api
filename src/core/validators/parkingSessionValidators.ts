@@ -100,6 +100,12 @@ const rulesCreate = new Checkit({
       message: 'Start time should be a valid datetime string',
     },
   ],
+  endTime: [
+    {
+      rule: 'string',
+      message: 'End time should be a valid datetime string',
+    },
+  ],
   durationMinutes: [
     {
       rule: 'integer',
@@ -164,7 +170,7 @@ const rulesCreate = new Checkit({
       message: 'Travel ID should be a valid UUID',
     },
   ],
-  ...ruleStatus([PARKING_SESSION_STATUS.ACTIVE]),
+  ...ruleStatus([PARKING_SESSION_STATUS.ACTIVE, PARKING_SESSION_STATUS.COMPLETED]),
 });
 
 const rulesUpdate = new Checkit({

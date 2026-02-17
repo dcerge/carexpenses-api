@@ -169,7 +169,7 @@ class ParkingSessionCore extends AppCore {
   }
 
   // ===========================================================================
-  // Create (Start Parking Session)
+  // Create (Start Parking Session or Create Past Completed Session)
   // ===========================================================================
 
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
@@ -196,42 +196,62 @@ class ParkingSessionCore extends AppCore {
       );
     }
 
-    // Check for existing active session on this vehicle
-    const existingSessions = await this.getGateways().parkingSessionGw.list({
-      filter: {
-        accountId,
-        carId: params.carId,
-        status: PARKING_SESSION_STATUS.ACTIVE,
-      },
-    });
+    const isCompleted = params.status === PARKING_SESSION_STATUS.COMPLETED;
 
-    if (existingSessions && existingSessions.length > 0) {
-      this.logger.log(
-        `Vehicle ${params.carId} already has an active parking session ${existingSessions[0].id}, ` +
-        `cannot start a new one`,
-      );
+    // Check for existing active session on this vehicle (only when creating an active session)
+    if (!isCompleted) {
+      const existingSessions = await this.getGateways().parkingSessionGw.list({
+        filter: {
+          accountId,
+          carId: params.carId,
+          status: PARKING_SESSION_STATUS.ACTIVE,
+        },
+      });
+
+      if (existingSessions && existingSessions.length > 0) {
+        this.logger.log(
+          `Vehicle ${params.carId} already has an active parking session ${existingSessions[0].id}, ` +
+          `cannot start a new one`,
+        );
+        return OpResult.fail(
+          OP_RESULT_CODES.VALIDATION_FAILED,
+          {},
+          'This vehicle already has an active parking session',
+        );
+      }
+    }
+
+    // Validate endTime is provided for completed sessions
+    if (isCompleted && !params.endTime) {
+      this.logger.log('Cannot create a completed parking session without an end time');
       return OpResult.fail(
         OP_RESULT_CODES.VALIDATION_FAILED,
         {},
-        'This vehicle already has an active parking session',
+        'End time is required when creating a completed parking session',
       );
     }
 
     const now = this.now();
 
-    const newSession = {
+    const newSession: any = {
       ...params,
       accountId,
       startTime: params.startTime || now,
-      status: PARKING_SESSION_STATUS.ACTIVE,
+      status: isCompleted ? PARKING_SESSION_STATUS.COMPLETED : PARKING_SESSION_STATUS.ACTIVE,
       startedBy: userId,
       createdBy: userId,
       createdAt: now,
     };
 
+    // Set end fields for completed sessions
+    if (isCompleted) {
+      newSession.endedBy = userId;
+    }
+
     this.logger.debug(
       `Parking session is ready for creation: car=${newSession.carId}, ` +
       `startTime=${newSession.startTime}, ` +
+      `status=${isCompleted ? 'COMPLETED' : 'ACTIVE'}, ` +
       `durationMinutes=${newSession.durationMinutes || 'none'}, ` +
       `initialPrice=${newSession.initialPrice || 'none'}`,
     );
@@ -247,13 +267,51 @@ class ParkingSessionCore extends AppCore {
         `Parking session ${created.id} was successfully started ` +
         `for vehicle ${created.carId} at ${created.formattedAddress || 'unknown location'}`,
       );
+
+      // Auto-generate parking expense if session was created as completed with price > 0
+      if (created.status === PARKING_SESSION_STATUS.COMPLETED) {
+        const price = created.finalPrice ?? created.initialPrice;
+
+        if (price && price > 0) {
+          this.logger.debug(
+            `Generating parking expense for newly created completed session ${created.id} with price=${price}`,
+          );
+
+          try {
+            const expenseId = await this.createParkingExpense(created, price);
+
+            if (expenseId) {
+              // Link the expense back to the parking session
+              await this.getGateways().parkingSessionGw.update(
+                { id: created.id, accountId: created.accountId },
+                { expenseId },
+              );
+
+              created.expenseId = expenseId;
+
+              this.logger.log(
+                `Parking expense ${expenseId} was auto-generated for completed session ${created.id}`,
+              );
+            }
+          } catch (err: any) {
+            // Log but don't fail the session creation
+            this.logger.log(
+              `Failed to auto-generate parking expense for session ${created.id}: ${err.message}`,
+            );
+          }
+        } else {
+          this.logger.debug(
+            `No expense generated for completed parking session ${created.id} (free parking or no price)`,
+          );
+        }
+      }
     }
 
     return items.map((item: any) => this.processItemOnOut(item, opt));
   }
 
   // ===========================================================================
-  // Update (Edit Active Session or End Parking Session)
+  // Update (Edit Active/Completed Session or End Parking Session)
   // ===========================================================================
 
   public async beforeUpdate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
@@ -289,12 +347,6 @@ class ParkingSessionCore extends AppCore {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, 'You do not have permission to update this parking session');
     }
 
-    // Prevent updates to already completed sessions
-    if (session.status === PARKING_SESSION_STATUS.COMPLETED) {
-      this.logger.log(`Parking session ${id} is already completed, cannot update`);
-      return OpResult.fail(OP_RESULT_CODES.VALIDATION_FAILED, {}, 'Cannot update a completed parking session');
-    }
-
     // Don't allow changing accountId or carId
     const { accountId: _a, carId: _c, ...restParams } = params;
 
@@ -306,19 +358,40 @@ class ParkingSessionCore extends AppCore {
       updatedAt: now,
     };
 
-    // Handle ending the parking session (status change to COMPLETED)
-    if (params.status === PARKING_SESSION_STATUS.COMPLETED) {
+    // Determine the resulting status after this update
+    const resultingStatus = params.status ?? session.status;
+
+    // Validate endTime is provided when the resulting session is completed
+    // (either completing an active session or updating an already completed session)
+    if (resultingStatus === PARKING_SESSION_STATUS.COMPLETED) {
+      const resultingEndTime = params.endTime ?? session.endTime;
+
+      if (!resultingEndTime) {
+        this.logger.log(`Parking session ${id} requires end time when status is completed`);
+        return OpResult.fail(
+          OP_RESULT_CODES.VALIDATION_FAILED,
+          {},
+          'End time is required for a completed parking session',
+        );
+      }
+    }
+
+    // Handle transition from ACTIVE to COMPLETED
+    if (
+      session.status === PARKING_SESSION_STATUS.ACTIVE &&
+      params.status === PARKING_SESSION_STATUS.COMPLETED
+    ) {
       this.logger.debug(`Parking session ${id} is being ended by user ${userId}`);
 
       updateParams.endTime = params.endTime || now;
       updateParams.endedBy = userId;
-
-      // Store session for afterUpdate expense generation
-      const requestId = this.getRequestId();
-      this.operationData.set(`update-${requestId}-${id}`, {
-        existingSession: session,
-      });
     }
+
+    // Store session for afterUpdate expense handling
+    const requestId = this.getRequestId();
+    this.operationData.set(`update-${requestId}-${id}`, {
+      existingSession: session,
+    });
 
     // Add accountId to where clause for SQL-level security
     where.accountId = accountId;
@@ -344,11 +417,12 @@ class ParkingSessionCore extends AppCore {
 
       const { existingSession } = updateInfo;
 
-      // Auto-generate parking expense if session was just ended with price > 0
-      if (
-        existingSession.status === PARKING_SESSION_STATUS.ACTIVE &&
-        session.status === PARKING_SESSION_STATUS.COMPLETED
-      ) {
+      const wasActive = existingSession.status === PARKING_SESSION_STATUS.ACTIVE;
+      const isNowCompleted = session.status === PARKING_SESSION_STATUS.COMPLETED;
+      const wasAlreadyCompleted = existingSession.status === PARKING_SESSION_STATUS.COMPLETED;
+
+      // Case 1: Transitioning from ACTIVE to COMPLETED — create expense if price > 0
+      if (wasActive && isNowCompleted) {
         const finalPrice = session.finalPrice ?? existingSession.initialPrice;
 
         if (finalPrice && finalPrice > 0) {
@@ -373,7 +447,6 @@ class ParkingSessionCore extends AppCore {
               );
             }
           } catch (err: any) {
-            // Log but don't fail the session update — session is already ended
             this.logger.log(
               `Failed to auto-generate parking expense for session ${session.id}: ${err.message}`,
             );
@@ -382,6 +455,89 @@ class ParkingSessionCore extends AppCore {
           this.logger.debug(
             `No expense generated for parking session ${session.id} (free parking or no price)`,
           );
+        }
+      }
+
+      // Case 2: Updating an already completed session — sync expense if any mapped field changed
+      if (wasAlreadyCompleted && isNowCompleted) {
+        const newPrice = session.finalPrice ?? session.initialPrice;
+        const hasLinkedExpense = !!session.expenseId;
+
+        if (newPrice && newPrice > 0 && hasLinkedExpense) {
+          // Check if any expense-relevant field has changed
+          const hasExpenseFieldChanges = this.hasExpenseRelevantChanges(existingSession, session);
+
+          if (hasExpenseFieldChanges) {
+            this.logger.debug(
+              `Updating linked expense ${session.expenseId} for session ${session.id} ` +
+              `due to expense-relevant field changes`,
+            );
+
+            try {
+              await this.updateParkingExpense(session, newPrice);
+
+              this.logger.log(
+                `Parking expense ${session.expenseId} was updated for session ${session.id}`,
+              );
+            } catch (err: any) {
+              this.logger.log(
+                `Failed to update parking expense ${session.expenseId} for session ${session.id}: ${err.message}`,
+              );
+            }
+          }
+        } else if (newPrice && newPrice > 0 && !hasLinkedExpense) {
+          // Price added to a previously free session — create expense
+          this.logger.debug(
+            `Creating parking expense for session ${session.id} that now has price=${newPrice}`,
+          );
+
+          try {
+            const expenseId = await this.createParkingExpense(session, newPrice);
+
+            if (expenseId) {
+              await this.getGateways().parkingSessionGw.update(
+                { id: session.id, accountId: session.accountId },
+                { expenseId },
+              );
+
+              session.expenseId = expenseId;
+
+              this.logger.log(
+                `Parking expense ${expenseId} was created for session ${session.id}`,
+              );
+            }
+          } catch (err: any) {
+            this.logger.log(
+              `Failed to create parking expense for session ${session.id}: ${err.message}`,
+            );
+          }
+        } else if ((!newPrice || newPrice <= 0) && hasLinkedExpense) {
+          // Price removed — remove linked expense
+          this.logger.debug(
+            `Removing linked expense ${session.expenseId} for session ${session.id} (price set to ${newPrice})`,
+          );
+
+          try {
+            await this.getContext().cores.expenseCore.remove({
+              where: { id: session.expenseId },
+              requestId: this.getContext().requestId,
+            });
+
+            await this.getGateways().parkingSessionGw.update(
+              { id: session.id, accountId: session.accountId },
+              { expenseId: null },
+            );
+
+            session.expenseId = null;
+
+            this.logger.log(
+              `Parking expense was removed for session ${session.id} (price cleared)`,
+            );
+          } catch (err: any) {
+            this.logger.log(
+              `Failed to remove parking expense for session ${session.id}: ${err.message}`,
+            );
+          }
         }
       }
 
@@ -450,8 +606,92 @@ class ParkingSessionCore extends AppCore {
   }
 
   // ===========================================================================
-  // Expense Generation Helper
+  // Expense Field Change Detection
   // ===========================================================================
+
+  /**
+   * Mapping of parking session fields to expense fields:
+   *
+   *   session.startTime        → expense.whenDone
+   *   session.finalPrice/initialPrice → expense.totalPrice
+   *   session.currency         → expense.paidInCurrency
+   *   session.latitude         → expense.latitude
+   *   session.longitude        → expense.longitude
+   *   session.formattedAddress → expense.location
+   *   session.notes            → expense.shortNote
+   *   session.travelId         → expense.travelId
+   *   session.uploadedFileId   → expense.uploadedFilesIds
+   */
+  private hasExpenseRelevantChanges(oldSession: any, newSession: any): boolean {
+    // Price comparison: use finalPrice ?? initialPrice for both
+    const oldPrice = oldSession.finalPrice ?? oldSession.initialPrice ?? 0;
+    const newPrice = newSession.finalPrice ?? newSession.initialPrice ?? 0;
+
+    if (oldPrice !== newPrice) return true;
+
+    // Simple field comparisons (null-safe via loose string coercion)
+    const fieldsToCompare = [
+      'startTime',
+      'currency',
+      'latitude',
+      'longitude',
+      'formattedAddress',
+      'notes',
+      'travelId',
+      'uploadedFileId',
+    ];
+
+    for (const field of fieldsToCompare) {
+      const oldVal = oldSession[field] ?? null;
+      const newVal = newSession[field] ?? null;
+
+      if (oldVal === newVal) continue;
+
+      // For date fields, compare formatted UTC strings
+      if (field === 'startTime' && oldVal && newVal) {
+        const oldFormatted = dayjs(oldVal).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
+        const newFormatted = dayjs(newVal).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
+
+        if (oldFormatted === newFormatted) continue;
+      }
+
+      // For numeric fields, compare as numbers
+      if ((field === 'latitude' || field === 'longitude') && oldVal != null && newVal != null) {
+        if (Number(oldVal) === Number(newVal)) continue;
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  // ===========================================================================
+  // Expense Generation/Update Helpers
+  // ===========================================================================
+
+  /**
+   * Build the expense params object from a parking session.
+   */
+  private buildExpenseParams(session: any, price: number): any {
+    return {
+      accountId: this.getContext().accountId,
+      carId: session.carId,
+      expenseType: EXPENSE_TYPES.EXPENSE,
+      kindId: PARKING_EXPENSE_KIND_ID,
+      whenDone: dayjs(session.startTime).utc().format('YYYY-MM-DDTHH:mm:ss.000Z'),
+      totalPrice: price,
+      paidInCurrency: session.currency,
+      latitude: session.latitude,
+      longitude: session.longitude,
+      location: session.formattedAddress,
+      whereDone: '',
+      comments: '',
+      travelId: session.travelId,
+      shortNote: session.notes,
+      uploadedFilesIds: session.uploadedFileId ? [session.uploadedFileId] : undefined,
+    };
+  }
 
   /**
    * Create a parking expense record from a completed parking session.
@@ -462,32 +702,17 @@ class ParkingSessionCore extends AppCore {
    * @returns The created expense ID, or null on failure
    */
   private async createParkingExpense(session: any, finalPrice: number): Promise<string | null> {
-    const { accountId, userId } = this.getContext();
-
-    const expenseParams = {
-      accountId,
-      carId: session.carId,
-      expenseType: EXPENSE_TYPES.EXPENSE,
-      kindId: PARKING_EXPENSE_KIND_ID,
-      whenDone: dayjs(session.startTime).utc().format('YYYY-MM-DDTHH:mm:ss.000Z'),
-      totalPrice: finalPrice,
-      paidInCurrency: session.currency,
-      latitude: session.latitude,
-      longitude: session.longitude,
-      location: session.formattedAddress,
-      whereDone: '',
-      comments: '', //session.notes,
-      travelId: session.travelId,
-      shortNote: session.notes,
-      uploadedFilesIds: session.uploadedFileId ? [session.uploadedFileId] : undefined,
-    };
+    const expenseParams = this.buildExpenseParams(session, finalPrice);
 
     this.logger.debug(
       `Creating parking expense for session ${session.id}: ` +
       `amount=${finalPrice} ${session.currency || 'N/A'}, car=${session.carId}`,
     );
 
-    const result = await this.getContext().cores.expenseCore.create({ params: expenseParams, requestId: this.getContext().requestId });
+    const result = await this.getContext().cores.expenseCore.create({
+      params: expenseParams,
+      requestId: this.getContext().requestId,
+    });
 
     if (result?.code !== OP_RESULT_CODES.OK || !result?.data?.[0]?.id) {
       this.logger.log(
@@ -502,6 +727,37 @@ class ParkingSessionCore extends AppCore {
     this.logger.debug(`Created parking expense ${expenseId} for session ${session.id}`);
 
     return expenseId;
+  }
+
+  /**
+   * Update an existing parking expense record linked to a parking session.
+   *
+   * Updates the expense through the expense core so all expense business
+   * logic (stats updates, home currency conversion, etc.) is re-applied.
+   */
+  private async updateParkingExpense(session: any, newPrice: number): Promise<void> {
+    const expenseParams = this.buildExpenseParams(session, newPrice);
+
+    this.logger.debug(
+      `Updating parking expense ${session.expenseId} for session ${session.id}: ` +
+      `newPrice=${newPrice} ${session.currency || 'N/A'}`,
+    );
+
+    const result = await this.getContext().cores.expenseCore.update({
+      where: { id: session.expenseId },
+      params: expenseParams,
+      requestId: this.getContext().requestId,
+    });
+
+    if (result?.code !== OP_RESULT_CODES.OK) {
+      this.logger.log(
+        `Failed to update parking expense ${session.expenseId} for session ${session.id}: ` +
+        `code=${result?.code}, errors=${JSON.stringify(result?.errors)}`,
+      );
+      throw new Error(`Expense update failed with code ${result?.code}`);
+    }
+
+    this.logger.debug(`Updated parking expense ${session.expenseId} for session ${session.id}`);
   }
 }
 
