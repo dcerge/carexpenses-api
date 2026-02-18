@@ -146,6 +146,7 @@ class TireSetCore extends AppCore {
       const carMileageIn = (itemCarId ? this.stageData.get(`carMileageIn:${itemCarId}`) : null) || 'km';
       const userDistanceIn = this.stageData.get('userDistanceIn') || 'km';
       const currentOdometerKm = itemCarId ? Number(this.stageData.get(`currentOdometerKm:${itemCarId}`) ?? null) : null;
+      const carInitialMileageKm = this.stageData.get('initialMileageKm') || 0
 
       // --- odometerAtInstall: km → car's mileageIn ---
       if (item.odometerAtInstallKm !== null && item.odometerAtInstallKm !== undefined) {
@@ -175,6 +176,8 @@ class TireSetCore extends AppCore {
       ) {
         // Installed but hasn't moved yet (or no current odometer available)
         sinceInstallKm = 0;
+      } else if (currentOdometerKm != null && item.tireSetStatus == TIRE_SET_STATUSES.ACTIVE) {
+        sinceInstallKm = currentOdometerKm - previousKm;
       }
 
       if (sinceInstallKm !== null) {
@@ -213,7 +216,10 @@ class TireSetCore extends AppCore {
       if (item.carId) {
         this.stageData.set('currentProcessingCarId', item.carId);
       }
-      item.items = item.items.map((child: any) => this.processItemOnOut(child, opt));
+      item.items = item.items.map((child: any) => {
+        child.tireSetStatus = item.status;
+        return this.processItemOnOut(child, opt)
+      });
     }
 
     return item;
@@ -240,6 +246,7 @@ class TireSetCore extends AppCore {
     carMileageIn: string;
     userDistanceIn: string;
     currentOdometerKm: number | null;
+    initialMileageKm: number | null;
   }> {
     // Check if we already resolved units for this car (avoid duplicate lookups
     // when listing tire sets that share the same vehicle)
@@ -249,17 +256,22 @@ class TireSetCore extends AppCore {
         carMileageIn: cachedMileageIn,
         userDistanceIn: this.stageData.get('userDistanceIn') || 'km',
         currentOdometerKm: this.stageData.get(`currentOdometerKm:${carId}`) ?? null,
+        initialMileageKm: this.stageData.get(`initialMileageKm:${carId}`) ?? null
       };
     }
 
     let carMileageIn = 'km';
     let userDistanceIn = 'km';
     let currentOdometerKm: number | null = null;
+    let initialMileageKm: number | null = null;
 
     try {
       const car = await this.getGateways().carGw.get(carId);
       if (car?.mileageIn) {
         carMileageIn = car.mileageIn;
+      }
+      if (car?.initialMileage) {
+        initialMileageKm = toMetricDistance(car?.initialMileage, carMileageIn);
       }
     } catch (error) {
       this.logger.debug(`Could not load car ${carId} for mileageIn, defaulting to km`);
@@ -286,8 +298,9 @@ class TireSetCore extends AppCore {
     // Store in stageData keyed by carId
     this.stageData.set(`carMileageIn:${carId}`, carMileageIn);
     this.stageData.set(`currentOdometerKm:${carId}`, currentOdometerKm);
+    this.stageData.set(`initialMileageKm:${carId}`, initialMileageKm);
 
-    return { carMileageIn, userDistanceIn, currentOdometerKm };
+    return { carMileageIn, userDistanceIn, currentOdometerKm, initialMileageKm };
   }
 
   // ===========================================================================
@@ -513,7 +526,7 @@ class TireSetCore extends AppCore {
     accountId: string | undefined,
     userId: string | undefined,
     inputItems: TireSetItemData[],
-    odometerAtInstallKm?: number | null,
+    odometerAtInstallKm?: number | null
   ): Promise<SyncTireSetItemsResult> {
     const now = this.now();
     const result: SyncTireSetItemsResult = {
@@ -567,6 +580,10 @@ class TireSetCore extends AppCore {
         (updateFields as any).treadDepthMeasuredAt = now;
       }
 
+      if (inputItem.tireCondition === TIRE_CONDITIONS.CAME_WITH_VEHICLE) {
+        (updateFields as any).odometerAtInstallKm = null;
+      }
+
       await this.getGateways().tireSetItemGw.update(
         { id: inputItem.id, accountId },
         {
@@ -605,7 +622,9 @@ class TireSetCore extends AppCore {
         // Mileage fields: mileageAccumulatedKm is already converted to km by
         // the caller (beforeCreate/beforeUpdate). odometerAtInstallKm is set
         // if the parent tire set is active.
-        odometerAtInstallKm: odometerAtInstallKm ?? null,
+        odometerAtInstallKm: inputItem.tireCondition === TIRE_CONDITIONS.CAME_WITH_VEHICLE
+          ? null
+          : odometerAtInstallKm ?? null,
         mileageAccumulatedKm: inputItem.mileageAccumulatedKm ?? 0,
         notes: inputItem.notes ?? null,
         status: STATUSES.ACTIVE,
@@ -613,7 +632,7 @@ class TireSetCore extends AppCore {
         createdAt: now,
       }));
 
-      const createdResults = await this.getGateways().tireSetItemGw.createMany(newItems);
+      const createdResults = await this.getGateways().tireSetItemGw.create(newItems);
 
       const createdItems = Array.isArray(createdResults) ? createdResults : [createdResults];
 
@@ -1029,17 +1048,24 @@ class TireSetCore extends AppCore {
     // Resolve car's mileageIn for converting item mileage input
     const car = await this.getGateways().carGw.get(params.carId);
     const carMileageIn = car?.mileageIn || 'km';
+    const carInitialMileageKm = toMetricDistance(car?.initialMileage, carMileageIn);
 
     // Convert mileageAccumulated on items from car's unit to km
     let convertedItems = params.items;
     if (Array.isArray(params.items)) {
       convertedItems = params.items.map((item: TireSetItemData) => {
-        if (item.mileageAccumulatedKm != null) {
+        if (item.tireCondition === 'came_with_vehicle') {
+          return {
+            ...item,
+            mileageAccumulatedKm: toMetricDistance(item.mileageAccumulatedKm ?? car?.initialMileage, carMileageIn),
+          };
+        } else if (item.mileageAccumulatedKm != null) {
           return {
             ...item,
             mileageAccumulatedKm: toMetricDistance(item.mileageAccumulatedKm, carMileageIn),
           };
         }
+
         return item;
       });
     }
@@ -1060,7 +1086,7 @@ class TireSetCore extends AppCore {
       items,
       createExpense,
       expenseDetails,
-      mileageWarrantyKm: _mwk,
+      mileageWarranty,
       ageLimitYears: _aly,
       treadLimitMm: _tlm,
       ...restParams
@@ -1074,6 +1100,7 @@ class TireSetCore extends AppCore {
       createExpense,
       expenseDetails,
       odometerAtInstallKm,
+      carInitialMileageKm
     });
 
     const now = this.now();
@@ -1133,7 +1160,7 @@ class TireSetCore extends AppCore {
             accountId,
             userId,
             stageInfo.items,
-            stageInfo.odometerAtInstallKm,
+            stageInfo.odometerAtInstallKm
           );
         } else {
           this.logger.debug(
@@ -1516,7 +1543,7 @@ class TireSetCore extends AppCore {
       );
     } else {
       // Batch soft-delete all child items
-      await this.getGateways().tireSetItemGw.removeMany(
+      await this.getGateways().tireSetItemGw.remove(
         allItems.map((item: any) => ({ id: item.id, accountId })),
       );
 

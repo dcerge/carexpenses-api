@@ -374,6 +374,46 @@ Flag urgent items as high priority so they stand out with a colored border and b
 
 ---
 
+# Parking Sessions
+
+Never forget where you parked, never lose track of your meter, and never miss a parking expense.
+
+## The Problem
+
+Parking is one of the most frequent vehicle expenses — yet it's easy to forget the exact spot, lose track of how much time is left on the meter, or skip logging the cost altogether. Parking Sessions solves all three.
+
+## What It Does
+
+**Remember where you parked.** When you start a parking session, the app asks permission to use your device's location to pinpoint where you are (you can also type in an address manually). Your parking spot is saved with GPS coordinates and address so you can always find your way back.
+
+**Know exactly how much time you have left.** If you entered a parking duration — whether paid or free with a time limit — a persistent banner appears across every page of the app showing a live countdown. When time is running low, the banner shifts to a warning state, and once your time has expired, you'll see exactly how long you've been over. For parking with no set duration, the banner simply shows how long you've been parked.
+
+**Walk back to your car with one tap.** From the active session view, open your parked location directly in Google Maps to get walking directions from wherever you are straight to your vehicle.
+
+**Log parking expenses without the hassle.** When you end a session and enter a price, a parking expense is automatically created and linked to the session — with the correct vehicle, date, amount, and location already filled in. No price? No expense. The session is simply saved as a free parking record.
+
+## How It Works
+
+**Starting a session.** Tap the parking button on your vehicle card. The app requests your location (or you enter an address), shows a map preview, and lets you optionally add how long you paid for, the price, and a note about your spot. Confirm and you're parked.
+
+**While you're parked.** The active session banner is visible on every page. Tap it to see full details including the map, address, timer, and your notes. If you extended your parking time — whether by feeding the meter or simply deciding to stay longer at a time-limited free spot — tap "Add Time" to update the session so the countdown stays accurate. This is a manual update to keep your records in sync, not a connection to any external parking service.
+
+**Ending a session.** When you're back at your car, end the session. Review the start and end times, enter or confirm the final price, and save. If you entered a price, a linked parking expense is created automatically.
+
+**Parking history.** A dedicated page shows all your past parking sessions — filterable by vehicle and date range — with summary stats on total spend, average duration, and your most-visited locations. You can edit any past session or manually create one for parking you forgot to log at the time.
+
+## Key Details
+
+- **One active session per vehicle** — each of your vehicles can have its own active session running at the same time
+- **Location permission optional** — the app works best with GPS access, but you can always enter an address manually
+- **Free parking friendly** — use it purely as a "where did I park?" tool without entering any price
+- **Automatic expense creation** — enter a price when ending a session and a parking expense is created and linked automatically
+- **Link to your travels** — associate a parking session with a travel record so parking costs are tracked as part of a trip
+- **Full history with manual entry** — browse and edit past sessions, or create new ones after the fact
+- **Multi-user support** — account members with the appropriate role can manage parking sessions for vehicles they have access to
+
+---
+
 ## Revenue Tracking
 
 Track income generated through vehicle usage, with optional linkage to trips for accurate profit and tax reporting.

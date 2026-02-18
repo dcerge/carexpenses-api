@@ -22,233 +22,74 @@ Effort estimates assume our current pace (one feature end-to-end in ~2 days). Pr
 
 ---
 
-# 1 Parking Sessions
+# # Parking Sessions — Remaining Tasks
 
-## Overview
+## 1. Vehicle Lifecycle Guard
 
-Parking Sessions is a real-time parking tracking feature that allows users to record where they parked, track parking duration, get walking directions back to their vehicle, and automatically generate parking expenses upon session completion. The feature addresses a high-frequency use case — parking is one of the most common vehicle-related expenses, and capturing it in real-time eliminates the need for after-the-fact data entry.
+**Priority:** High
 
-## Problem Statement
+Before a vehicle can be deleted or transferred, the system must check for active parking sessions on that vehicle. If an active session exists, the operation should be blocked with a clear error message prompting the user to end the parking session first.
 
-Currently, users must manually create a parking expense after the fact, often forgetting the exact location, duration, or amount paid. There is no way to remember where the car is parked, no timer to track parking duration, and no quick way to navigate back to the vehicle. This leads to incomplete expense records and a poor user experience around one of the most frequent vehicle costs.
+**Scope:**
 
-## Goals
-
-- Enable one-tap parking session start directly from the vehicle card
-- Track parking location with GPS coordinates and address for easy navigation back
-- Provide real-time countdown (paid parking) or elapsed time (free parking) visible across all pages
-- Streamline expense creation by auto-generating a parking expense on session close
-- Support free parking scenarios where the user simply wants to remember their car's location
-
-## User Segments
-
-- **Gig economy / delivery drivers** — frequent paid parking in urban areas, need accurate expense records for tax deductions
-- **Multi-vehicle families** — need to track where each vehicle is parked, especially in shared-use scenarios
-- **Small fleet operators** — drivers can log parking sessions that automatically flow into fleet expense reports
-- **General consumers** — anyone who forgets where they parked or wants to track parking spend
+- Add a pre-delete check in the vehicle core (`beforeRemove`) that queries for active parking sessions on the target vehicle
+- Return a validation error if any active sessions are found
+- Display a user-friendly message: e.g., "This vehicle has an active parking session. Please end it before deleting the vehicle."
+- Consider the same guard for vehicle transfer flows if applicable
 
 ---
 
-## Workflow
+## 2. Linked Expense Cleanup on Session Delete
 
-### 1. Starting a Parking Session
+**Priority:** High
 
-**Entry point:** The vehicle card's quick actions bar includes a parking button. The button reflects the current state:
+When a parking session is deleted and it has a linked expense (`expenseId`), the associated expense record should also be soft-deleted to prevent orphaned expenses in the user's records.
 
-- **No active session:** The button shows a default parking icon/label (e.g., "Park"). Tapping initiates the start flow.
-- **Active session exists:** The button changes appearance (e.g., highlighted color, pulsing indicator, or label changes to "Parked") to signal an active session. Tapping opens the active parking detail drawer instead of starting a new session.
+**Scope:**
 
-Since the parking button is on the vehicle card, the vehicle is already known — no vehicle selection step is needed.
-
-**Start flow (bottom sheet or drawer):**
-
-1. **Capture location**
-   - The app requests the user's current GPS coordinates.
-   - A map preview is displayed with a pin at the detected position.
-   - The address is reverse-geocoded and shown for confirmation.
-   - The user can adjust the pin by dragging it (useful for parking garages or GPS inaccuracy).
-   - The user can manually edit the address text.
-
-2. **Parking details (all optional)**
-   - **Duration** — How long they paid for. Quick presets (30 min, 1h, 2h, 3h) and a custom input option. Can be skipped entirely for free or unknown-duration parking.
-   - **Price paid** — Amount paid upfront. Can be skipped; the user will be asked again when ending the session.
-   - **Notes** — Free text field for context (e.g., "Level 3, spot B12", "next to the blue pillar", "metered parking on Main St").
-
-3. **Confirm and start**
-   - Start time defaults to the current time but is editable (in case the user is logging a session that started a few minutes ago).
-   - On confirmation, a parking session record is created with status `active`.
-
-### 2. Active Parking Badge (Global)
-
-Once a parking session is active, a persistent badge is displayed across all pages of the application, following the same pattern as the existing active travel badge.
-
-**Display logic:**
-
-| Scenario                         | Badge Display                                | Example               |
-| -------------------------------- | -------------------------------------------- | --------------------- |
-| Duration entered, time remaining | Countdown of time left                       | ⏱ 38 min left         |
-| Duration entered, time expired   | Overtime elapsed since expiry, warning style | ⚠️ Expired 12 min ago |
-| No duration entered              | Elapsed time since start                     | 🅿️ Parked 1h 12m      |
-
-The badge clearly labels what the user is seeing so there is no ambiguity between "time left" and "time elapsed."
-
-**Interaction:** Tapping the badge opens the active parking detail drawer.
-
-### 3. Active Parking Detail View
-
-When the user taps the active parking badge or the parking quick action button on a vehicle card with an active session, a detail drawer (bottom sheet) opens with the following sections:
-
-**Location section:**
-
-- Google Maps static image preview showing the parked location pin
-- Address text
-- **"Directions" button** — Opens Google Maps (or the device's default map app) with walking directions from the user's current location to the parked vehicle
-
-**Timer section:**
-
-- Larger, more prominent version of the badge countdown or elapsed time display
-- If duration was set: a visual progress indicator (progress bar or circular ring) showing how much time has passed vs. total duration
-
-**Actions:**
-
-- **"Add Time"** — Visible only when the user entered a duration. Allows extending the session by adding more time (quick presets: +15 min, +30 min, +1h, custom). Updates the session's total duration.
-- **"Edit"** — Allows updating notes, correcting the location pin/address, or adjusting the start time.
-- **"End Parking"** — Initiates the session close flow.
-
-### 4. Ending a Parking Session
-
-When the user taps "End Parking":
-
-**Step 1 — Review and adjust times:**
-
-- **Start time** — Displayed and editable (in case the user needs to correct it).
-- **End time** — Defaults to the current time, editable (in case the user is closing the session after already leaving the parking spot).
-- **Total duration** — Calculated and displayed based on start and end times.
-
-**Step 2 — Final price:**
-
-- If a price was entered at start, it is pre-filled but fully editable.
-- If no price was entered, the field is empty.
-- The user can enter 0 or leave it blank to indicate free parking.
-- Currency follows the vehicle's or account's configured default.
-
-**Step 3 — Notes:**
-
-- Pre-filled with any notes from the session, editable.
-- The user can add closing notes or context.
-
-**Step 4 — Confirm and close.**
-
-**On save:**
-
-- The parking session status is updated to `completed` with the final end time and price.
-- **If final price > 0:** An expense record is automatically created with:
-  - Category: Parking
-  - Date: The session's start time
-  - Amount: The final price
-  - Vehicle: The session's vehicle
-  - Location: The session's coordinates and address
-  - Reference: A link back to the parking session record
-  - Notes: Carried over from the session
-- **If final price = 0 or blank:** No expense is created. The session is stored as a completed free parking record.
-
-### 5. Parking History
-
-Completed parking sessions are accessible through a parking history view, filterable by vehicle and date range. Each entry displays:
-
-- Date and time
-- Location / address
-- Total duration
-- Cost (or "Free")
-
-Tapping a completed session opens its detail view showing the full map, times, notes, and — if an expense was generated — a link to the associated expense record. Conversely, parking expenses display a link back to their originating parking session.
+- In `ParkingSessionCore.afterRemove`, check if the removed session had an `expenseId`
+- If so, call `expenseCore.remove` to soft-delete the linked expense
+- Log the cleanup action for debugging
+- Handle failures gracefully — log the error but don't fail the session deletion
 
 ---
 
-## Business Rules
+## 3. Sync Parking Session When Linked Expense Changes
 
-| Rule                           | Description                                                                                                                                                                                          |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| One active session per vehicle | A vehicle cannot have more than one active parking session at a time. Multiple vehicles can each have their own active session simultaneously.                                                       |
-| Expense generation             | An expense is only created when the session is closed with a final price greater than zero.                                                                                                          |
-| Free parking support           | Sessions with no price or zero price are valid. They serve as location bookmarks without generating expenses.                                                                                        |
-| Role-based access              | Account members with Owner, Admin, or Driver roles can start, edit, and end parking sessions for vehicles they have access to. Viewers can see active and completed sessions but cannot modify them. |
-| Vehicle lifecycle              | Active parking sessions should be resolved before a vehicle can be deleted or transferred.                                                                                                           |
-| Timezone handling              | Start and end times are stored in UTC and displayed in the user's local timezone.                                                                                                                    |
-| Currency                       | Defaults to the vehicle's or account's configured home currency.                                                                                                                                     |
+**Priority:** Medium
 
----
+When a user edits a parking expense that was auto-generated from a parking session (i.e., the expense has a linked `parkingSessionId` or the session has an `expenseId`), the parking session should be updated to reflect the changes.
 
-## Data Model
+**Scope:**
 
-### Table: `parking_sessions`
-
-| Column              | Type        | Description                                                                               |
-| ------------------- | ----------- | ----------------------------------------------------------------------------------------- |
-| `id`                | UUID        | Primary key                                                                               |
-| `account_id`        | UUID        | Account reference (for SQL-level security filtering) - reference to external microservice |
-| `car_id`            | UUID        | Associated vehicle - refrences to the table `cars`                                        |
-| `travel_id`         | UUID        | Associated travel - reference to the table `travels`                                      |
-| `start_time`        | TIMESTAMPTZ | When parking started                                                                      |
-| `end_time`          | TIMESTAMPTZ | When parking ended (null while active)                                                    |
-| `duration_minutes`  | INTEGER     | Paid duration in minutes (nullable — null means free/unknown)                             |
-| `initial_price`     | DECIMAL     | Price entered at start (nullable)                                                         |
-| `final_price`       | DECIMAL     | Price confirmed at end (nullable)                                                         |
-| `currency`          | VARCHAR     | Currency code: USD, CAD, EUR, etc                                                         |
-| `latitude`          | DECIMAL     | GPS latitude of parking location                                                          |
-| `longitude`         | DECIMAL     | GPS longitude of parking location                                                         |
-| `formatted_address` | TEXT        | Reverse-geocoded or manually entered address                                              |
-| `uploaded_file_id`  | UUID        | Reference to a photo from the parking spot, then moved to an expense                      |
-| `notes`             | TEXT        | User notes (nullable)                                                                     |
-| `expense_id`        | UUID        | Reference to generated expense (nullable, set on close)                                   |
-| `started_by`        | UUID        | User who started the session - reference to external microservice                         |
-| `ended_by`          | UUID        | User who ended the session (nullable) - reference to external microservice                |
-| `status`            | INTEGER     | 100 - active, 200 - complete                                                              |
-| `created_at`        | TIMESTAMPTZ | Record creation timestamp                                                                 |
-| `updated_at`        | TIMESTAMPTZ | Record update timestamp                                                                   |
-| `deleted_at`        | TIMESTAMPTZ | Soft delete timestamp                                                                     |
-| `created_by`        | TIMESTAMPTZ | Record created by userId - reference to external microservice                             |
-| `updated_by`        | TIMESTAMPTZ | Record updated by userId - reference to external microservice                             |
-| `deleted_by`        | TIMESTAMPTZ | Soft deleted by userId - reference to external microservice                               |
-
-**Indexes:**
-
-- `account_id` + `car_id` + `status` (for quick lookup of active sessions per vehicle)
-- `account_id` + `status` (for listing all active sessions across account)
-- `account_id` + `car_id` + `start_time` (for history queries)
-
-**Constraints:**
-
-- Unique partial index on (`account_id`, `car_id`) WHERE `status = 100` — enforces one active session per vehicle at the database level
+- In the expense core's `afterUpdate`, detect if the updated expense is linked to a parking session
+- Sync relevant fields back to the parking session:
+  - `expense.totalPrice` → `session.finalPrice`
+  - `expense.paidInCurrency` → `session.currency`
+  - `expense.whenDone` → `session.startTime`
+  - `expense.location` → `session.formattedAddress`
+  - `expense.latitude` → `session.latitude`
+  - `expense.longitude` → `session.longitude`
+  - `expense.shortNote` → `session.notes`
+  - `expense.travelId` → `session.travelId`
+- Guard against infinite update loops (session updates expense → expense updates session). Use a flag or check whether values actually changed before writing back.
+- When a linked expense is deleted by the user, clear `expenseId` on the parking session but keep the session itself intact
 
 ---
 
-## UI Components
+## 4. Drag-to-Adjust Pin on Start Parking Map
 
-### New Components
+**Priority:** Low
 
-| Component                  | Type    | Description                                                                                     |
-| -------------------------- | ------- | ----------------------------------------------------------------------------------------------- |
-| `ParkingQuickActionButton` | Feature | Vehicle card quick action button with active state indication                                   |
-| `StartParkingDrawer`       | Feature | Bottom sheet for starting a new parking session (location capture, duration, price, notes)      |
-| `ActiveParkingBadge`       | Feature | Global persistent badge showing countdown or elapsed time (follows active travel badge pattern) |
-| `ActiveParkingDrawer`      | Feature | Bottom sheet showing parking detail with map, timer, directions, and action buttons             |
-| `EndParkingDrawer`         | Feature | Bottom sheet for closing a session (time review, final price, notes)                            |
-| `ParkingHistoryList`       | Feature | List of completed parking sessions with filters                                                 |
-| `ParkingSessionDetail`     | Feature | Detail view for a completed parking session                                                     |
-| `DurationPicker`           | Generic | Reusable duration input with quick presets and custom entry                                     |
+The start parking drawer currently shows a read-only map preview after location detection. The spec envisions users being able to drag the pin to correct GPS inaccuracy, which is common in parking garages and dense urban areas.
 
-### Modified Components
+**Scope:**
 
-| Component                  | Change                                                          |
-| -------------------------- | --------------------------------------------------------------- |
-| Vehicle card quick actions | Add parking button with active session state awareness          |
-| Global layout / app shell  | Add `ActiveParkingBadge` alongside existing active travel badge |
-| Expense detail view        | Show link to originating parking session when applicable        |
+- Replace or enhance the `LocationPreview` in the `StartParkingDrawer` with an interactive map that allows pin dragging
+- On pin drop, reverse-geocode the new coordinates and update the address field
+- Consider feasibility within the current map component setup before prioritizing
 
----
-
-## Notifications
+## 5. Notifications
 
 **PWA phase (current):** No push notifications. The active parking badge serves as the sole visual reminder across all pages. The badge's countdown/overtime display provides passive awareness.
 
@@ -257,18 +98,6 @@ Tapping a completed session opens its detail view showing the full map, times, n
 - Reminder at a configurable interval before expiry (e.g., 10 minutes before)
 - Alert when parking time has expired
 - Optional periodic reminders if overtime continues
-
----
-
-## Localization
-
-All user-facing strings must support the existing four languages: English, Spanish, French, and Russian. Key translation areas include:
-
-- Badge text patterns ("X min left", "Parked Xh Ym", "Expired X min ago")
-- Drawer labels and button text
-- Duration presets
-- Parking history list labels
-- Error messages (e.g., "This vehicle already has an active parking session")
 
 ---
 
