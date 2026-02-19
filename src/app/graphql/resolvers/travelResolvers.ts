@@ -56,7 +56,12 @@ const resolvers = buildDefaultResolvers({
         if (!firstRecord && firstRecordId) {
           return context.gateways.expenseBaseGw
             .get(firstRecordId)
-            .then((item) => context.cores.expenseCore.processItemWithProfile(item));
+            .then(async (item) => {
+              const userProfile = await context.cores.expenseCore.getCurrentUserProfile();
+              const car = await context.gateways.carGw.get(item.carId);
+              const enriched = context.cores.expenseCore.processItemWithProfile(item, userProfile, car.mileageIn);
+              return enriched
+            });
         }
 
         return firstRecord ?? null;
@@ -67,7 +72,12 @@ const resolvers = buildDefaultResolvers({
         if (!lastRecord && lastRecordId) {
           return context.gateways.expenseBaseGw
             .get(lastRecordId)
-            .then((item) => context.cores.expenseCore.processItemWithProfile(item));
+            .then(async (item) => {
+              const userProfile = await context.cores.expenseCore.getCurrentUserProfile();
+              const car = await context.gateways.carGw.get(item.carId);
+              const enriched = context.cores.expenseCore.processItemWithProfile(item, userProfile, car.mileageIn);
+              return enriched
+            });
         }
 
         return lastRecord ?? null;
@@ -90,7 +100,14 @@ const resolvers = buildDefaultResolvers({
             },
           });
 
-          return records.map((record) => context.cores.expenseCore.processItemWithProfile(record));
+          if (records.length) {
+            const userProfile = await context.cores.expenseCore.getCurrentUserProfile();
+            const car = await context.gateways.carGw.get(records[0].carId);
+
+            return records.map((record) => context.cores.expenseCore.processItemWithProfile(record, userProfile, car.mileageIn));
+          }
+
+          return [];
         }
 
         return waypoints ?? [];
