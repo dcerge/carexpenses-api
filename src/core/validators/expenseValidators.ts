@@ -178,6 +178,10 @@ const rulesCreate = new Checkit({
   ],
   totalPrice: [
     {
+      rule: 'required',
+      message: 'Total price is required',
+    },
+    {
       rule: 'numeric',
       message: 'Total price should be a number',
     },

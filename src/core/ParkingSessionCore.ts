@@ -20,7 +20,7 @@ dayjs.extend(utc);
 const PARKING_EXPENSE_CATEGORY_ID = 8;
 
 /** Expense kind ID for "Parking" in the expense_kinds lookup table */
-const PARKING_EXPENSE_KIND_ID = 30;
+const PARKING_EXPENSE_KIND_ID = 306;
 
 // ===========================================================================
 // Interfaces
