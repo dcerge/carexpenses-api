@@ -55,6 +55,16 @@ const resolvers = buildDefaultResolvers({
       userEnded(parent, args, context) {
         return parent.endedBy ? { __typename: 'User', id: parent.endedBy } : null;
       },
+      async uploadedFile(parent, args, context) {
+        const { uploadedFileId } = parent || {};
+
+        return uploadedFileId
+          ? {
+            __typename: 'UploadedFile',
+            id: uploadedFileId,
+          }
+          : null;
+      },
     },
   },
 });

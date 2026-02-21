@@ -65,6 +65,9 @@ const typeDefs = `#graphql
     "User notes (e.g., Level 3, spot B12, next to the blue pillar)"
     notes: String
 
+    "Photo from the parking spot"
+    uploadedFile: UploadedFile
+
     # ==========================================================================
     # Linked expense
     # ==========================================================================
