@@ -999,6 +999,8 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 ## 22. Use API to fetch vehicle details by make, model and year - we need fuel tank details
 
+## 23. Trip Cost Calculator (Gas vs EV) for marketing website, maybe update existing one to support EV vehicles and have a comparison
+
 ## Priority Summary
 
 | #   | Feature                                   | Priority | Effort    | Key Dependencies                       |

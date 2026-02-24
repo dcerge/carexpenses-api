@@ -8,7 +8,7 @@ import {
 } from '@sdflc/backend-helpers';
 import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { rulesMultipleUuidInId, ruleStatus } from './commonRules';
-import { CAR_STATUSES } from 'boundary';
+import { CAR_STATUSES } from '../../boundary';
 
 const rulesList = new Checkit({
   ...rulesMultipleUuidInId(),
