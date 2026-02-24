@@ -1,3 +1,17 @@
+---- TESTING
+
+
+select "expense_bases"."id" from "carexpenses"."expense_bases" 
+inner join "carexpenses"."expenses" on "expenses"."id" = "expense_bases"."id" and "expenses"."tire_set_id" = '6950ad21-e2c1-4094-826e-7d9888d64d0c'
+ where "expense_bases"."status" in (100) 
+  and "expense_bases"."removed_at" is null 
+  and "account_id" in ('b6663f20-d05f-4461-9b09-e39141fb4488') 
+  and "car_id" in ('e0667f34-1fa2-4b20-b3f9-89b4ca369f1d') 
+  order by "when_done" desc
+
+
+----
+
 update ms_auth.account set status = 100 
 update ms_auth.user set status = 100, space_id = 'carexpenses'
 update carexpenses.cars set status = 100 where status = 10
@@ -106,12 +120,16 @@ select * from carexpenses.refuels r
 SELECT 
   eb.odometer,
   eb.trip_meter,
+  eb.fuel_in_tank,
+  r.is_full_tank,
   r.refuel_volume,
-  r.volume_entered_in
+  r.volume_entered_in,
+  eb.total_price,
+  eb.paid_in_currency 
 FROM carexpenses.expense_bases eb
 JOIN carexpenses.refuels r ON r.id = eb.id
-WHERE eb.car_id = '9df5c235-fddb-48af-809d-213b6e9b044f'
-ORDER BY eb.odometer;
+WHERE eb.car_id = '172e8894-dbbe-49a7-81d0-d9e1494d7d24'
+ORDER BY eb.when_done DESC;
 
 update carexpenses.travels set status = 200, is_active = false where status = 100
 
@@ -160,6 +178,11 @@ select apf.id, ap.plan_name, af.feature_code, af.feature_name, apf.feature_value
   where ap.plan_code = 'business'
   order by af.order_no asc 
 
+  
+
+  
+  
+  
 ---- DATA MIGRATION:
   
 

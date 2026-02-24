@@ -12,7 +12,7 @@ class CarGw extends BaseGateway {
     super({
       ...props,
       table: TABLES.CARS,
-      hasStatus: true,
+      hasStatus: false,
       hasVersion: true,
       hasLang: false,
       hasUserId: false,
@@ -54,6 +54,7 @@ class CarGw extends BaseGateway {
       searchKeyword,
       hasNoUploadedFileId,
       hasEntityAttachmentId,
+      status
     } = filterParams || {};
 
     await super.onListFilter(query, filterParams);
@@ -105,10 +106,14 @@ class CarGw extends BaseGateway {
     if (searchKeyword) {
       query.where(FIELDS.LABEL, 'ilike', `%${searchKeyword}%`);
     }
+
+    if (status) {
+      query.whereIn(FIELDS.STATUS, castArray(status));
+    }
   }
 
   async onUpdateFilter(query: any, whereParams: any): Promise<number> {
-    const { accountId, userId } = whereParams || {};
+    const { accountId, userId, status } = whereParams || {};
 
     let filtersAppliedQty = await super.onUpdateFilter(query, whereParams);
 
@@ -122,11 +127,16 @@ class CarGw extends BaseGateway {
       query.whereIn(FIELDS.USER_ID, castArray(userId));
     }
 
+    if (status) {
+      filtersAppliedQty++;
+      query.whereIn(FIELDS.STATUS, castArray(status));
+    }
+
     return filtersAppliedQty;
   }
 
   async onRemoveFilter(query: any, whereParams: any): Promise<number> {
-    const { accountId, userId } = whereParams || {};
+    const { accountId, userId, status } = whereParams || {};
 
     let filtersAppliedQty = await super.onRemoveFilter(query, whereParams);
 
@@ -138,6 +148,11 @@ class CarGw extends BaseGateway {
     if (userId != null) {
       filtersAppliedQty++;
       query.whereIn(FIELDS.USER_ID, castArray(userId));
+    }
+
+    if (status) {
+      filtersAppliedQty++;
+      query.whereIn(FIELDS.STATUS, castArray(status));
     }
 
     return filtersAppliedQty;

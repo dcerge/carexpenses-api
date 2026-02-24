@@ -8,6 +8,7 @@ import {
 } from '@sdflc/backend-helpers';
 import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { rulesMultipleUuidInId, ruleStatus } from './commonRules';
+import { CAR_STATUSES } from 'boundary';
 
 const rulesList = new Checkit({
   ...rulesMultipleUuidInId(),
@@ -402,7 +403,7 @@ const rulesCreate = new Checkit({
   ],
   // New tank fields
   ...rulesTankFields,
-  ...ruleStatus(),
+  ...ruleStatus(Object.values(CAR_STATUSES)),
 });
 
 const rulesUpdate = new Checkit({
@@ -635,7 +636,7 @@ const rulesUpdate = new Checkit({
   ],
   // New tank fields
   ...rulesTankFields,
-  ...ruleStatus(),
+  ...ruleStatus(Object.values(CAR_STATUSES)),
 });
 
 const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpdate?: boolean) => {

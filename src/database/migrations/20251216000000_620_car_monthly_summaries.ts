@@ -50,6 +50,7 @@ export const up = (knex: Knex) =>
     // Indexes
     table.index([FIELDS.ORIG_ID]);
     table.index([FIELDS.CAR_ID, FIELDS.HOME_CURRENCY]);
+    table.index([FIELDS.CAR_ID, FIELDS.YEAR, FIELDS.MONTH]);
 
     // Unique constraint: one summary per car/currency/year/month
     table.unique([FIELDS.CAR_ID, FIELDS.HOME_CURRENCY, FIELDS.YEAR, FIELDS.MONTH]);
