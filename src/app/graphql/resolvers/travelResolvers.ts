@@ -1,5 +1,6 @@
 import { buildDefaultResolvers } from '@sdflc/backend-helpers';
 import { EXPENSE_TYPES } from '../../../database';
+import { sortBy } from 'lodash';
 
 const resolvers = buildDefaultResolvers({
   prefix: 'travel',
@@ -93,7 +94,7 @@ const resolvers = buildDefaultResolvers({
               expenseType: EXPENSE_TYPES.TRAVEL_POINT,
             },
             params: {
-              sorting: [
+              sortBy: [
                 { name: 'whenDone', order: 'asc' },
                 { name: 'odometer', order: 'asc' },
               ],
