@@ -60,7 +60,7 @@ const resolvers = buildDefaultResolvers({
             .then(async (item) => {
               const userProfile = await context.cores.expenseCore.getCurrentUserProfile();
               const car = await context.gateways.carGw.get(item.carId);
-              const enriched = context.cores.expenseCore.processItemWithProfile(item, userProfile, car.mileageIn);
+              const enriched = context.cores.expenseCore.processItemWithProfile({ ...item }, userProfile, car.mileageIn);
               return enriched
             });
         }
@@ -76,7 +76,7 @@ const resolvers = buildDefaultResolvers({
             .then(async (item) => {
               const userProfile = await context.cores.expenseCore.getCurrentUserProfile();
               const car = await context.gateways.carGw.get(item.carId);
-              const enriched = context.cores.expenseCore.processItemWithProfile(item, userProfile, car.mileageIn);
+              const enriched = context.cores.expenseCore.processItemWithProfile({ ...item }, userProfile, car.mileageIn);
               return enriched
             });
         }
