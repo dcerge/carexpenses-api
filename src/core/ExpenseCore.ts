@@ -1029,6 +1029,15 @@ class ExpenseCore extends AppCore {
 
     const baseFields = this.extractBaseFields(convertedParams);
 
+    if ([EXPENSE_TYPES.CHECKPOINT, EXPENSE_TYPES.TRAVEL_POINT].includes(baseFields.expenseType)) {
+      baseFields.paidInCurrency = (await this.getCurrentUserProfile()).homeCurrency;
+    }
+
+    if (!baseFields.paidInCurrency) {
+      const result = new OpResult().setCode(OP_RESULT_CODES.VALIDATION_FAILED);
+      return result.addError('paidInCurrency', `Currency is required`);
+    }
+
     // Store data for afterCreate using requestId
     const requestId = this.getRequestId();
     this.updateData.set(`create-${requestId}`, {
@@ -1046,11 +1055,6 @@ class ExpenseCore extends AppCore {
       createdBy: userId,
       createdAt: this.now(),
     };
-
-    if (newExpenseBase.expenseType === EXPENSE_TYPES.CHECKPOINT || !newExpenseBase.paidInCurrency) {
-      const userProfile = await this.getCurrentUserProfile();
-      newExpenseBase.paidInCurrency = userProfile.homeCurrency;
-    }
 
     return newExpenseBase;
   }
@@ -1230,6 +1234,15 @@ class ExpenseCore extends AppCore {
 
 
     const baseFields = this.extractBaseFields(convertedParams);
+
+    if ([EXPENSE_TYPES.CHECKPOINT, EXPENSE_TYPES.TRAVEL_POINT].includes(baseFields.expenseType)) {
+      baseFields.paidInCurrency = (await this.getCurrentUserProfile()).homeCurrency;
+    }
+
+    if (!baseFields.paidInCurrency) {
+      const result = new OpResult().setCode(OP_RESULT_CODES.VALIDATION_FAILED);
+      return result.addError('paidInCurrency', `Currency is required`);
+    }
 
     baseFields.updatedBy = userId;
     baseFields.updatedAt = this.now();

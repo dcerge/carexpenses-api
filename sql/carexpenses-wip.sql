@@ -131,7 +131,19 @@ JOIN carexpenses.refuels r ON r.id = eb.id
 WHERE eb.car_id = '172e8894-dbbe-49a7-81d0-d9e1494d7d24'
 ORDER BY eb.when_done DESC;
 
+SELECT *
+FROM carexpenses.car_monthly_summaries
+WHERE car_id = 'e0667f34-1fa2-4b20-b3f9-89b4ca369f1d'
+  AND (year, month) IN ((2026, 1))
+ORDER BY year, month;
+
 update carexpenses.travels set status = 200, is_active = false where status = 100
+
+CREATE INDEX car_monthly_summaries_car_year_month_index 
+  ON carexpenses.car_monthly_summaries (car_id, year, month);
+
+CREATE INDEX car_monthly_summaries_car_year_month_index 
+  ON carexpenses.car_monthly_summaries (car_id, year, month);
 
 --------
 
