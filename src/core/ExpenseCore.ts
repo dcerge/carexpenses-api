@@ -1223,7 +1223,7 @@ class ExpenseCore extends AppCore {
     }
 
     // Don't allow changing accountId, userId, or expenseType
-    const { accountId: _, userId: __, expenseType: ___, uploadedFilesIds, tags, ...restParams } = params;
+    const { accountId: _, userId: __, expenseType, uploadedFilesIds, tags, ...restParams } = params;
 
     // Fetch car to get its mileageIn for odometer conversion
     const car = await this.fetchCar(expenseBase.carId);
@@ -1235,7 +1235,7 @@ class ExpenseCore extends AppCore {
 
     const baseFields = this.extractBaseFields(convertedParams);
 
-    if ([EXPENSE_TYPES.CHECKPOINT, EXPENSE_TYPES.TRAVEL_POINT].includes(baseFields.expenseType)) {
+    if ([EXPENSE_TYPES.CHECKPOINT, EXPENSE_TYPES.TRAVEL_POINT].includes(expenseType)) {
       baseFields.paidInCurrency = (await this.getCurrentUserProfile()).homeCurrency;
     }
 
