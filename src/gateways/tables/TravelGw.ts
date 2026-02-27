@@ -209,6 +209,56 @@ class TravelGw extends BaseGateway {
 
     return result?.rows?.[0]?.qty ? Number(result.rows[0].qty) : 0;
   }
+
+  /**
+   * Get recent unique travel purposes for the given cars.
+   * Deduplicates by normalized purpose, returning the most recent spelling.
+   * Results are sorted by most recently used first.
+   *
+   * Uses the partial index: travels_purpose_lookup_idx
+   * (account_id, car_id, purpose_normalized, first_dttm DESC)
+   * WHERE removed_at IS NULL AND purpose IS NOT NULL AND purpose != ''
+   *
+   * @param carIds Array of car IDs to search
+   * @param accountId Account ID for security filtering
+   * @param limit Max number of purposes to return
+   * @returns Array of { purpose: string } objects
+   */
+  async getRecentPurposes(
+    carIds: string[],
+    accountId: string,
+    limit: number = 10,
+  ): Promise<Array<{ purpose: string }>> {
+    if (!carIds || carIds.length === 0) {
+      return [];
+    }
+
+    const carPlaceholders = carIds.map(() => '?').join(', ');
+
+    const query = `
+      SELECT sub.purpose
+      FROM (
+        SELECT DISTINCT ON (LOWER(TRIM(t.purpose))) TRIM(t.purpose) AS purpose, t.first_dttm
+        FROM ${config.dbSchema}.${TABLES.TRAVELS} t
+        WHERE t.${FIELDS.CAR_ID} IN (${carPlaceholders})
+          AND t.${FIELDS.ACCOUNT_ID} = ?
+          AND t.${FIELDS.REMOVED_AT} IS NULL
+          AND t.${FIELDS.PURPOSE} IS NOT NULL
+          AND TRIM(t.${FIELDS.PURPOSE}) != ''
+        ORDER BY LOWER(TRIM(t.purpose)), t.first_dttm DESC
+      ) sub
+      ORDER BY sub.first_dttm DESC
+      LIMIT ?
+    `;
+
+    const bindings = [...carIds, accountId, limit];
+
+    const result = await this.getDb().runRawQuery(query, bindings);
+
+    return (result?.rows || []).map((row: any) => ({
+      purpose: row.purpose,
+    }));
+  }
 }
 
 export { TravelGw };

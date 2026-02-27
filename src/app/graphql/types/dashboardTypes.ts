@@ -35,6 +35,12 @@ const typeDefs = `#graphql
     consumption: Float
   }
 
+  type TravelPurpose {
+    "The purpose text (most recent spelling)"
+    purpose: String!
+  }
+
+
   # ===========================================================================
   # Unified stats type (currency-independent)
   # ===========================================================================
@@ -148,6 +154,8 @@ const typeDefs = `#graphql
     averages: DashboardAverages
     "Number of days remaining in the current month (based on user's timezone)"
     daysRemainingInMonth: Int
+    "Recent unique travel purposes across accessible cars, sorted by most recently used"
+    recentTravelPurposes: [TravelPurpose!]
   }
 
   type DashboardResult implements OpResult {

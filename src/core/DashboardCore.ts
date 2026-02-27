@@ -81,6 +81,10 @@ interface DashboardAverages {
   monthlyConsumption: number | null;
 }
 
+interface TravelPurpose {
+  purpose: string;
+}
+
 interface DashboardItem {
   carId: string;
   car: any | null;
@@ -92,6 +96,7 @@ interface DashboardItem {
   previousMonthMonetary: StatsMonetary[];
   averages: DashboardAverages;
   daysRemainingInMonth: number;
+  recentTravelPurposes: TravelPurpose[];
 }
 
 interface FleetSummary {
@@ -745,8 +750,10 @@ class DashboardCore extends AppCore {
           totalRowsByCarId.get(cid)!.push(row);
         }
 
+        const recentTravelPurposesCount = params.recentTravelPurposesCount ?? 10;
+
         // =====================================================================
-        // 6. Batch fetch monthly summaries (current + previous + avg window)
+        // 6a. Batch fetch monthly summaries (current + previous + avg window)
         // =====================================================================
 
         // Build year-month pairs: current + previous + last N for averages
@@ -787,6 +794,24 @@ class DashboardCore extends AppCore {
             periodMap.set(periodKey, []);
           }
           periodMap.get(periodKey)!.push(row);
+        }
+
+        // =====================================================================
+        // 6b. Fetch recent travel purposes (skip if no travels across all cars)
+        // =====================================================================
+
+        const totalTravelsAcrossAllCars = Array.from(totalRowsByCarId.values())
+          .flat()
+          .reduce((sum, row) => sum + num(row.totalTravelsCount), 0);
+
+        let recentTravelPurposes: TravelPurpose[] = [];
+
+        if (totalTravelsAcrossAllCars > 0 && recentTravelPurposesCount > 0) {
+          recentTravelPurposes = await this.getGateways().travelGw.getRecentPurposes(
+            carIds,
+            accountId,
+            recentTravelPurposesCount,
+          );
         }
 
         // =====================================================================
@@ -840,6 +865,7 @@ class DashboardCore extends AppCore {
             previousMonthMonetary,
             averages,
             daysRemainingInMonth,
+            recentTravelPurposes,
           });
         }
 

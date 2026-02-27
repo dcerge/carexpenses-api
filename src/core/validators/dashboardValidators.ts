@@ -38,6 +38,20 @@ const rulesGet = new Checkit({
       message: 'Include breakdowns should be a boolean',
     },
   ],
+  recentTravelPurposesCount: [
+    {
+      rule: 'integer',
+      message: 'Recent travel purposes count should be an integer',
+    },
+    {
+      rule: 'greaterThanEqualTo:0',
+      message: 'Recent travel purposes count should be at least 0',
+    },
+    {
+      rule: 'lessThanEqualTo:50',
+      message: 'Recent travel purposes count should be at most 50',
+    },
+  ],
 });
 
 const validateGet = async (args: any, opt: BaseCoreActionsInterface) => {
@@ -120,7 +134,7 @@ const rulesGetFleetSummary = new Checkit({
       rule: 'integer',
       message: 'Timezone offset should be an integer',
     },
-  ],
+  ]
 });
 
 const validateGetFleetSummary = async (args: any, opt: BaseCoreActionsInterface) => {

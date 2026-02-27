@@ -457,7 +457,9 @@ class ExpenseCore extends AppCore {
 
       // Price per unit (handles all fuel types correctly now)
       if (processed.refuelVolumeDisplay && processed.refuelVolumeDisplay > 0) {
-        processed.pricePerVolume = processed.totalPrice / processed.refuelVolumeDisplay;
+        // in case we paid in foreign currency and then entered price home currency 
+        // then use price in home currency to calculated price per volume
+        processed.pricePerVolume = (processed.totalPriceInHc ?? processed.totalPrice) / processed.refuelVolumeDisplay;
       } else {
         processed.pricePerVolume = null;
       }
@@ -502,10 +504,15 @@ class ExpenseCore extends AppCore {
     // Convert refuel volume from the unit it was entered in (volumeEnteredIn) to metric (liters)
     // volumeEnteredIn tells us what unit the user used when entering the value
     if (converted.refuelVolume !== undefined && converted.refuelVolume !== null) {
+      this.logger.debug('=== CP1:', { volume: converted.refuelVolume, volumeIn: converted.volumeEnteredIn });
       const userProfile = await this.getCurrentUserProfile();
       const volumeUnit = converted.volumeEnteredIn || userProfile.volumeIn;
       converted.refuelVolume = toMetricVolume(converted.refuelVolume, volumeUnit);
+      this.logger.debug('=== CP2:', { volume: converted.refuelVolume, volumeIn: volumeUnit });
+
     }
+
+    this.logger.debug('=== CP3:', converted);
 
     return converted;
   }
