@@ -153,6 +153,26 @@ const rulesCreate = new Checkit({
       message: 'Issuing authority should not exceed 128 characters',
     },
   ],
+  phone: [
+    {
+      rule: 'string',
+      message: 'Phone should be a string',
+    },
+    {
+      rule: 'maxLength:64',
+      message: 'Phone should not exceed 64 characters',
+    },
+  ],
+  website: [
+    {
+      rule: 'string',
+      message: 'Website should be a string',
+    },
+    {
+      rule: 'maxLength:256',
+      message: 'Website should not exceed 256 characters',
+    },
+  ],
   cost: [
     {
       rule: 'numeric',
@@ -271,6 +291,26 @@ const rulesUpdate = new Checkit({
     {
       rule: 'maxLength:128',
       message: 'Issuing authority should not exceed 128 characters',
+    },
+  ],
+  phone: [
+    {
+      rule: 'string',
+      message: 'Phone should be a string',
+    },
+    {
+      rule: 'maxLength:64',
+      message: 'Phone should not exceed 64 characters',
+    },
+  ],
+  website: [
+    {
+      rule: 'string',
+      message: 'Website should be a string',
+    },
+    {
+      rule: 'maxLength:256',
+      message: 'Website should not exceed 256 characters',
     },
   ],
   cost: [

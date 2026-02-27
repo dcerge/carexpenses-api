@@ -437,6 +437,8 @@ export const FIELDS = {
   HAS_ISSUING_AUTHORITY: 'has_issuing_authority',
   HAS_COST: 'has_cost',
   HAS_COVERAGE_AMOUNT: 'has_coverage_amount',
+  HAS_PHONE: 'has_phone',
+  HAS_WEBSITE: 'has_website',
   DOCUMENT_NUMBER_LABEL_KEY: 'document_number_label_key',
   DOCUMENT_NUMBER_LABEL: 'document_number_label',
   DOCUMENT_NUMBER: 'document_number',
@@ -453,6 +455,7 @@ export const FIELDS = {
   NOTES: 'notes',
   IS_PRIMARY: 'is_primary',
   VEHICLE_ID: 'vehicle_id',
+  PHONE: 'phone',
 
   // ---------------------------------------------------------------------------
   // Revenue Tracking Fields

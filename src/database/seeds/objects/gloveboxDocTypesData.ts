@@ -25,6 +25,8 @@ export interface GloveboxDocTypeData {
   hasCost?: boolean;
   hasCoverageAmount?: boolean;
   hasInspectionDate?: boolean;
+  hasPhone?: boolean;
+  hasWebsite?: boolean;
   documentNumberLabelKey?: string;
   langs: {
     en: GloveboxDocTypeLang;
@@ -48,6 +50,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'registrationNumber',
     langs: {
       en: {
@@ -82,6 +85,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasIssuingAuthority: true,
     hasCost: true,
     hasCoverageAmount: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'policyNumber',
     langs: {
       en: {
@@ -114,6 +119,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasEffectiveDate: true,
     hasExpiration: true,
     hasIssuingAuthority: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'policyNumber',
     langs: {
       en: {
@@ -178,6 +185,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'inspectionNumber',
     langs: {
       en: {
@@ -211,6 +219,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'testNumber',
     langs: {
       en: {
@@ -245,6 +254,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCoverageAmount: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'warrantyNumber',
     langs: {
       en: {
@@ -280,6 +291,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasIssuingAuthority: true,
     hasCost: true,
     hasCoverageAmount: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'warrantyNumber',
     langs: {
       en: {
@@ -376,6 +389,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'loanNumber',
     langs: {
       en: {
@@ -410,6 +425,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'leaseNumber',
     langs: {
       en: {
@@ -443,6 +460,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'membershipNumber',
     langs: {
       en: {
@@ -477,6 +496,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'permitNumber',
     langs: {
       en: {
@@ -508,6 +528,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasDocumentNumber: true,
     hasIssueDate: true,
     hasIssuingAuthority: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'transponderNumber',
     langs: {
       en: {
@@ -605,6 +627,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'vignetteNumber',
     langs: {
       en: {
@@ -637,6 +660,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasIssueDate: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'stickerNumber',
     langs: {
       en: {
@@ -674,6 +698,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'licenseNumber',
     langs: {
       en: {
@@ -707,6 +732,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'permitNumber',
     langs: {
       en: {
@@ -740,6 +766,7 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'licenseNumber',
     langs: {
       en: {
@@ -905,6 +932,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasExpiration: true,
     hasIssuingAuthority: true,
     hasCost: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'licenseNumber',
     langs: {
       en: {
@@ -1325,6 +1354,8 @@ export const gloveboxDocTypes: GloveboxDocTypeData[] = [
     hasCost: true,
     hasCoverageAmount: true,
     hasInspectionDate: true,
+    hasPhone: true,
+    hasWebsite: true,
     documentNumberLabelKey: 'documentNumber',
     langs: {
       en: {

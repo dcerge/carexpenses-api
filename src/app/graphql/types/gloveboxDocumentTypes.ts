@@ -19,6 +19,8 @@ const typeDefs = `#graphql
     expiresAt: String
     inspectedAt: String
     issuingAuthority: String
+    phone: String
+    website: String
     
     # Financial fields
     cost: Float
@@ -92,6 +94,8 @@ const typeDefs = `#graphql
     expiresAt: String
     inspectedAt: String
     issuingAuthority: String
+    phone: String
+    website: String
     cost: Float
     costCurrency: String
     coverageAmount: Float
