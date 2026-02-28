@@ -36,7 +36,7 @@ class ExpenseGw extends BaseGateway {
   }
 
   async onListFilter(query: any, filterParams: any) {
-    const { id, kindId, accountId, tireSetId } = filterParams || {};
+    const { id, kindId, accountId, tireSetId, travelId, savedPlaceId, hasOdometer, hasFuelInTank, fuelInTank, hasWeather, hasCoordinates } = filterParams || {};
     const self = this;
 
     await super.onListFilter(query, filterParams);
@@ -51,6 +51,50 @@ class ExpenseGw extends BaseGateway {
 
     if (tireSetId) {
       query.whereIn(FIELDS.TIRE_SET_ID, castArray(tireSetId));
+    }
+
+    if (travelId) {
+      query.whereIn(FIELDS.TRAVEL_ID, castArray(travelId));
+    }
+
+    if (savedPlaceId) {
+      query.whereIn(FIELDS.SAVED_PLACE_ID, castArray(savedPlaceId));
+    }
+
+    if (fuelInTank) {
+      query.whereIn(FIELDS.FUEL_IN_TANK, castArray(fuelInTank));
+    }
+
+    if (hasOdometer != null) {
+      if (hasOdometer) {
+        query.whereNotNull(FIELDS.ODOMETER);
+      } else {
+        query.whereNull(FIELDS.ODOMETER);
+      }
+    }
+
+    if (hasFuelInTank != null) {
+      if (hasFuelInTank) {
+        query.whereNotNull(FIELDS.FUEL_IN_TANK);
+      } else {
+        query.whereNull(FIELDS.FUEL_IN_TANK);
+      }
+    }
+
+    if (hasWeather != null) {
+      if (hasWeather) {
+        query.whereNotNull(FIELDS.WEATHER_TEMP_C);
+      } else {
+        query.whereNull(FIELDS.WEATHER_TEMP_C);
+      }
+    }
+
+    if (hasCoordinates != null) {
+      if (hasCoordinates) {
+        query.whereNotNull(FIELDS.LONGITUDE);
+      } else {
+        query.whereNull(FIELDS.LONGITUDE);
+      }
     }
 
     // Security filter through expense_bases join

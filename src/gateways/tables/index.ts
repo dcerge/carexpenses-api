@@ -58,3 +58,5 @@ export * from './TireSetItemGw';
 
 export * from './VehicleTaskGw';
 export * from './ParkingSessionGw';
+
+export * from './SavedPlaceGw';

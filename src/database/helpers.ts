@@ -130,6 +130,8 @@ export const TABLES = {
   VEHICLE_TASKS: 'vehicle_tasks',
 
   PARKING_SESSIONS: 'parking_sessions',
+
+  SAVED_PLACES: 'saved_places',
 };
 
 // =============================================================================
@@ -671,6 +673,16 @@ export const FIELDS = {
   FORMATTED_ADDRESS: 'formatted_address',
   STARTED_BY: 'started_by',
   ENDED_BY: 'ended_by',
+
+  // ---------------------------------------------------------------------------
+  // Saved Placed Fields
+  // ---------------------------------------------------------------------------
+  PLACE_TYPE: 'place_type',
+  IS_PRIVATE: 'is_private',
+  RADIUS_M: 'radius_m',
+  USE_COUNT: 'use_count',
+  LAST_USED_AT: 'last_used_at',
+  SAVED_PLACE_ID: 'saved_place_id',
 };
 
 // =============================================================================
@@ -1013,4 +1025,15 @@ export const VEHICLE_TASK_PRIORITY = {
 export const PARKING_SESSION_STATUS = {
   ACTIVE: 100,       // Session in progress
   COMPLETED: 200,    // Session ended
+} as const;
+
+
+export const PLACE_TYPES = {
+  HOME: 'home',
+  OFFICE: 'office',
+  CLIENT: 'client',
+  GAS_STATION: 'gas_station',
+  MECHANIC: 'mechanic',
+  STORE: 'store',
+  OTHER: 'other',
 } as const;

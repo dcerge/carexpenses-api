@@ -45,6 +45,17 @@ const resolvers = buildDefaultResolvers({
 
         return travel ?? null;
       },
+      async savedPlace(parent, args, context) {
+        const { savedPlace, savedPlaceId } = parent || {};
+
+        if (!savedPlace && savedPlaceId) {
+          return context.gateways.savedPlaceGw
+            .get(savedPlaceId)
+            .then((item) => context.cores.savedPlaceCore.processItemOnOut(item));
+        }
+
+        return savedPlace ?? null;
+      },
       async expenseKind(parent, args, context) {
         const { expenseKind, kindId, expenseType } = parent || {};
 

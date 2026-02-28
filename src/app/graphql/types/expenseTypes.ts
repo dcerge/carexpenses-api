@@ -41,6 +41,8 @@ const typeDefs = `#graphql
     location: String
     "Place name (gas station, service center, etc.)"
     whereDone: String
+    "Reference to a saved place - it has name, whereDone and location (address)"
+    savedPlaceId: ID
     "Subtotal before tax and fees"
     subtotal: Float
     "Tax amount"
@@ -223,6 +225,8 @@ const typeDefs = `#graphql
     tags: [ExpenseTag]
     "Associaated tire set"
     tireSet: TireSet
+    "Saved place - it has name, business name, address and other information about the place"
+    savedPlace: SavedPlace
   }
 
   type ExpenseResult implements OpResult {
@@ -245,8 +249,11 @@ const typeDefs = `#graphql
     "Odometer in car's mileageIn units"
     odometer: Float
     whenDone: String
+    "Location/address (legacy field - use structured address fields instead)"
     location: String
     whereDone: String
+    "Reference to a saved place - it has name, whereDone and location (address)"
+    savedPlaceId: ID
     subtotal: Float
     tax: Float
     fees: Float
@@ -259,6 +266,10 @@ const typeDefs = `#graphql
     fuelInTank: Float
     "Reference to a travel the record is associated with"
     travelId: ID
+    "Save the place. If true then use whereDone, location, address1, address2 and other address related fields to create a record in saved placed and use its reference"
+    savePlace: Boolean
+    "If true then try to lookup a saved place by coordinates and use its ID as savedPlaceId and fill out whereDone, location, address1 and other places"
+    lookupSavedPlaceByCoordinates: Boolean
     
     # ==========================================================================
     # Address fields
@@ -364,6 +375,8 @@ const typeDefs = `#graphql
     whenDoneFrom: String
     whenDoneTo: String
     
+    savedPlaceId: [ID]
+
     # Location filters
     "Filter by city"
     city: [String]

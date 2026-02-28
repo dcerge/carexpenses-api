@@ -164,6 +164,11 @@ const typeDefs = `#graphql
     firstRecord: ExpenseInput
     "First waypoint information like odometer, place and location. Used only when you close a trip or when user enters past trips details"
     lastRecord: ExpenseInput
+
+    "Save the place. If true then use whereDone, location, address1, address2 and other address related fields to create a record in saved placed and use its reference"
+    savePlace: Boolean
+    "If true then try to lookup a saved place by coordinates and use its ID as savedPlaceId and fill out whereDone, location, address1 and other places"
+    lookupSavedPlaceByCoordinates: Boolean
   }
 
   input TravelFilter {

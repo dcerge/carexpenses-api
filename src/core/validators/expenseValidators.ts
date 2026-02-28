@@ -44,6 +44,12 @@ const rulesList = new Checkit({
       message: 'Travel IDs should be an array of UUIDs',
     },
   ],
+  savedPlaceId: [
+    {
+      rule: 'array',
+      message: 'References to saved places should be an array of UUIDs',
+    },
+  ],
   pointType: [
     {
       rule: 'array',
@@ -228,6 +234,12 @@ const rulesCreate = new Checkit({
     {
       rule: 'uuid',
       message: 'Travel ID should be a valid UUID',
+    },
+  ],
+  savedPlaceId: [
+    {
+      rule: 'uuid',
+      message: 'Reference to a saved place should be a valid UUID',
     },
   ],
   // Travel Point-specific fields (expenseType = 4)
@@ -467,6 +479,12 @@ const rulesUpdate = new Checkit({
       message: 'Travel ID should be a valid UUID',
     },
   ],
+  savedPlaceId: [
+    {
+      rule: 'uuid',
+      message: 'Reference to a saved place should be a valid UUID',
+    },
+  ],
   // Travel Point-specific fields (expenseType = 4)
   pointType: [
     {
@@ -585,7 +603,7 @@ const rulesUpdate = new Checkit({
 });
 
 const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpdate?: boolean) => {
-  const { carId, travelId, pointType, expenseType, tags } = args?.params || {};
+  const { carId, travelId, savedPlaceId, pointType, expenseType, tags } = args?.params || {};
   const { accountId } = opt.core.getContext();
 
   const dependencies = {};
@@ -616,6 +634,20 @@ const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpd
     }
 
     dependencies['travel'] = travel;
+  }
+
+  if (savedPlaceId) {
+    const savedPlace = await opt.core.getGateways().savedPlaceGw.get(savedPlaceId);
+
+    if (!savedPlace) {
+      return [new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError('savedPlaceId', 'Saved place not found'), {}];
+    }
+
+    if (savedPlace.accountId !== accountId) {
+      return [new OpResult({ code: OP_RESULT_CODES.VALIDATION_FAILED }).addError('savedPlaceId', 'Saved place not found'), {}];
+    }
+
+    dependencies['savedPlace'] = savedPlace;
   }
 
   // Validate pointType only for travel points (expenseType = 4)
