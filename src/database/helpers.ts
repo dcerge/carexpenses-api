@@ -1031,6 +1031,11 @@ export const PARKING_SESSION_STATUS = {
 export const PLACE_TYPES = {
   HOME: 'home',
   OFFICE: 'office',
+  HQ: 'hq',
+  BRANCH: 'branch',
+  POS: 'pos',
+  WAREHOUSE: 'warehouse',
+  WHOLESALE: 'wholesale',
   CLIENT: 'client',
   GAS_STATION: 'gas_station',
   MECHANIC: 'mechanic',

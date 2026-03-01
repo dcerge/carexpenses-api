@@ -993,102 +993,30 @@ High implementation complexity, requires the Capacitor wrapper, and only serves 
 
 ---
 
-## 20. Add fuel based cost of each travel based on driven distance, recent car consumption and recent car costs
+## Unprocessed features
 
-## 21. Add fuel based cost per distance for a trip
+### Travels
 
-## 22. Use API to fetch vehicle details by make, model and year - we need fuel tank details
+- Let user save locations by name and coordinates
+- Let the app automatically detect saved location name by current coordinates (around some radius)
 
-## 23. Trip Cost Calculator (Gas vs EV) for marketing website, maybe update existing one to support EV vehicles and have a comparison
+### Travel reporting
 
-## Priority Summary
+- Add fuel based cost of each travel based on driven distance, recent car consumption and recent car costs
+- Add fuel based cost per distance for a travel
 
-| #   | Feature                                   | Priority | Effort    | Key Dependencies                       |
-| --- | ----------------------------------------- | -------- | --------- | -------------------------------------- |
-| 1   | **Country-Specific Equipment Prompts**    | **P1**   | 1–2 days  | Existing Glovebox system               |
-| 2   | **Vehicle Tasks**                         | **P1**   | 2–3 days  | DONE                                   |
-| 3   | **Tire Tracking**                         | **P1**   | 2–3 days  | DONE                                   |
-| 4   | **Loan/Lease Tracking**                   | **P1**   | 3–4 days  | DONE                                   |
-| 5   | Recurring Revenues                        | **P2**   | 1–2 days  | Existing scheduled expenses system     |
-| 6   | Revenue Reports                           | **P2**   | 2–3 days  | Existing data + Recharts               |
-| 7   | Data Import                               | **P2**   | 3–5 days  | CSV parsers per competitor format      |
-| 8   | Monthly Budget Estimator                  | **P2**   | 2–3 days  | 3+ months of historical data           |
-| 9   | User Location → Regional Links            | **P2**   | 2–3 days  | Manual seed data per region            |
-| 10  | Service Providers Directory               | **P2**   | 2–3 days  | Google Places API (existing)           |
-| 11  | Checklists                                | **P2**   | 3–4 days  | Existing attachment system             |
-| 12  | Voice Input + Voice Memos                 | **P2**   | 3–4 days  | MediaRecorder API + Whisper + LLM      |
-| 13  | Receipt Scanning                          | **P2**   | 3–5 days  | DONE                                   |
-| 14  | Native App Wrapper (Capacitor)            | **P3**   | 3–5 days  | Capacitor + Xcode/Android Studio       |
-| 15  | Real-Time Travel Tracking + Time Tracking | **P3**   | 5–7 days  | Feature #16 (Capacitor)                |
-| 16  | Map Visualization                         | **P3**   | 3–5 days  | Google Maps or Mapbox API              |
-| 17  | Nearby Gas Stations                       | **P3**   | 3–5 days  | Google Places API + fuel price sources |
-| 18  | AI Troubleshooting Chatbot                | **P4**   | 5–7 days+ | LLM API + data curation (ongoing)      |
-| 19  | OBD-II Integration                        | **P4**   | 5–7 days  | Feature #16 (Capacitor) + BT adapter   |
+### Vehicle management
 
----
+- Use API to fetch vehicle details by make, model and year - we need fuel tank details
 
-## Implementation Phases
+### Marketing website
 
-### Phase 1 — Core Value for Everyone (~2–3 weeks)
+- Trip Cost Calculator (Gas vs EV) for marketing website, maybe update existing one to support EV vehicles and have a comparison
 
-**Goal**: Make CarExpenses compelling for regular car owners and multi-vehicle families — the largest audience segments. All features work in the existing PWA with no new infrastructure.
+### Parts
 
-| Order | Feature                      | Effort   | Rationale |
-| ----- | ---------------------------- | -------- | --------- |
-| 1     | Vehicle Equipment (Glovebox) | 1–2 days | DONE      |
-| 2     | Vehicle Tasks                | 2–3 days | DONE      |
-| 3     | Tire Tracking                | 2–3 days | DONE      |
-| 4     | Loan/Lease Tracking          | 3–4 days | DONE      |
+- Add a page where user can manage purchased parts - to know what they have in the garage, link to expense (multiple parts to the same expense in case they've purchased in bulk), maybe have expiration date, part #, etc
 
-**Total: ~12–16 days**
+### Vehicle management ??
 
-### Phase 2 — Growth & Gig Worker Support (~3–4 weeks)
-
-**Goal**: Round out the feature set for gig workers, add polish that helps with competitor switching, and increase data value.
-
-| Order | Feature                        | Effort   | Rationale                          |
-| ----- | ------------------------------ | -------- | ---------------------------------- |
-| 5     | Recurring Revenues             | 1–2 days | Enables revenue reports            |
-| 6     | Revenue Reports                | 2–3 days | Key for gig workers                |
-| 7     | Data Import                    | 3–5 days | Removes switching barrier          |
-| 8     | Monthly Budget Estimator       | 2–3 days | Forward-looking value              |
-| 9     | User Location / Regional Links | 2–3 days | Contextual intelligence            |
-| 10    | Service Providers Directory    | 2–3 days | Value builds over time             |
-| 11    | Checklists                     | 3–4 days | Fleet/road-trip value              |
-| 12    | Voice Input + Voice Memos      | 3–4 days | Differentiator, good for marketing |
-| 13    | Receipt Scanning               | 3–5 days | DONE                               |
-
-**Total: ~22–32 days**
-
-### Phase 3 — Platform Expansion (~3–4 weeks)
-
-**Goal**: Build the native app and ship features that require it. Time tracking and real-time tracking ship together as a cohesive "live travel" feature.
-
-| Order | Feature                                   | Effort   | Rationale                              |
-| ----- | ----------------------------------------- | -------- | -------------------------------------- |
-| 14    | Native App Wrapper (Capacitor)            | 3–5 days | Foundation for native features         |
-| 15    | Real-Time Travel Tracking + Time Tracking | 5–7 days | Requires Capacitor, huge for fleet/gig |
-| 16    | Map Visualization                         | 3–5 days | Marketing value, power users           |
-| 17    | Nearby Gas Stations                       | 3–5 days | Station finder first, prices later     |
-
-**Total: ~14–22 days**
-
-### Phase 4 — Advanced / Niche (Ongoing)
-
-**Goal**: Power-user features that require significant infrastructure or serve smaller segments.
-
-| Feature                    | Effort    | Notes                                |
-| -------------------------- | --------- | ------------------------------------ |
-| AI Troubleshooting Chatbot | 5–7 days+ | Defer until user base justifies cost |
-| OBD-II Integration         | 5–7 days  | Power users only, requires hardware  |
-
----
-
-## What This Roadmap Optimizes For
-
-1. **Widest audience first**: Phase 1 features benefit every car owner, not just gig workers or fleets
-2. **Multi-user advantage**: Viewer Role, Tasks, and Tire Tracking all shine in shared accounts
-3. **PWA-first**: Phases 1 and 2 require no native app infrastructure
-4. **Coherent feature bundles**: Time tracking ships with live tracking; revenue features ship together
-5. **Marketing momentum**: Each phase delivers something demo-worthy for App Store launch
-6. **Competitive positioning**: Data import and multi-user features directly address Fuelio/Drivvo gaps
+- Let user create a page for their vehicle. User can decide if they want to show only stats, or provide also maintenance records, maybe repairs, maybe publish selling price, have contact form. Could be a good for those who plan to sell the car.

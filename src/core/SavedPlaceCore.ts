@@ -393,10 +393,17 @@ class SavedPlaceCore extends AppCore {
           accountId,
           latitude,
           longitude,
-          radiusM,
+          radiusM: radiusM || 150,
         };
 
-        const items = await this.getGateways().savedPlaceGw.list(listFilter);
+        const items = await this.getGateways().savedPlaceGw.list({
+          filter: listFilter,
+          params: {
+            pagination: {
+              pageSize: 5
+            }
+          }
+        });
 
         if (!Array.isArray(items) || items.length === 0) {
           return OpResult.ok([]);

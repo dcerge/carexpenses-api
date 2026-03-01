@@ -21,7 +21,7 @@ const resolvers = buildDefaultResolvers({
     },
   },
   query: {
-    async savedPlacesListByProximity(parent, args, context) {
+    async savedPlaceListByProximity(parent, args, context) {
       const { proximity, filter } = args || {};
       return context.cores.savedPlaceCore.listByProximity({ proximity, filter });
     },
