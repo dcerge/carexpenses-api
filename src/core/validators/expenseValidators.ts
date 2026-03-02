@@ -7,10 +7,11 @@ import {
 } from '@sdflc/backend-helpers';
 import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { rulesMultipleUuidInId, ruleStatus } from './commonRules';
-import { POINT_TYPES } from '../../database';
+import { PLACE_TYPES } from '../../database';
 
 // Valid point types for travel waypoints (expenseType = 4)
-const validPointTypes = Object.values(POINT_TYPES);
+// 
+const validPointTypes = Object.values(PLACE_TYPES);
 
 const rulesList = new Checkit({
   ...rulesMultipleUuidInId(),

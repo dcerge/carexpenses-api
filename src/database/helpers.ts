@@ -701,6 +701,7 @@ export const TRAVEL_TYPES = {
 // POINT TYPES (for travel waypoints)
 // =============================================================================
 
+// Obsolete. Instead use the PLACE_TYPES from saved places
 export const POINT_TYPES = {
   HOME: 'home',
   OFFICE: 'office',
