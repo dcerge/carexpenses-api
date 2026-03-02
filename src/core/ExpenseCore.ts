@@ -37,6 +37,7 @@ interface ExpenseUpdateData {
   tags: string[];
   oldExpenseBase?: any; // Store old expense for stats delta calculation
   oldExtension?: any; // Store old extension data (refuel or expense)
+  resolvedByFlags?: boolean; // Whether resolveSavedPlace already handled the saved place
 }
 
 interface DerivedRefuelFields {
@@ -1025,7 +1026,7 @@ class ExpenseCore extends AppCore {
       return OpResult.fail(OP_RESULT_CODES.NOT_FOUND, {}, `You do not have permission to create ${this.getExepnseTypeName(params.expenseType)} for the vehicle`);
     }
 
-    const { uploadedFilesIds, tags, ...restParams } = params;
+    const { uploadedFilesIds, tags, savePlace, lookupSavedPlaceByCoordinates, ...restParams } = params;
 
     // Fetch car to get its mileageIn for odometer conversion
     const car = await this.fetchCar(restParams.carId);
@@ -1033,6 +1034,19 @@ class ExpenseCore extends AppCore {
 
     // Convert input units to metric (odometer uses car's mileageIn, volume uses user's preference)
     const convertedParams = await this.convertInputToMetric(restParams, carMileageIn);
+
+    // Resolve saved place (savePlace / lookupSavedPlaceByCoordinates)
+    const placeType = convertedParams.expenseType === EXPENSE_TYPES.REFUEL
+      ? 'gas_station'
+      : convertedParams.expenseType === EXPENSE_TYPES.REVENUE
+        ? 'other'
+        : 'service';
+
+    await this.resolveSavedPlace(convertedParams, {
+      savePlace,
+      lookupSavedPlaceByCoordinates,
+      placeType,
+    });
 
     const baseFields = this.extractBaseFields(convertedParams);
 
@@ -1053,6 +1067,7 @@ class ExpenseCore extends AppCore {
       extensionParams: convertedParams,
       uploadedFilesIds,
       tags,
+      resolvedByFlags: !!(params.savePlace || params.lookupSavedPlaceByCoordinates),
     });
 
     const newExpenseBase = {
@@ -1138,6 +1153,12 @@ class ExpenseCore extends AppCore {
         expenseBase.latitude,
         expenseBase.longitude,
         expenseBase.whenDone
+      );
+
+      // Touch saved place if resolveSavedPlace didn't handle it
+      await this.touchSavedPlaceOnCreate(
+        expenseBase.savedPlaceId,
+        createInfo?.resolvedByFlags ?? false,
       );
 
       this.getGateways().carTotalExpenseGw.clear(expenseBase.carId);
@@ -1230,7 +1251,7 @@ class ExpenseCore extends AppCore {
     }
 
     // Don't allow changing accountId, userId, or expenseType
-    const { accountId: _, userId: __, expenseType, uploadedFilesIds, tags, ...restParams } = params;
+    const { accountId: _, userId: __, expenseType, uploadedFilesIds, tags, savePlace, lookupSavedPlaceByCoordinates, ...restParams } = params;
 
     // Fetch car to get its mileageIn for odometer conversion
     const car = await this.fetchCar(expenseBase.carId);
@@ -1239,6 +1260,18 @@ class ExpenseCore extends AppCore {
     // Convert input units to metric (odometer uses car's mileageIn, volume uses user's preference)
     const convertedParams = await this.convertInputToMetric(restParams, carMileageIn);
 
+    // Resolve saved place (savePlace / lookupSavedPlaceByCoordinates)
+    const placeType = expenseBase.expenseType === EXPENSE_TYPES.REFUEL
+      ? 'gas_station'
+      : expenseBase.expenseType === EXPENSE_TYPES.REVENUE
+        ? 'other'
+        : 'service';
+
+    await this.resolveSavedPlace(convertedParams, {
+      savePlace,
+      lookupSavedPlaceByCoordinates,
+      placeType,
+    });
 
     const baseFields = this.extractBaseFields(convertedParams);
 
@@ -1267,6 +1300,7 @@ class ExpenseCore extends AppCore {
       tags,
       oldExpenseBase: expenseBase, // Store for stats delta
       oldExtension, // Store for stats delta
+      resolvedByFlags: !!(savePlace || lookupSavedPlaceByCoordinates),
     });
 
     return baseFields;
@@ -1411,6 +1445,13 @@ class ExpenseCore extends AppCore {
           item.whenDone
         );
       }
+
+      // Sync saved place usage counters
+      await this.syncSavedPlaceUsageOnUpdate(
+        oldExpenseBase?.savedPlaceId,
+        item.savedPlaceId,
+        updateInfo.resolvedByFlags ?? false,
+      );
 
       // Clean up stored data
       this.updateData.delete(`update-${requestId}-${item.id}`);

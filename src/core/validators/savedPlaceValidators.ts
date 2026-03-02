@@ -428,7 +428,13 @@ const checkDependencies = async (args: any, opt: BaseCoreActionsInterface, isUpd
       searchKeyword: normalizedName,
     };
 
-    const existingPlaces = await opt.core.getGateways().savedPlaceGw.list(existingFilter);
+    const existingPlaces = await opt.core.getGateways().savedPlaceGw.list({
+      filter: existingFilter,
+      params: {
+        pageSize: 1
+      }
+    });
+
     const duplicate = existingPlaces?.find((place: any) => {
       if (isUpdate && place.id === args?.where?.id) {
         return false;

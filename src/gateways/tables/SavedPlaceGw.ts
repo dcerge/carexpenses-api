@@ -189,6 +189,45 @@ class SavedPlaceGw extends BaseGateway {
 
     return result?.rows?.[0]?.qty ? Number(result.rows[0].qty) : 0;
   }
+
+  /**
+   * Atomically increment use_count and update last_used_at for a saved place.
+   * Also sets updated_by and updated_at.
+   *
+   * @param id The saved place ID
+   * @param accountId Account ID for security filtering
+   * @param userId User ID to set as updated_by
+   */
+  async touch(id: string, accountId: string, userId: string): Promise<void> {
+    await this.getDb().runRawQuery(
+      `UPDATE ${config.dbSchema}.${TABLES.SAVED_PLACES} 
+       SET ${FIELDS.USE_COUNT} = COALESCE(${FIELDS.USE_COUNT}, 0) + 1, 
+           ${FIELDS.LAST_USED_AT} = NOW(),
+           ${FIELDS.UPDATED_BY} = ?,
+           ${FIELDS.UPDATED_AT} = NOW()
+       WHERE ${FIELDS.ID} = ? AND ${FIELDS.ACCOUNT_ID} = ? AND ${FIELDS.REMOVED_AT} IS NULL`,
+      [userId, id, accountId],
+    );
+  }
+
+  /**
+   * Atomically decrement use_count on a saved place (minimum 0).
+   * Also sets updated_by and updated_at.
+   *
+   * @param id The saved place ID
+   * @param accountId Account ID for security filtering
+   * @param userId User ID to set as updated_by
+   */
+  async decrementUsage(id: string, accountId: string, userId: string): Promise<void> {
+    await this.getDb().runRawQuery(
+      `UPDATE ${config.dbSchema}.${TABLES.SAVED_PLACES} 
+       SET ${FIELDS.USE_COUNT} = GREATEST(COALESCE(${FIELDS.USE_COUNT}, 0) - 1, 0), 
+           ${FIELDS.UPDATED_BY} = ?,
+           ${FIELDS.UPDATED_AT} = NOW()
+       WHERE ${FIELDS.ID} = ? AND ${FIELDS.ACCOUNT_ID} = ? AND ${FIELDS.REMOVED_AT} IS NULL`,
+      [userId, id, accountId],
+    );
+  }
 }
 
 export { SavedPlaceGw };

@@ -20,6 +20,10 @@ interface TravelOperationData {
   lastRecord?: any;
   tagIds?: string[];
   existingTravel?: any;
+  savePlace?: boolean;
+  lookupSavedPlaceByCoordinates?: boolean;
+  oldFirstSavedPlaceId?: string | null;
+  oldLastSavedPlaceId?: string | null;
 }
 
 class TravelCore extends AppCore {
@@ -301,6 +305,45 @@ class TravelCore extends AppCore {
   }
 
   // ===========================================================================
+  // Saved Place Resolution for Travel Points
+  // ===========================================================================
+
+  /**
+   * Resolve saved places for firstRecord and/or lastRecord.
+   * Extracts the savePlace/lookupSavedPlaceByCoordinates flags from travel input
+   * and delegates to AppCore.resolveSavedPlace() for each record.
+   *
+   * @param firstRecord First waypoint data (may be mutated)
+   * @param lastRecord Last waypoint data (may be mutated)
+   * @param savePlace Whether to save the location as a saved place
+   * @param lookupSavedPlaceByCoordinates Whether to lookup and auto-fill from a saved place
+   */
+  private async resolveWaypointSavedPlaces(
+    firstRecord: any | undefined,
+    lastRecord: any | undefined,
+    savePlace?: boolean,
+    lookupSavedPlaceByCoordinates?: boolean,
+  ): Promise<void> {
+    if (!savePlace && !lookupSavedPlaceByCoordinates) {
+      return;
+    }
+
+    const options = {
+      savePlace,
+      lookupSavedPlaceByCoordinates,
+      placeType: 'other',
+    };
+
+    if (firstRecord) {
+      await this.resolveSavedPlace(firstRecord, options);
+    }
+
+    if (lastRecord) {
+      await this.resolveSavedPlace(lastRecord, options);
+    }
+  }
+
+  // ===========================================================================
   // Process Item Methods
   // ===========================================================================
 
@@ -375,7 +418,7 @@ class TravelCore extends AppCore {
 
     // Extract nested inputs and tagIds
     // the input value for "distance" is always in the car's units - car.mileageIn
-    const { firstRecord, lastRecord, tagIds, distance, ...travelParams } = params;
+    const { firstRecord, lastRecord, tagIds, distance, savePlace, lookupSavedPlaceByCoordinates, ...travelParams } = params;
 
     if (roleId === USER_ROLES.VIEWER) {
       return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to create travels');
@@ -447,6 +490,9 @@ class TravelCore extends AppCore {
       }
     }
 
+    // Resolve saved places for waypoints (savePlace / lookupSavedPlaceByCoordinates)
+    await this.resolveWaypointSavedPlaces(firstRecord, lastRecord, savePlace, lookupSavedPlaceByCoordinates);
+
     // Calculate distance
     let calculatedDistanceInCarUnit: number | null = null;
     let calculatedDistanceKm: number | null = null;
@@ -485,6 +531,8 @@ class TravelCore extends AppCore {
       firstRecord,
       lastRecord,
       tagIds,
+      savePlace: params.savePlace,
+      lookupSavedPlaceByCoordinates: params.lookupSavedPlaceByCoordinates,
     });
 
     return newTravel;
@@ -526,6 +574,17 @@ class TravelCore extends AppCore {
 
       // Sync tags
       await this.syncTravelTags(travel.id, tagIds);
+
+      // Touch saved places on waypoints if resolveSavedPlace didn't handle them
+      const resolvedByFlags = !!(createInfo.savePlace || createInfo.lookupSavedPlaceByCoordinates);
+
+      if (firstRecord) {
+        await this.touchSavedPlaceOnCreate(firstRecord.savedPlaceId, resolvedByFlags);
+      }
+
+      if (lastRecord) {
+        await this.touchSavedPlaceOnCreate(lastRecord.savedPlaceId, resolvedByFlags);
+      }
 
       // Clean up stored data
       this.operationData.delete(`create-${requestId}`);
@@ -582,7 +641,7 @@ class TravelCore extends AppCore {
 
     // Extract nested inputs and tagIds
     // the input value for "distance" is always in the car's units - car.mileageIn
-    const { firstRecord, lastRecord, tagIds, distance, ...travelParams } = params;
+    const { firstRecord, lastRecord, tagIds, distance, savePlace, lookupSavedPlaceByCoordinates, ...travelParams } = params;
 
     // Don't allow changing accountId or userId
     const { accountId: _, userId: __, id: ___, ...restParams } = travelParams;
@@ -638,6 +697,9 @@ class TravelCore extends AppCore {
       }
     }
 
+    // Resolve saved places for waypoints (savePlace / lookupSavedPlaceByCoordinates)
+    await this.resolveWaypointSavedPlaces(firstRecord, lastRecord, savePlace, lookupSavedPlaceByCoordinates);
+
     // Calculate distance
     let calculatedDistanceInCarUnit: number | null = null;
     let calculatedDistanceKm: number | null = null;
@@ -676,6 +738,20 @@ class TravelCore extends AppCore {
     // Add accountId to where clause for SQL-level security
     where.accountId = accountId;
 
+    // Fetch old waypoint savedPlaceIds for usage tracking
+    let oldFirstSavedPlaceId: string | null = null;
+    let oldLastSavedPlaceId: string | null = null;
+
+    if (travel.firstRecordId) {
+      const oldFirst = await this.getGateways().expenseBaseGw.get(travel.firstRecordId);
+      oldFirstSavedPlaceId = oldFirst?.savedPlaceId || null;
+    }
+
+    if (travel.lastRecordId) {
+      const oldLast = await this.getGateways().expenseBaseGw.get(travel.lastRecordId);
+      oldLastSavedPlaceId = oldLast?.savedPlaceId || null;
+    }
+
     // Store nested data and existing travel for afterUpdate processing
     const requestId = this.getRequestId();
     this.operationData.set(`update-${requestId}-${id}`, {
@@ -683,6 +759,10 @@ class TravelCore extends AppCore {
       lastRecord,
       tagIds,
       existingTravel: travel,
+      savePlace: params.savePlace,
+      lookupSavedPlaceByCoordinates: params.lookupSavedPlaceByCoordinates,
+      oldFirstSavedPlaceId,
+      oldLastSavedPlaceId
     });
 
     return restParams;
@@ -734,6 +814,25 @@ class TravelCore extends AppCore {
             travel.lastRecordId = lastPoint.id;
           }
         }
+      }
+
+      // Sync saved place usage for waypoints
+      const resolvedByFlags = !!(updateInfo.savePlace || updateInfo.lookupSavedPlaceByCoordinates);
+
+      if (firstRecord) {
+        await this.syncSavedPlaceUsageOnUpdate(
+          updateInfo.oldFirstSavedPlaceId,
+          firstRecord.savedPlaceId,
+          resolvedByFlags,
+        );
+      }
+
+      if (lastRecord) {
+        await this.syncSavedPlaceUsageOnUpdate(
+          updateInfo.oldLastSavedPlaceId,
+          lastRecord.savedPlaceId,
+          resolvedByFlags,
+        );
       }
 
       // Sync tags if provided
