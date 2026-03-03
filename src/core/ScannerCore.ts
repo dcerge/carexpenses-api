@@ -41,14 +41,6 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
  */
 class ScannerCore extends AppCore {
 
-  private getHeaders() {
-    const { req } = this.getContext();
-
-    return {
-      cookie: req.headers['cookie'],
-    };
-  }
-
   /**
    * The method receives an uploaded file and scans it using Claude Vision API
    */

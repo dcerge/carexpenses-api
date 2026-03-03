@@ -43,3 +43,4 @@ export * from './ReportProfitabilityCore';
 export * from './ParkingSessionCore';
 export * from './DashboardCore';
 export * from './SavedPlaceCore';
+export * from './TravelTrackingCore';

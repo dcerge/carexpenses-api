@@ -1,6 +1,6 @@
 {
   "name": "carexpenses-api",
-  "version": "1.0.55",
+  "version": "1.0.56",
   "description": "A multi-tenant SaaS platform for tracking car expenses and trips",
   "main": "build/index.js",
   "scripts": {
@@ -30,6 +30,7 @@
     "@graphql-tools/merge": "^9.1.7",
     "@graphql-tools/schema": "^10.0.31",
     "@graphql-tools/utils": "^11.0.0",
+    "@mapbox/polyline": "^1.2.1",
     "@microsoft/signalr": "^9.0.6",
     "@sdflc/api-helpers": "^1.1.13",
     "@sdflc/backend-helpers": "^1.0.112",

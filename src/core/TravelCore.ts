@@ -13,6 +13,21 @@ import { mapWeatherToDbFields } from '../gateways/apis/weather';
 import { toMetricDistance } from '../utils';
 import { USER_ROLES } from '../boundary';
 
+import { TRACKING_STATUS } from '../database';
+import {
+  validateTrackingTransition,
+  trackingStatusLabel,
+  generateRouteImageUrl,
+} from '../utils/trackingHelpers';
+import {
+  rdpSimplifyBySegments,
+  encodePolyline,
+} from '../utils/trackingPolylineUtils';
+import {
+  calculateTotalDistance,
+  metersToKm,
+} from '../utils/trackingGeoUtils';
+
 dayjs.extend(utc);
 
 interface TravelOperationData {
@@ -24,6 +39,7 @@ interface TravelOperationData {
   lookupSavedPlaceByCoordinates?: boolean;
   oldFirstSavedPlaceId?: string | null;
   oldLastSavedPlaceId?: string | null;
+  enableTracking?: boolean;
 }
 
 class TravelCore extends AppCore {
@@ -62,6 +78,156 @@ class TravelCore extends AppCore {
   // ===========================================================================
   // Utility Methods
   // ===========================================================================
+
+  /**
+   * Initialize tracking fields on a travel record.
+   * Called from afterCreate when enableTracking is true.
+   */
+  private async initializeTracking(travelId: string): Promise<void> {
+    const { accountId, userId } = this.getContext();
+
+    await this.getGateways().travelGw.update(
+      { id: travelId, accountId },
+      {
+        trackingStatus: TRACKING_STATUS.ACTIVE,
+        currentSegmentId: 0,
+        gpsDistance: 0,
+        encodedPolyline: null,
+        routeUploadedFileId: null,
+        trackingStartedAt: this.now(),
+        trackingEndedAt: null,
+        updatedBy: userId,
+        updatedAt: this.now(),
+      },
+    );
+  }
+
+  /**
+   * Complete tracking: simplify points into polyline, generate route image,
+   * and update tracking status to COMPLETED.
+   * Called from afterUpdate when lastRecord is provided and tracking is active/paused.
+   */
+  private async completeTracking(travel: any): Promise<void> {
+    const { accountId, userId } = this.getContext();
+    const travelId = travel.id;
+
+    // Fetch all tracking points
+    const points = await this.getGateways().travelTrackingPointGw.getByTravelId(accountId, travelId);
+
+    if (!points || points.length === 0) {
+      this.logger.log(`Completing tracking for travel ${travelId} with no travel points`);
+      // No tracking points — just mark as completed
+      await this.getGateways().travelGw.update(
+        { id: travelId, accountId },
+        {
+          trackingStatus: TRACKING_STATUS.COMPLETED,
+          trackingEndedAt: this.now(),
+          updatedBy: userId,
+          updatedAt: this.now(),
+        },
+      );
+      return;
+    }
+
+    // Build SegmentedPoint array for RDP
+    const segmentedPoints = points.map((p: any) => ({
+      lat: Number(p.latitude),
+      lng: Number(p.longitude),
+      segmentId: p.segment_id,
+    }));
+
+    // Simplify per segment
+    const simplified = rdpSimplifyBySegments(segmentedPoints);
+
+    // Encode to polyline
+    const encoded = encodePolyline(simplified);
+
+    // Calculate GPS distance from points if not already set
+    let gpsDistance = travel.gpsDistance;
+
+    if (gpsDistance == null || gpsDistance === 0) {
+      const allLatLng = points.map((p: any) => ({
+        lat: Number(p.latitude),
+        lng: Number(p.longitude),
+      }));
+      gpsDistance = metersToKm(calculateTotalDistance(allLatLng));
+    }
+
+    this.logger.log(`Completing tracking for travel ${travelId} with ${points.length} points, distance ${gpsDistance} km`);
+
+    // Generate static route map image
+    let routeUploadedFileId: string | null = null;
+
+    try {
+      routeUploadedFileId = await this.generateAndStoreRouteImage(travelId, encoded);
+    } catch (error) {
+      // Log but don't fail — the polyline is saved regardless
+      console.error(`Failed to generate route image for travel ${travelId}:`, error);
+    }
+
+    // Update travel with tracking completion data
+    const updateFields: any = {
+      trackingStatus: TRACKING_STATUS.COMPLETED,
+      trackingEndedAt: this.now(),
+      encodedPolyline: encoded,
+      gpsDistance,
+      updatedBy: userId,
+      updatedAt: this.now(),
+    };
+
+    if (routeUploadedFileId) {
+      updateFields.routeUploadedFileId = routeUploadedFileId;
+    }
+
+    await this.getGateways().travelGw.update(
+      { id: travelId, accountId },
+      updateFields,
+    );
+  }
+
+  /**
+   * Generate a static map PNG from the encoded polyline via Google Static Maps API,
+   * upload it to ms_storage, and return the uploaded file ID.
+   */
+  private async generateAndStoreRouteImage(travelId: string, encodedPolyline: string): Promise<string | null> {
+    const apiKey = this.config.context?.googleMapsApiKey || process.env.GOOGLE_MAPS_API_KEY;
+
+    if (!apiKey) {
+      this.logger.warn('Google Maps API key not configured — skipping route image generation');
+      return null;
+    }
+
+    const imageUrl = generateRouteImageUrl(encodedPolyline, apiKey);
+
+    this.logger.log(`Travel tracking route image is: ${imageUrl}`);
+
+    // Fetch the PNG
+    const response = await fetch(imageUrl);
+
+    if (!response.ok) {
+      this.logger.error(`Static Maps API returned ${response.status} for travel ${travelId}`);
+      return null;
+    }
+
+    const imageBuffer = Buffer.from(await response.arrayBuffer());
+
+    // Upload to ms_storage via the storage gateway
+    const { accountId, userId } = this.getContext();
+
+    const uploadedFile = await this.getGateways().uploadedFileGw.create({
+      accountId,
+      userId,
+      fileData: imageBuffer,
+      originalFilename: `route-${travelId}.png`,
+      mimeType: 'image/png',
+      name: `route-${travelId}.png`,
+      headers: this.getHeaders(),
+    });
+
+    this.logger.log(`Travel tracking route image has been uploaded and has ID: ${uploadedFile.id}`);
+
+    return uploadedFile?.id ?? null;
+  }
 
   /**
    * Calculate distance from odometer readings
@@ -366,6 +532,14 @@ class TravelCore extends AppCore {
       item.lastDttm = dayjs(item.lastDttm).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
     }
 
+    if (item.trackingStartedAt !== null && item.trackingStartedAt !== undefined) {
+      item.trackingStartedAt = dayjs(item.trackingStartedAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
+    }
+
+    if (item.trackingEndedAt !== null && item.trackingEndedAt !== undefined) {
+      item.trackingEndedAt = dayjs(item.trackingEndedAt).utc().format('YYYY-MM-DDTHH:mm:ss.000Z');
+    }
+
     return item;
   }
 
@@ -418,7 +592,7 @@ class TravelCore extends AppCore {
 
     // Extract nested inputs and tagIds
     // the input value for "distance" is always in the car's units - car.mileageIn
-    const { firstRecord, lastRecord, tagIds, distance, savePlace, lookupSavedPlaceByCoordinates, ...travelParams } = params;
+    const { firstRecord, lastRecord, tagIds, distance, savePlace, lookupSavedPlaceByCoordinates, enableTracking, ...travelParams } = params;
 
     if (roleId === USER_ROLES.VIEWER) {
       return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to create travels');
@@ -533,6 +707,7 @@ class TravelCore extends AppCore {
       tagIds,
       savePlace: params.savePlace,
       lookupSavedPlaceByCoordinates: params.lookupSavedPlaceByCoordinates,
+      enableTracking
     });
 
     return newTravel;
@@ -588,6 +763,19 @@ class TravelCore extends AppCore {
 
       // Clean up stored data
       this.operationData.delete(`create-${requestId}`);
+    }
+
+    if (createInfo?.enableTracking) {
+      try {
+        await this.initializeTracking(travel.id);
+        // Refresh the travel record so the response includes tracking fields
+        const updatedTravel = await this.getGateways().travelGw.get(travel.id);
+        if (updatedTravel) {
+          Object.assign(travel, updatedTravel);
+        }
+      } catch (error) {
+        console.error('Error initializing tracking after travel create:', error);
+      }
     }
 
     // Update car stats for travels with a car assigned
@@ -838,6 +1026,25 @@ class TravelCore extends AppCore {
       // Sync tags if provided
       await this.syncTravelTags(travel.id, tagIds);
 
+      if (existingTravel && lastRecord) {
+        const currentTrackingStatus = existingTravel.trackingStatus;
+        if (
+          currentTrackingStatus === TRACKING_STATUS.ACTIVE ||
+          currentTrackingStatus === TRACKING_STATUS.PAUSED
+        ) {
+          try {
+            await this.completeTracking(existingTravel);
+            // Refresh the travel record so the response includes tracking completion fields
+            const refreshed = await this.getGateways().travelGw.get(travel.id);
+            if (refreshed) {
+              Object.assign(travel, refreshed);
+            }
+          } catch (error) {
+            console.error('Error completing tracking after travel update:', error);
+          }
+        }
+      }
+
       // Update car stats
       // Need to handle: old car, new car, or both if car changed
       const oldCarId = existingTravel?.carId;
@@ -934,6 +1141,14 @@ class TravelCore extends AppCore {
 
         // Remove tag associations
         await this.getGateways().travelExpenseTagGw.remove({ travelId: existingTravel.id });
+
+        if (existingTravel.trackingStatus != null && existingTravel.trackingStatus !== TRACKING_STATUS.NONE) {
+          try {
+            await this.getGateways().travelTrackingPointGw.removeByTravelId(accountId, existingTravel.id);
+          } catch (error) {
+            console.error('Error removing tracking points after travel remove:', error);
+          }
+        }
 
         // Update car stats
         if (existingTravel.carId) {
@@ -1041,6 +1256,121 @@ class TravelCore extends AppCore {
     }
 
     return items.map((item: any) => this.processItemOnOut(item, opt));
+  }
+
+  /**
+   * Pause live GPS tracking for a travel.
+   * Called via travelPause mutation.
+   */
+  public async pauseTracking(args: any): Promise<any> {
+    return this.runAction({
+      args,
+      doAuth: true,
+      roles: [USER_ROLES.OWNER, USER_ROLES.ADMIN, USER_ROLES.DRIVER],
+      action: async (args: any) => {
+        const { where } = args || {};
+        const { id: travelId } = where || {};
+        const { accountId, userId } = this.getContext();
+
+        if (!travelId) {
+          return this.failure(OP_RESULT_CODES.NOT_FOUND, 'Travel ID is required');
+        }
+
+        const travel = await this.getGateways().travelGw.get(travelId);
+
+        if (!travel || travel.accountId !== accountId) {
+          return this.failure(OP_RESULT_CODES.NOT_FOUND, 'Travel not found');
+        }
+
+        const hasAccess = await this.validateCarAccess({ id: travel.carId, accountId });
+
+        if (!hasAccess) {
+          return this.failure(OP_RESULT_CODES.FORBIDDEN, 'You do not have permission to control this travel');
+        }
+
+        // Validate state transition: ACTIVE → PAUSED
+        if (!validateTrackingTransition(travel.trackingStatus, TRACKING_STATUS.PAUSED)) {
+          return this.failure(
+            OP_RESULT_CODES.VALIDATION_FAILED,
+            `Cannot pause: tracking is ${trackingStatusLabel(travel.trackingStatus)}, expected active`,
+          );
+        }
+
+        await this.getGateways().travelGw.update(
+          { id: travelId, accountId },
+          {
+            trackingStatus: TRACKING_STATUS.PAUSED,
+            updatedBy: userId,
+            updatedAt: this.now(),
+          },
+        );
+
+        const updated = await this.getGateways().travelGw.get(travelId);
+        return this.success(this.processItemOnOut(updated));
+      },
+      hasTransaction: false,
+      doingWhat: 'pausing travel tracking',
+    });
+  }
+
+  /**
+   * Resume live GPS tracking for a travel after a pause.
+   * Increments currentSegmentId so the client starts a new segment.
+   * Called via travelResume mutation.
+   */
+  public async resumeTracking(args: any): Promise<any> {
+    return this.runAction({
+      args,
+      doAuth: true,
+      roles: [USER_ROLES.OWNER, USER_ROLES.ADMIN, USER_ROLES.DRIVER],
+      action: async (args: any) => {
+        const { where } = args || {};
+        const { id: travelId } = where || {};
+        const { accountId, userId } = this.getContext();
+
+        if (!travelId) {
+          return this.failure(OP_RESULT_CODES.NOT_FOUND, 'Travel ID is required');
+        }
+
+        const travel = await this.getGateways().travelGw.get(travelId);
+
+        if (!travel || travel.accountId !== accountId) {
+          return this.failure(OP_RESULT_CODES.NOT_FOUND, 'Travel not found');
+        }
+
+        const hasAccess = await this.validateCarAccess({ id: travel.carId, accountId });
+
+        if (!hasAccess) {
+          return this.failure(OP_RESULT_CODES.FORBIDDEN, 'You do not have permission to control this travel');
+        }
+
+        // Validate state transition: PAUSED → ACTIVE
+        if (!validateTrackingTransition(travel.trackingStatus, TRACKING_STATUS.ACTIVE)) {
+          return this.failure(
+            OP_RESULT_CODES.VALIDATION_FAILED,
+            `Cannot resume: tracking is ${trackingStatusLabel(travel.trackingStatus)}, expected paused`,
+          );
+        }
+
+        // Increment segment ID
+        const newSegmentId = (travel.currentSegmentId || 0) + 1;
+
+        await this.getGateways().travelGw.update(
+          { id: travelId, accountId },
+          {
+            trackingStatus: TRACKING_STATUS.ACTIVE,
+            currentSegmentId: newSegmentId,
+            updatedBy: userId,
+            updatedAt: this.now(),
+          },
+        );
+
+        const updated = await this.getGateways().travelGw.get(travelId);
+        return this.success(this.processItemOnOut(updated));
+      },
+      hasTransaction: false,
+      doingWhat: 'resuming travel tracking',
+    });
   }
 }
 

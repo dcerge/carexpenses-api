@@ -60,3 +60,4 @@ export * from './VehicleTaskGw';
 export * from './ParkingSessionGw';
 
 export * from './SavedPlaceGw';
+export * from './TravelTrackingPointGw';

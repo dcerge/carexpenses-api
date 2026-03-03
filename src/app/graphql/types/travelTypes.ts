@@ -1,3 +1,5 @@
+// ./src/app/graphql/types/travelTypes.ts
+
 const typeDefs = `#graphql
   type Travel @key(fields: "id") {
     "Unique travel record identifier"
@@ -66,6 +68,22 @@ const typeDefs = `#graphql
     activeMinutes: Int
     "Total trip time including waiting in minutes"
     totalMinutes: Int
+
+    # Live GPS tracking fields
+    "Live tracking status: 0=none, 1=active, 2=paused, 3=completed"
+    trackingStatus: Int
+    "Current segment counter (incremented on each resume after pause)"
+    currentSegmentId: Int
+    "Total GPS-derived distance in km (from client running total)"
+    gpsDistance: Float
+    "Google Encoded Polyline of the simplified route (generated on trip completion)"
+    encodedPolyline: String
+    "Reference to ms_storage uploaded file containing the static route map PNG"
+    routeUploadedFileId: ID
+    "When live tracking was first started"
+    trackingStartedAt: String
+    "When live tracking was stopped or completed"
+    trackingEndedAt: String
     
     # System fields
     "Record status: 100=Draft, 200=Completed, 300=Submitted, etc."
@@ -104,6 +122,8 @@ const typeDefs = `#graphql
     userUpdated: User
     "User who soft-deleted this record"
     userRemoved: User
+    "Uploaded file with the travel route image"
+    routeUploadedFile: UploadedFile
   }
 
   type TravelResult implements OpResult {
@@ -169,6 +189,9 @@ const typeDefs = `#graphql
     savePlace: Boolean
     "If true then try to lookup a saved place by coordinates and use its ID as savedPlaceId and fill out whereDone, location, address1 and other places"
     lookupSavedPlaceByCoordinates: Boolean
+
+    "Enable live GPS tracking when starting this travel (used on create only)"
+    enableTracking: Boolean
   }
 
   input TravelFilter {
@@ -211,6 +234,9 @@ const typeDefs = `#graphql
     status: [Int]
     "Search in purpose and destination fields"
     searchKeyword: String
+
+    "Filter by tracking status: 0=none, 1=active, 2=paused, 3=completed"
+    trackingStatus: [Int]
   }
 
   input TravelWhereInput {
@@ -236,6 +262,11 @@ const typeDefs = `#graphql
     travelRemove(where: TravelWhereInput): TravelResult
     "Soft-delete multiple travel records"
     travelRemoveMany(where: [TravelWhereInput]): TravelResult
+
+    "Pause live GPS tracking for a travel. Flushes remaining points first."
+    travelPause(where: TravelWhereInput): TravelResult
+    "Resume live GPS tracking after a pause. Increments segment counter."
+    travelResume(where: TravelWhereInput): TravelResult
   }
 `;
 

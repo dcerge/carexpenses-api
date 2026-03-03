@@ -1,6 +1,7 @@
+// ./src/app/graphql/resolvers/travelResolvers.ts
+
 import { buildDefaultResolvers } from '@sdflc/backend-helpers';
 import { EXPENSE_TYPES } from '../../../database';
-import { sortBy } from 'lodash';
 
 const resolvers = buildDefaultResolvers({
   prefix: 'travel',
@@ -113,6 +114,24 @@ const resolvers = buildDefaultResolvers({
 
         return waypoints ?? [];
       },
+      async routeUploadedFile(parent, args, context) {
+        const { routeUploadedFileId } = parent || {};
+
+        return routeUploadedFileId
+          ? {
+            __typename: 'UploadedFile',
+            id: routeUploadedFileId,
+          }
+          : null;
+      }
+    },
+  },
+  mutation: {
+    async travelPause(parent, args, context) {
+      return context.cores.travelCore.pauseTracking(args);
+    },
+    async travelResume(parent, args, context) {
+      return context.cores.travelCore.resumeTracking(args);
     },
   },
 });

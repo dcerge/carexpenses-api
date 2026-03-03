@@ -55,7 +55,8 @@ export interface UploadedFileWhereInput {
 export interface UploadFileParams {
   accountId: string;
   userId?: string;
-  filePath: string;
+  filePath?: string;
+  fileData?: Buffer;
   name?: string;
   originalFilename: string;
   mimeType: string;
@@ -222,14 +223,25 @@ class UploadedFileGw {
    */
   public async create(params: UploadFileParams) {
     try {
+      if (!params.filePath && !params.fileData) {
+        logger.error('Either filePath or fileData must be provided to upload a file.');
+        return null;
+      }
+
       const formData = new FormData();
 
-      // Add file from disk
-      const fileStream = fs.createReadStream(params.filePath);
-      formData.append('files', fileStream, {
-        filename: params.originalFilename,
-        contentType: params.mimeType,
-      });
+      if (params.fileData) {
+        formData.append('files', params.fileData, {
+          filename: params.originalFilename,
+          contentType: params.mimeType,
+        });
+      } else {
+        const fileStream = fs.createReadStream(params.filePath!);
+        formData.append('files', fileStream, {
+          filename: params.originalFilename,
+          contentType: params.mimeType,
+        });
+      }
 
       // Add metadata
       if (params.accountId) {

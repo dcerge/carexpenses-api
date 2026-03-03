@@ -1,4 +1,4 @@
-// ./src/database/migrations/20260227200000_1452_add_saved_place_id_to_expense_bases.ts
+// ./src/database/migrations/20260227100000_1470_alter_expense_bases.ts
 
 import { Knex } from 'knex';
 

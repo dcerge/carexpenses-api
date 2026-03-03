@@ -576,6 +576,14 @@ class AppCore extends BaseCore {
 
     recordData.savedPlaceId = savedPlace.id;
   }
+
+  public getHeaders() {
+    const { req } = this.getContext();
+
+    return {
+      cookie: req.headers['cookie'],
+    };
+  }
 }
 
 export { AppCore };

@@ -132,6 +132,11 @@ export const TABLES = {
   PARKING_SESSIONS: 'parking_sessions',
 
   SAVED_PLACES: 'saved_places',
+
+  // ---------------------------------------------------------------------------
+  // Live Tracking
+  // ---------------------------------------------------------------------------
+  TRAVEL_TRACKING_POINTS: 'travel_tracking_points',
 };
 
 // =============================================================================
@@ -683,6 +688,26 @@ export const FIELDS = {
   USE_COUNT: 'use_count',
   LAST_USED_AT: 'last_used_at',
   SAVED_PLACE_ID: 'saved_place_id',
+
+  // ---------------------------------------------------------------------------
+  // Live Tracking Fields
+  // ---------------------------------------------------------------------------
+  SEGMENT_ID: 'segment_id',
+  SEQ: 'seq',
+  ALTITUDE: 'altitude',
+  SPEED: 'speed',
+  HEADING: 'heading',
+  ACCURACY: 'accuracy',
+  RECORDED_AT: 'recorded_at',
+
+  // Travel Tracking Fields (added to travels table)
+  TRACKING_STATUS: 'tracking_status',
+  CURRENT_SEGMENT_ID: 'current_segment_id',
+  GPS_DISTANCE: 'gps_distance',
+  ENCODED_POLYLINE: 'encoded_polyline',
+  ROUTE_UPLOADED_FILE_ID: 'route_uploaded_file_id',
+  TRACKING_STARTED_AT: 'tracking_started_at',
+  TRACKING_ENDED_AT: 'tracking_ended_at',
 };
 
 // =============================================================================
@@ -1042,4 +1067,15 @@ export const PLACE_TYPES = {
   MECHANIC: 'mechanic',
   STORE: 'store',
   OTHER: 'other',
+} as const;
+
+// =============================================================================
+// TRAVEL TRACKING STATUS VALUES (travels.tracking_status)
+// =============================================================================
+
+export const TRACKING_STATUS = {
+  NONE: 0,           // No live tracking for this travel
+  ACTIVE: 1,         // GPS tracking in progress
+  PAUSED: 2,         // Tracking temporarily paused (e.g., coffee stop)
+  COMPLETED: 3,      // Tracking finished, polyline generated
 } as const;
