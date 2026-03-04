@@ -2,7 +2,7 @@
 
 import { Knex } from 'knex';
 
-import { dbFieldAddDefaults } from '@sdflc/backend-helpers';
+import { addOrderNoNum, dbFieldAddDefaults } from '@sdflc/backend-helpers';
 
 import config from '../../config';
 import { dbNewId, FIELDS, TABLES } from '../helpers';
@@ -14,6 +14,8 @@ export const up = async (knex: Knex) => {
     table.uuid(FIELDS.ID).primary().defaultTo(knex.raw(dbNewId)).comment('Parking session ID');
 
     table.uuid(FIELDS.ACCOUNT_ID).notNullable().comment('Account ID - references ms_auth account');
+
+    addOrderNoNum(table);
 
     table
       .uuid(FIELDS.CAR_ID)

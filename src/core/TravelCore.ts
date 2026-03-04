@@ -10,7 +10,7 @@ import { EXPENSE_TYPES, STATUS } from '../database';
 import { CarStatsUpdater, TravelStatsParams } from '../utils/CarStatsUpdater';
 import { weatherGateway } from '../weatherClient';
 import { mapWeatherToDbFields } from '../gateways/apis/weather';
-import { toMetricDistance } from '../utils';
+import { calculateTieredReimbursement, getRateForTravelType, isDeductibleTravelType, toMetricDistance } from '../utils';
 import { USER_ROLES } from '../boundary';
 
 import { TRACKING_STATUS } from '../database';
@@ -400,6 +400,89 @@ class TravelCore extends AppCore {
     return new CarStatsUpdater(db, schema);
   }
 
+  /**
+ * Resolve reimbursement rate and amount for a travel record.
+ * Rate is looked up from official IRS/CRA tables — users cannot set these fields.
+ *
+ * @param travelType Travel type string (e.g. 'business', 'medical', 'charity')
+ * @param distanceKm Distance in kilometres (metric, as stored internally)
+ * @param firstDttm The travel date — used to determine the tax year
+ * @returns Object with reimbursementRate, reimbursementRateCurrency, calculatedReimbursement
+ *          or all-null if the travel type is not deductible or country is unsupported
+ */
+  private async resolveReimbursement(
+    travelType: string | null | undefined,
+    distanceKm: number | null | undefined,
+    firstDttm: string | Date | null | undefined,
+  ): Promise<{
+    reimbursementRate: number | null;
+    reimbursementRateCurrency: string | null;
+    calculatedReimbursement: number | null;
+  }> {
+    const nullResult = {
+      reimbursementRate: null,
+      reimbursementRateCurrency: null,
+      calculatedReimbursement: null,
+    };
+
+    if (!travelType || distanceKm == null) {
+      return nullResult;
+    }
+
+    // Fetch account to determine country
+    const { accountId } = this.getContext();
+    const account = await this.getGateways().authAccountGw.get(accountId, { headers: this.getHeaders() });
+    const countryId: string | null = account?.countryId ?? null;
+
+    this.logger.log('=== CP2', { countryId, account });
+
+    // Only US and CA have supported rates
+    if (countryId !== 'US' && countryId !== 'CA') {
+      return nullResult;
+    }
+
+    const country = countryId as 'US' | 'CA';
+
+    // Check deductibility
+    if (!isDeductibleTravelType(travelType, country)) {
+      this.logger.log(`The travel type ${travelType} is not deductable in ${country}`);
+      return nullResult;
+    }
+
+    // Determine tax year from firstDttm, fall back to current year
+    const year = firstDttm
+      ? dayjs(firstDttm).utc().year()
+      : dayjs().utc().year();
+
+    const rateConfig = getRateForTravelType(year, country, travelType);
+
+    if (!rateConfig) {
+      this.logger.log(`The travel rate config was not found for year ${year}, country ${country} and type ${travelType}`);
+      return nullResult;
+    }
+
+    // IRS rates are per-mile; convert km → miles for the calculation
+    const distanceInRateUnit =
+      rateConfig.distanceUnit === 'mi'
+        ? distanceKm * 0.621371
+        : distanceKm;
+
+    const result = calculateTieredReimbursement(distanceInRateUnit, rateConfig);
+
+    this.logger.log(`The reimbursement calculation result is:`, result);
+
+    // Store the first-tier rate as the display rate (e.g. $0.70/mi or $0.72/km)
+    const primaryRate = rateConfig.tiers[0]?.rate ?? null;
+
+    this.logger.log(`The reimbursement primare rate is:`, primaryRate);
+
+    return {
+      reimbursementRate: primaryRate,
+      reimbursementRateCurrency: rateConfig.currency,
+      calculatedReimbursement: result.totalReimbursement,
+    };
+  }
+
   // ===========================================================================
   // Weather Integration
   // ===========================================================================
@@ -590,9 +673,13 @@ class TravelCore extends AppCore {
   public async beforeCreate(params: any, opt?: BaseCoreActionsInterface): Promise<any> {
     const { accountId, userId, roleId } = this.getContext();
 
-    // Extract nested inputs and tagIds
-    // the input value for "distance" is always in the car's units - car.mileageIn
-    const { firstRecord, lastRecord, tagIds, distance, savePlace, lookupSavedPlaceByCoordinates, enableTracking, ...travelParams } = params;
+    // Strip fields the user must never set — these are calculated server-side
+    const {
+      firstRecord, lastRecord, tagIds, distance,
+      savePlace, lookupSavedPlaceByCoordinates, enableTracking,
+      reimbursementRate: _rr, reimbursementRateCurrency: _rrc, calculatedReimbursement: _cr,
+      ...travelParams
+    } = params;
 
     if (roleId === USER_ROLES.VIEWER) {
       return OpResult.fail(OP_RESULT_CODES.FORBIDDEN, [], 'You do not have permission to create travels');
@@ -692,11 +779,14 @@ class TravelCore extends AppCore {
     }
 
     // Calculate reimbursement if we have distance and rate
-    if (newTravel.distanceKm != null && travelParams.reimbursementRate != null) {
-      newTravel.calculatedReimbursement = this.calculateReimbursement(
+    // Auto-calculate reimbursement from official rates (only when travel is complete)
+    if (newTravel.distanceKm != null && lastRecord != null) {
+      const reimbursement = await this.resolveReimbursement(
+        newTravel.travelType,
         newTravel.distanceKm,
-        travelParams.reimbursementRate,
+        newTravel.firstDttm,
       );
+      Object.assign(newTravel, reimbursement);
     }
 
     // Store nested data for afterCreate processing
@@ -827,9 +917,13 @@ class TravelCore extends AppCore {
     const car = await this.getGateways().carGw.get(travel.carId);
     const odometerIn = car?.mileageIn || 'km';
 
-    // Extract nested inputs and tagIds
-    // the input value for "distance" is always in the car's units - car.mileageIn
-    const { firstRecord, lastRecord, tagIds, distance, savePlace, lookupSavedPlaceByCoordinates, ...travelParams } = params;
+    // Strip fields the user must never set — these are calculated server-side
+    const {
+      firstRecord, lastRecord, tagIds, distance,
+      savePlace, lookupSavedPlaceByCoordinates,
+      reimbursementRate: _rr, reimbursementRateCurrency: _rrc, calculatedReimbursement: _cr,
+      ...travelParams
+    } = params;
 
     // Don't allow changing accountId or userId
     const { accountId: _, userId: __, id: ___, ...restParams } = travelParams;
@@ -912,15 +1006,25 @@ class TravelCore extends AppCore {
       restParams.distanceKm = toMetricDistance(distance, odometerIn);
     }
 
-    // Calculate reimbursement
-    const reimbursementRate = restParams.reimbursementRate ?? travel.reimbursementRate;
+    // Auto-calculate reimbursement from official rates.
+    // Recalculate whenever distance, travel type, or dates may have changed.
+    // Use the final distance and type, falling back to the existing travel record.
     const finalDistanceKm = restParams.distanceKm ?? travel.distanceKm;
+    const finalTravelType = restParams.travelType ?? travel.travelType;
+    const finalFirstDttm = restParams.firstDttm ?? travel.firstDttm;
 
-    if (finalDistanceKm != null && reimbursementRate != null) {
-      restParams.calculatedReimbursement = this.calculateReimbursement(
+    // Only calculate when we have a complete trip (both endpoints exist)
+    const hasLastRecord = lastRecord != null || travel.lastRecordId != null;
+
+    this.logger.log('=== CP1', { finalDistanceKm, finalTravelType, finalFirstDttm });
+
+    if (finalDistanceKm != null && hasLastRecord) {
+      const reimbursement = await this.resolveReimbursement(
+        finalTravelType,
         finalDistanceKm,
-        reimbursementRate,
+        finalFirstDttm,
       );
+      Object.assign(restParams, reimbursement);
     }
 
     // Add accountId to where clause for SQL-level security

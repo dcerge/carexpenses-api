@@ -8,7 +8,7 @@ import {
 } from '@sdflc/backend-helpers';
 import { OpResult, OP_RESULT_CODES } from '@sdflc/api-helpers';
 import { rulesMultipleUuidInId, ruleStatus, ruleTravelStatus } from './commonRules';
-import { TRAVEL_TYPES } from '../../database';
+import { PLACE_TYPES, TRAVEL_TYPES } from '../../database';
 
 // Valid travel types for tax categorization
 const validTravelTypes = Object.values(TRAVEL_TYPES);
@@ -422,7 +422,7 @@ const validateFirstRecord = (firstRecord: any): OpResult | true => {
 
   // Validate pointType
   if (firstRecord.pointType) {
-    const validPointTypes = ['home', 'office', 'client', 'other'];
+    const validPointTypes = Object.values(PLACE_TYPES);
     if (!validPointTypes.includes(firstRecord.pointType)) {
       errors.push({
         field: 'firstRecord.pointType',
@@ -474,7 +474,7 @@ const validateLastRecord = (lastRecord: any): OpResult | true => {
 
   // Validate pointType
   if (lastRecord.pointType) {
-    const validPointTypes = ['home', 'office', 'client', 'other'];
+    const validPointTypes = Object.values(PLACE_TYPES);
     if (!validPointTypes.includes(lastRecord.pointType)) {
       errors.push({
         field: 'lastRecord.pointType',

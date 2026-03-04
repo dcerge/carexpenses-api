@@ -53,7 +53,9 @@ class AuthAccountGw {
     return Array.isArray(result.data) ? result.data : [];
   }
 
-  public async get(id: any) {
+  public async get(id: any, opt?: any) {
+    const { headers } = opt || {};
+
     const result = await queryGraphQL({
       url: config.gatewayUrl,
       queryName: 'accountGet',
@@ -86,7 +88,7 @@ class AuthAccountGw {
       },
       headers: {
         [HEADERS.SPACE_ID]: config.spaceId,
-        //...omit(headers, Object.keys(config.skipHeaders)),
+        ...omit(headers || {}, Object.keys(config.skipHeaders)),
       },
     });
 
