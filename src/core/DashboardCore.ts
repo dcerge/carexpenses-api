@@ -81,6 +81,14 @@ interface DashboardAverages {
   monthlyConsumption: number | null;
 }
 
+interface CostOfOwnership {
+  totalCost: number | null;
+  perMonth: number | null;
+  perDistance: number | null;
+  monthsOwned: number;
+  ownershipStartAt: string | null;
+}
+
 interface TravelPurpose {
   purpose: string;
 }
@@ -97,6 +105,7 @@ interface DashboardItem {
   averages: DashboardAverages;
   daysRemainingInMonth: number;
   recentTravelPurposes: TravelPurpose[];
+  costOfOwnership: CostOfOwnership;
 }
 
 interface FleetSummary {
@@ -275,6 +284,130 @@ class DashboardCore extends AppCore {
       monthlyMileageInCarUnits: null,
       monthlyMileageInUserUnits: null,
       monthlyConsumption: null,
+    };
+  }
+
+  // ===========================================================================
+  // Cost of Ownership
+  // ===========================================================================
+
+  /**
+   * Compute true cost of ownership for a single car.
+   *
+   * Total cost = all refuels + all expenses in home currency (from total summary rows).
+   * When multiple currency rows exist for the same car, monetary values are summed —
+   * they are already expressed in home currency by the summary pipeline.
+   *
+   * Ownership start priority:
+   *   1. car.whenBought  (user-entered purchase date)
+   *   2. totalStats.firstRecordAt  (earliest expense/refuel record)
+   *   3. car.createdAt  (fallback: when the car was added to the app)
+   *
+   * monthsOwned is calculated as full calendar months elapsed, minimum 1
+   * so that perMonth is never a division-by-zero or nonsensically large number.
+   *
+   * perDistance uses the user's distanceIn preference and the latest known
+   * odometer reading minus the car's initial_mileage (both stored in metric km).
+   * If no odometer data is available, perDistance is null.
+   */
+  private computeCostOfOwnership(
+    car: any,
+    totalSummaryRows: any[],
+    totalStats: CarStats,
+    userProfile: UserProfile,
+    nowUtc: dayjs.Dayjs,
+  ): CostOfOwnership {
+    // -------------------------------------------------------------------------
+    // 1. Determine ownership start date
+    // -------------------------------------------------------------------------
+    const ownershipStartRaw =
+      car?.whenBought ||
+      totalStats.firstRecordAt ||
+      car?.createdAt ||
+      null;
+
+    const ownershipStartAt = formatTimestamp(ownershipStartRaw);
+
+    // -------------------------------------------------------------------------
+    // 2. Months owned (full calendar months, minimum 1)
+    // -------------------------------------------------------------------------
+    let monthsOwned = 1;
+
+    if (ownershipStartRaw) {
+      const startDay = dayjs(ownershipStartRaw).utc();
+      // diff truncates toward zero — gives full completed months
+      const diffMonths = nowUtc.diff(startDay, 'month');
+      monthsOwned = Math.max(1, diffMonths);
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. Total cost in home currency
+    // Sum monetary values across all currency rows (already in home currency)
+    // -------------------------------------------------------------------------
+    let totalRefuelsCost = 0;
+    let totalExpensesCost = 0;
+    let hasAnyMonetaryData = false;
+
+    for (const row of totalSummaryRows) {
+      const refuelsCost = num(row.totalRefuelsCost);
+      const expensesCost = num(row.totalExpensesCost);
+
+      if (refuelsCost > 0 || expensesCost > 0) {
+        hasAnyMonetaryData = true;
+      }
+
+      totalRefuelsCost += refuelsCost;
+      totalExpensesCost += expensesCost;
+    }
+
+    const totalCost = hasAnyMonetaryData ? totalRefuelsCost + totalExpensesCost : null;
+
+    // -------------------------------------------------------------------------
+    // 4. Per-month average
+    // -------------------------------------------------------------------------
+    const perMonth = totalCost != null ? totalCost / monthsOwned : null;
+
+    // -------------------------------------------------------------------------
+    // 5. Per-distance (cost per km or mi in user's distanceIn unit)
+    // Distance = latestKnownMileage (metric km) - initialMileage (metric km)
+    // Both values are stored in metric; initialMileage is entered in mileageIn
+    // but stored converted. We use fromMetricDistance for the output unit only.
+    // -------------------------------------------------------------------------
+    let perDistance: number | null = null;
+
+    if (totalCost != null) {
+      // latest_known_mileage across all currency rows (take max — identical across rows)
+      let latestKnownMileageKm = 0;
+      for (const row of totalSummaryRows) {
+        latestKnownMileageKm = Math.max(latestKnownMileageKm, num(row.latestKnownMileage));
+      }
+
+      // initial_mileage on cars is stored in the car's mileageIn unit (not metric).
+      // Convert to metric km for consistent subtraction.
+      const carDistanceUnit = car?.mileageIn || 'km';
+      const initialMileageKm =
+        carDistanceUnit === 'mi'
+          ? num(car?.initialMileage) * 1.60934
+          : num(car?.initialMileage);
+
+      const drivenKm = latestKnownMileageKm - initialMileageKm;
+
+      if (drivenKm > 0) {
+        const userDistanceUnit = userProfile?.distanceIn || 'km';
+        const drivenInUserUnit = fromMetricDistance(drivenKm, userDistanceUnit);
+
+        if (drivenInUserUnit && drivenInUserUnit > 0) {
+          perDistance = totalCost / drivenInUserUnit;
+        }
+      }
+    }
+
+    return {
+      totalCost,
+      perMonth,
+      perDistance,
+      monthsOwned,
+      ownershipStartAt,
     };
   }
 
@@ -853,6 +986,15 @@ class DashboardCore extends AppCore {
           }
           const averages = this.computeAverages(avgMonthlyRows, carId, homeCurrency, avgMonths, car, userProfile);
 
+          // --- Cost of ownership ---
+          const costOfOwnership = this.computeCostOfOwnership(
+            car,
+            carTotalRows,
+            totalStats,
+            userProfile,
+            userNow,
+          );
+
           // --- Build dashboard item ---
           dashboardItems.push({
             carId,
@@ -866,6 +1008,7 @@ class DashboardCore extends AppCore {
             averages,
             daysRemainingInMonth,
             recentTravelPurposes,
+            costOfOwnership,
           });
         }
 

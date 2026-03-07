@@ -137,14 +137,11 @@ WHERE car_id = 'e0667f34-1fa2-4b20-b3f9-89b4ca369f1d'
   AND (year, month) IN ((2026, 1))
 ORDER BY year, month;
 
-update carexpenses.travels set status = 200, is_active = false where status = 100
-
-CREATE INDEX car_monthly_summaries_car_year_month_index 
-  ON carexpenses.car_monthly_summaries (car_id, year, month);
-
-CREATE INDEX car_monthly_summaries_car_year_month_index 
-  ON carexpenses.car_monthly_summaries (car_id, year, month);
-
+select u.username, eb.when_done, eb.expense_type, eb.odometer, c."label", eb.total_price, eb.where_done, eb."comments"  
+  from carexpenses.expense_bases eb 
+  join carexpenses.cars c on (c.id = eb.car_id)
+  join ms_auth."user" u on (eb.created_by  = u.id)
+  order by eb.created_at desc
 --------
 
 select account_id, 

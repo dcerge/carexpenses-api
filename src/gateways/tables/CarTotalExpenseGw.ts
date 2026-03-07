@@ -170,6 +170,89 @@ class CarTotalExpenseGw extends BaseGateway {
   public clear(carId): void {
     this.loader.clear(carId);
   }
+
+  /**
+   * Fetch expense totals for a list of cars, aggregated by expense category.
+   * Joins expense_kinds → expense_categories to resolve category codes, and
+   * optionally joins expense_category_l_10_n for localized category names.
+   *
+   * Returns one row per car × home_currency × expense_category, summing
+   * amount and records_count across all expense_kinds within that category.
+   *
+   * @param carIds     Array of car UUIDs
+   * @param accountId  Account UUID for security filtering
+   * @param lang       ISO 639-1 language code for name localization (default 'en')
+   */
+  async listByCategoryForCars(
+    carIds: string[],
+    accountId: string,
+    lang: string = 'en',
+  ): Promise<Array<{
+    carId: string;
+    homeCurrency: string;
+    categoryId: number;
+    categoryCode: string;
+    categoryName: string | null;
+    totalAmount: number;
+    totalRecordsCount: number;
+  }>> {
+    if (!carIds || carIds.length === 0) {
+      return [];
+    }
+
+    const schema = config.dbSchema;
+    const carPlaceholders = carIds.map(() => '?').join(', ');
+
+    const query = `
+      SELECT
+        cte.${FIELDS.CAR_ID}                          AS car_id,
+        cte.${FIELDS.HOME_CURRENCY}                   AS home_currency,
+        ec.${FIELDS.ID}                               AS category_id,
+        ec.${FIELDS.CODE}                             AS category_code,
+        ecl.${FIELDS.NAME}                            AS category_name,
+        COALESCE(SUM(cte.${FIELDS.AMOUNT}), 0)        AS total_amount,
+        COALESCE(SUM(cte.${FIELDS.RECORDS_COUNT}), 0) AS total_records_count
+      FROM ${schema}.${TABLES.CAR_TOTAL_EXPENSES} cte
+      INNER JOIN ${schema}.${TABLES.CARS} c
+        ON c.${FIELDS.ID} = cte.${FIELDS.CAR_ID}
+        AND c.${FIELDS.ACCOUNT_ID} = ?
+        AND c.${FIELDS.REMOVED_AT} IS NULL
+      INNER JOIN ${schema}.${TABLES.EXPENSE_KINDS} ek
+        ON ek.${FIELDS.ID} = cte.${FIELDS.EXPENSE_KIND_ID}
+      INNER JOIN ${schema}.${TABLES.EXPENSE_CATEGORIES} ec
+        ON ec.${FIELDS.ID} = ek.${FIELDS.EXPENSE_CATEGORY_ID}
+      LEFT JOIN ${schema}.${TABLES.EXPENSE_CATEGORY_L10N} ecl
+        ON ecl.${FIELDS.EXPENSE_CATEGORY_ID} = ec.${FIELDS.ID}
+        AND ecl.${FIELDS.LANG} = ?
+      WHERE cte.${FIELDS.CAR_ID} IN (${carPlaceholders})
+      GROUP BY
+        cte.${FIELDS.CAR_ID},
+        cte.${FIELDS.HOME_CURRENCY},
+        ec.${FIELDS.ID},
+        ec.${FIELDS.CODE},
+        ecl.${FIELDS.NAME}
+      ORDER BY
+        cte.${FIELDS.CAR_ID},
+        cte.${FIELDS.HOME_CURRENCY},
+        ec.${FIELDS.ORDER_NO},
+        ec.${FIELDS.ID}
+    `;
+
+    const bindings = [accountId, lang, ...carIds];
+
+    const result = await this.getDb().runRawQuery(query, bindings);
+    const rows = result?.rows || [];
+
+    return rows.map((row: any) => ({
+      carId: row.car_id,
+      homeCurrency: row.home_currency,
+      categoryId: Number(row.category_id),
+      categoryCode: row.category_code,
+      categoryName: row.category_name ?? null,
+      totalAmount: Number(row.total_amount) || 0,
+      totalRecordsCount: Number(row.total_records_count) || 0,
+    }));
+  }
 }
 
 export { CarTotalExpenseGw };

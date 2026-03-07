@@ -42,10 +42,10 @@ class AppCore extends BaseCore {
     return {
       id: '',
       accountId: '',
-      homeCurrency: 'USD',
-      distanceIn: 'km',
-      volumeIn: 'l',
-      consumptionIn: 'l100km',
+      homeCurrency: 'USD', // CAD, EUR, RUB, BYN, etc
+      distanceIn: 'km', // km/mi
+      volumeIn: 'l', // l, gal-us, gal-uk
+      consumptionIn: 'l100km', // l100km, km-l, mpg-us, mpg-uk, mi-l, kwh100km, km-kwh, mi-kwh, kwh100km
       notifyInMileage: 500,
       notifyInDays: 14,
     };

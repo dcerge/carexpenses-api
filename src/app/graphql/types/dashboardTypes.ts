@@ -40,6 +40,29 @@ const typeDefs = `#graphql
     purpose: String!
   }
 
+  # ===========================================================================
+  # True Cost of Ownership
+  # ===========================================================================
+
+  """
+  True cost of ownership summary for a single car.
+  Monetary values are in the user's home currency.
+  perDistance is in the user's preferred distance unit (distanceIn from profile).
+  monthsOwned is calculated from ownershipStartAt to now.
+  """
+  type CostOfOwnership {
+    "Total cost: all refuels + all expenses in home currency"
+    totalCost: Float
+    "Average cost per calendar month since ownership start (totalCost / monthsOwned)"
+    perMonth: Float
+    "Cost per distance unit driven (totalCost / total odometer distance in user's distanceIn unit)"
+    perDistance: Float
+    "Number of full calendar months from ownershipStartAt to now (minimum 1)"
+    monthsOwned: Int!
+    "The date used as ownership baseline: when_bought, first_record_at, or car created_at (ISO UTC)"
+    ownershipStartAt: String
+  }
+
 
   # ===========================================================================
   # Unified stats type (currency-independent)
@@ -156,6 +179,8 @@ const typeDefs = `#graphql
     daysRemainingInMonth: Int
     "Recent unique travel purposes across accessible cars, sorted by most recently used"
     recentTravelPurposes: [TravelPurpose!]
+    "True cost of ownership summary: total spend, per-month and per-distance averages"
+    costOfOwnership: CostOfOwnership
   }
 
   type DashboardResult implements OpResult {
