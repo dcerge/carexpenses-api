@@ -20,12 +20,17 @@ stages:
         displayName: 'Build and Push Image'
         steps:
           - task: Docker@2
-            displayName: 'Build and Push to ACR'
+            displayName: 'Login to ACR'
             inputs:
               containerRegistry: $(acrServiceConnection)
-              repository: $(imageName)
-              command: 'buildAndPush'
-              Dockerfile: '**/Dockerfile'
-              tags: |
-                $(Build.BuildId)
-                latest
+              command: 'login'
+
+          - script: |
+              docker build \
+                -f Dockerfile \
+                -t $(acrLoginServer)/$(imageName):$(Build.BuildId) \
+                -t $(acrLoginServer)/$(imageName):latest \
+                .
+              docker push $(acrLoginServer)/$(imageName):$(Build.BuildId)
+              docker push $(acrLoginServer)/$(imageName):latest
+            displayName: 'Build and Push to ACR'
