@@ -1,12 +1,13 @@
 {
   "name": "carexpenses-api",
-  "version": "1.0.58",
+  "version": "1.0.59",
   "description": "A multi-tenant SaaS platform for tracking car expenses and trips",
   "main": "build/index.js",
   "scripts": {
     "cmd": "ts-node -r tsconfig-paths/register --project ./tsconfig.json ./src/app/cli/index.ts ",
     "build": "cross-env NODE_ENV=production tsc -p ./tsconfig.json",
     "start": "cpy .env.example dist && node dist/src/index.js",
+    "start:test": "npm run build && cpy .env .env.example dist/ && node dist/src/index.js",
     "start:dev": "nodemon --exec \"ts-node -r tsconfig-paths/register --project ./tsconfig.json ./src/index.ts\" -e ts",
     "lint": "eslint */**/*.{js,ts,tsx} --quiet --fix",
     "test": "jest --config jest.config.ts",

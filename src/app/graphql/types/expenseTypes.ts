@@ -372,8 +372,9 @@ const typeDefs = `#graphql
     fuelGrade: [String]
     "Filter by tank type: main, addl"
     tankType: [String]
-    whenDoneFrom: String
-    whenDoneTo: String
+    
+    dateFrom: String
+    dateTo: String
     
     savedPlaceId: [ID]
 

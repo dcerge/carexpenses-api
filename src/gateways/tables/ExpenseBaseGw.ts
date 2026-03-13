@@ -6,6 +6,7 @@ import { SORT_ORDER, STATUSES } from '@sdflc/utils';
 import config from '../../config';
 import { FIELDS, TABLES } from '../../database';
 import { logger } from '../../logger';
+import { EXPENSE_TYPES } from '../../boundary';
 
 class ExpenseBaseGw extends BaseGateway {
   constructor(props: BaseGatewayPropsInterface) {
@@ -44,8 +45,9 @@ class ExpenseBaseGw extends BaseGateway {
       carId,
       expenseType,
       travelId,
-      whenDoneFrom,
-      whenDoneTo,
+      dateFrom,
+      dateTo,
+      kindId,
       searchKeyword,
       withOdometer,
       expenseScheduleId,
@@ -79,12 +81,12 @@ class ExpenseBaseGw extends BaseGateway {
       query.whereIn(FIELDS.EXPENSE_SCHEDULE_ID, castArray(expenseScheduleId));
     }
 
-    if (whenDoneFrom) {
-      query.where(FIELDS.WHEN_DONE, '>=', whenDoneFrom);
+    if (dateFrom) {
+      query.where(FIELDS.WHEN_DONE, '>=', dateFrom);
     }
 
-    if (whenDoneTo) {
-      query.where(FIELDS.WHEN_DONE, '<=', whenDoneTo);
+    if (dateTo) {
+      query.where(FIELDS.WHEN_DONE, '<=', dateTo);
     }
 
     if (withOdometer != null) {
@@ -108,11 +110,23 @@ class ExpenseBaseGw extends BaseGateway {
       });
     }
 
+    if (kindId) {
+      const self = this;
+      const kindIds = castArray(kindId);
+      query.innerJoin(TABLES.EXPENSES, function (table: any) {
+        table.on(`${TABLES.EXPENSES}.${FIELDS.ID}`, '=', `${TABLES.EXPENSE_BASES}.${FIELDS.ID}`);
+        table.andOn(self.getDb().raw(
+          `${TABLES.EXPENSES}.${FIELDS.KIND_ID} IN (${kindIds.map(() => '?').join(',')})`,
+          kindIds
+        ));
+      });
+    }
+
     if (tireSetId) {
       const self = this;
-      query.innerJoin(TABLES.EXPENSES, function (this: any) {
-        this.on(`${TABLES.EXPENSES}.${FIELDS.ID}`, '=', `${TABLES.EXPENSE_BASES}.${FIELDS.ID}`);
-        this.andOn(`${TABLES.EXPENSES}.${FIELDS.TIRE_SET_ID}`, '=', self.getDb().raw('?', tireSetId));
+      query.innerJoin(TABLES.EXPENSES, function (table: any) {
+        table.on(`${TABLES.EXPENSES}.${FIELDS.ID}`, '=', `${TABLES.EXPENSE_BASES}.${FIELDS.ID}`);
+        table.andOn(`${TABLES.EXPENSES}.${FIELDS.TIRE_SET_ID}`, '=', self.getDb().raw('?', tireSetId));
       });
     }
   }
@@ -335,6 +349,120 @@ class ExpenseBaseGw extends BaseGateway {
       }));
 
     return result;
+  }
+
+  /**
+   * Fetch all MAINTENANCE and REPAIRS expenses for a single car,
+   * joined with expense kind and category localization tables.
+   * Used exclusively by ReportCarHandoverCore.
+   *
+   * Filters:
+   *   - expense_type = 2 (expenses only, no refuels)
+   *   - expense_categories.code IN ('MAINTENANCE', 'REPAIRS')
+   *   - status = ACTIVE
+   *   - removed_at IS NULL
+   *   - account_id = accountId (security)
+   *   - car_id = carId
+   *
+   * Odometer is returned as-is in km (stored unit). Conversion to the
+   * car's mileageIn unit happens in ReportCarHandoverCore.
+   *
+   * @param params.carId    - Car UUID to fetch records for
+   * @param params.accountId - Account UUID for security filtering (required)
+   * @param params.lang     - ISO 639-1 language code for localized names (default 'en')
+   * @returns Array of HandoverRawRecord ordered by when_done DESC
+   */
+  async listForHandover(params: {
+    carId: string;
+    accountId: string;
+    lang: string;
+  }): Promise<Array<{
+    id: string;
+    whenDone: string;
+    odometer: number | null;
+    whereDone: string | null;
+    shortNote: string | null;
+    comments: string | null;
+    categoryCode: string;
+    categoryName: string | null;
+    kindCode: string;
+    kindName: string | null;
+  }>> {
+    const { carId, accountId, lang } = params;
+
+    if (!carId || !accountId) {
+      return [];
+    }
+
+    const schema = config.dbSchema;
+
+    const sql = `
+      SELECT
+        eb.${FIELDS.ID}                       AS "id",
+        eb.${FIELDS.WHEN_DONE}                AS "whenDone",
+        eb.${FIELDS.ODOMETER}                 AS "odometer",
+        eb.${FIELDS.WHERE_DONE}               AS "whereDone",
+        eb.${FIELDS.COMMENTS}                 AS "comments",
+        e.${FIELDS.SHORT_NOTE}                AS "shortNote",
+        ec.${FIELDS.CODE}                     AS "categoryCode",
+        COALESCE(ecl.${FIELDS.NAME}, ecl_en.${FIELDS.NAME}) AS "categoryName",
+        ek.${FIELDS.CODE}                     AS "kindCode",
+        COALESCE(ekl.${FIELDS.NAME}, ekl_en.${FIELDS.NAME}) AS "kindName"
+      FROM ${schema}.${TABLES.EXPENSE_BASES} eb
+      INNER JOIN ${schema}.${TABLES.EXPENSES} e
+        ON e.${FIELDS.ID} = eb.${FIELDS.ID}
+      INNER JOIN ${schema}.${TABLES.EXPENSE_KINDS} ek
+        ON ek.${FIELDS.ID} = e.${FIELDS.KIND_ID}
+      INNER JOIN ${schema}.${TABLES.EXPENSE_CATEGORIES} ec
+        ON ec.${FIELDS.ID} = ek.${FIELDS.EXPENSE_CATEGORY_ID}
+      LEFT JOIN ${schema}.${TABLES.EXPENSE_CATEGORY_L10N} ecl
+        ON ecl.${FIELDS.EXPENSE_CATEGORY_ID} = ec.${FIELDS.ID}
+        AND ecl.${FIELDS.LANG} = ?
+      LEFT JOIN ${schema}.${TABLES.EXPENSE_CATEGORY_L10N} ecl_en
+        ON ecl_en.${FIELDS.EXPENSE_CATEGORY_ID} = ec.${FIELDS.ID}
+        AND ecl_en.${FIELDS.LANG} = 'en'
+      LEFT JOIN ${schema}.${TABLES.EXPENSE_KIND_L10N} ekl
+        ON ekl.${FIELDS.EXPENSE_KIND_ID} = ek.${FIELDS.ID}
+        AND ekl.${FIELDS.LANG} = ?
+      LEFT JOIN ${schema}.${TABLES.EXPENSE_KIND_L10N} ekl_en
+        ON ekl_en.${FIELDS.EXPENSE_KIND_ID} = ek.${FIELDS.ID}
+        AND ekl_en.${FIELDS.LANG} = 'en'
+      WHERE eb.${FIELDS.CAR_ID} = ?
+        AND eb.${FIELDS.ACCOUNT_ID} = ?
+        AND eb.${FIELDS.EXPENSE_TYPE} = ?
+        AND eb.${FIELDS.STATUS} = ?
+        AND eb.${FIELDS.REMOVED_AT} IS NULL
+        AND ec.${FIELDS.CODE} IN ('MAINTENANCE', 'REPAIRS')
+      ORDER BY eb.${FIELDS.WHEN_DONE} DESC
+    `;
+
+    const bindings = [
+      lang,        // ecl.lang
+      lang,        // ekl.lang
+      carId,
+      accountId,
+      EXPENSE_TYPES.EXPENSE,
+      STATUSES.ACTIVE,
+    ];
+
+    const result = await this.getDb().runRawQuery(sql, bindings);
+
+    if (!result?.rows) {
+      return [];
+    }
+
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      whenDone: row.whenDone,
+      odometer: row.odometer != null ? parseFloat(row.odometer) : null,
+      whereDone: row.whereDone ?? null,
+      shortNote: row.shortNote ?? null,
+      comments: row.comments ?? null,
+      categoryCode: row.categoryCode,
+      categoryName: row.categoryName ?? null,
+      kindCode: row.kindCode,
+      kindName: row.kindName ?? null,
+    }));
   }
 }
 

@@ -75,13 +75,13 @@ const rulesList = new Checkit({
       message: 'Thank type should be a array of strings',
     },
   ],
-  whenDoneFrom: [
+  dateFrom: [
     {
       rule: 'string',
       message: 'When done from should be a valid datetime string',
     },
   ],
-  whenDoneTo: [
+  dateTo: [
     {
       rule: 'string',
       message: 'When done to should be a valid datetime string',

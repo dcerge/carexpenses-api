@@ -222,17 +222,23 @@ Configure recurring maintenance schedules to receive timely notifications:
 
 ## Travel Tracking
 
-Log trips for mileage records, business expense reports, or personal tracking:
+Log trips for mileage records, business expense reports, or personal tracking — with optional live GPS route recording while you drive.
 
 1. **Start travel**: Enter date/time, starting odometer, departure location, and trip purpose
-2. **Add travel points**: Record intermediate waypoints with odometer readings, location, and notes
-3. **End travel**: Close the trip to calculate total distance and duration
-4. **Trip summary**: View all expenses and revenue linked to the trip — including fuel, tolls, lodging, meals, and other travel-related costs — with subtotals by category
-5. **Tags**: Assign custom tags for reporting and organization
-6. **Trip categorization**: Assign trip type (business, personal, medical, charity, other) for tax deductions (IRS/CRA)
+2. **Drive with live tracking**: While the app is open in the foreground, GPS records your route in real time — the active travel banner shows your current speed, heading (N, NE, E, SE, S, SW, W, NW), total time driven, and distance covered so far
+3. **Add travel points**: Tap the active banner to open the travel drawer — pause GPS tracking, record a waypoint with odometer, location, and notes, then tap Resume when you're back on the road
+4. **End travel**: Open the travel drawer and close the trip by providing the final waypoint details — distance, duration, and route are calculated automatically
+5. **Trip summary**: View all expenses and revenue linked to the trip — including fuel, tolls, lodging, meals, and other travel-related costs — with subtotals by category
+6. **Tags**: Assign custom tags for reporting and organization
+7. **Trip categorization**: Assign trip type (business, personal, medical, charity, other) for tax deductions (IRS/CRA)
 
 **Travel features:**
 
+- **Live GPS route recording**: While the app runs in the foreground, the device's GPS captures your path every second. A built-in filtering algorithm reduces the raw snapshot volume while preserving route accuracy, so storage stays lean without losing meaningful detail. This is an optional feature
+- **Active travel banner**: Visible on every page of the app while a trip is in progress — shows current speed, compass heading, elapsed driving time, and distance covered. Tap the banner to open the travel drawer to add a waypoint, resume after a stop, or end the trip
+- **Waypoint workflow**: Adding a waypoint pauses GPS tracking. After saving the waypoint, a Resume button appears on the banner — tap it when you're ready to continue driving and tracking resumes automatically
+- **Route visualization**: After a trip is complete, view the full driven route plotted on Google Maps with all waypoints marked in sequence
+- **Reimbursement & tax deduction calculation**: For trips categorized as business (or medical/charity), the app automatically calculates the applicable reimbursement or tax deduction on completion using IRS or CRA rates. The result is shown per trip on the Travels page so your deductible mileage is always at a glance
 - **Multiple waypoints**: Add as many intermediate stops as needed
 - **Map visualization**: View your entire route with all waypoints on Google Maps
 - **Location detection**: Optionally pre-fill coordinates based on your current location
@@ -240,6 +246,8 @@ Log trips for mileage records, business expense reports, or personal tracking:
 - **In-app travel widget**: Quickly add waypoints or stop trips from any screen in the app — no need to navigate away from what you're doing
 - **Linked expenses**: Associate refuels, meals, tolls, lodging, ferry crossings, and other costs directly to the trip for accurate per-trip totals
 - **Linked revenue**: Connect earnings to specific trips for profitability tracking
+
+> **Note on GPS tracking**: Because CarExpenses is a PWA, live GPS tracking requires the app to remain open and active in the foreground. Background location tracking is not used — you stay in full control of when and what is recorded.
 
 ---
 
@@ -588,6 +596,29 @@ See your entire year at a glance:
 - **Monthly budget estimator**: Based on historical data, shows average monthly cost for each vehicle (fuel + maintenance + insurance + other) to help plan future expenses (_coming soon_)
 - **Filtering**: By year, vehicle, or tags
 
+### True Cost of Ownership (TCO) Report
+
+Understand the full financial picture of owning each vehicle from day one:
+
+- **Dashboard snapshot**: Each vehicle card shows a TCO tab with total amount spent, cost per month, and cost per km/mile — visible at a glance without opening the full report
+- **Lifetime summary**: Total cost since ownership start, average monthly cost, and cost per km/mile — all in your home currency
+- **Ownership timeline**: Automatically determines ownership start from purchase date, first recorded expense, or vehicle creation date
+- **Cost by category**: Fuel, Maintenance, Insurance, and all other expense categories with total amount, record count, share percentage, monthly average, and per-distance cost
+- **Monthly cost trend**: 24-month stacked bar chart separating fuel costs from other expenses, with a total cost line overlay
+- **Multi-vehicle comparison**: Run the report across multiple vehicles simultaneously to compare lifetime costs side by side
+- **Filtering**: By vehicle (one or many)
+
+### Car Handover Report
+
+The perfect companion when selling your vehicle — share a complete, professional service history with potential buyers in seconds:
+
+- **Vehicle summary card**: Buyer-ready header with photo, year/make/model, drivetrain badges, engine size, tank configuration, current mileage, VIN, color, and purchase history
+- **Service history by category**: Records grouped into **Maintenance** (oil changes, filters, inspections, fluid services) and **Repairs** (mechanical and bodywork), each with date, odometer reading, service type, shop name, and technician notes
+- **Price-free by design**: All cost and payment information is intentionally excluded — the report shows only what was done and when, making it safe to share directly with buyers
+- **Print & PDF export**: One-click print opens a formatted A4 document with proper page breaks, alternating row shading, and a clean header — save as PDF straight from the browser
+- **Localized output**: Service type names and category labels appear in the user's selected language (EN/RU/FR/ES) with automatic English fallback
+- **Filtering**: By vehicle
+
 ### Travel Report
 
 Track your trips for tax compliance and mileage deductions (IRS/CRA):
@@ -597,6 +628,7 @@ Track your trips for tax compliance and mileage deductions (IRS/CRA):
 - **Two deduction methods**:
   - **Standard Mileage Method (IRS)**: Calculates deductions using official IRS rates ($0.67/mile business, $0.21/mile medical, $0.14/mile charity for 2024) or CRA tiered rates ($0.70/km first 5,000 km, $0.64/km after)
   - **Actual Expense Method (CRA/IRS)**: Shows total vehicle expenses (fuel, maintenance, other) and calculates deductible portion based on business use percentage
+- **Per-trip reimbursement**: For trips categorized as business, medical, or charity, the reimbursement or tax deduction is calculated automatically at trip completion using IRS or CRA rates and displayed directly on the Travels page — no need to open the report to see your deductible amount for each trip
 - **Trip details table**: Date, purpose, destination, distance, travel type, linked expenses/refuels/revenues, calculated reimbursement, and tags for each trip
 - **Expense allocation**: See refuels, maintenance, lodging, meals, tolls, and other expenses directly linked to each trip
 - **Revenue tracking**: Track earnings from gig work or delivery services alongside expenses

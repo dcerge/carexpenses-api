@@ -75,7 +75,9 @@ class AuthUserGw {
     });
   }
 
-  public async get(id: any) {
+  public async get(id: any, opt?: any) {
+    const { headers } = opt || {};
+
     const result = await queryGraphQL({
       url: config.gatewayUrl,
       queryName: 'userGet',
@@ -129,6 +131,7 @@ class AuthUserGw {
       headers: {
         [HEADERS.SPACE_ID]: config.spaceId,
         [HEADERS.API_KEY]: config.interserviceApiKey,
+        ...omit(headers || {}, Object.keys(config.skipHeaders)),
         //...omit(headers, Object.keys(config.skipHeaders)),
       },
     });

@@ -115,7 +115,7 @@ const typeDefs = `#graphql
     entityAttachment: EntityAttachment
     "IDs of all documents attached to this car"
     uploadedFilesIds: [ID]
-    "All documents attached to this car (resolved from uploadedFilesIds)"
+    "All documents attached including images to this car (resolved from uploadedFilesIds)"
     uploadedFiles: [UploadedFile]
     "Car's main image (resolved from uploadedFileId)"
     uploadedFile: UploadedFile

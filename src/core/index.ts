@@ -44,4 +44,5 @@ export * from './ParkingSessionCore';
 export * from './DashboardCore';
 export * from './SavedPlaceCore';
 export * from './TravelTrackingCore';
-export * from "./ReportTcoCore";
+export * from './ReportTcoCore';
+export * from './ReportCarHandoverCore';
